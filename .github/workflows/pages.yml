@@ -42,10 +42,7 @@ jobs:
           grep -q '<title>解答用紙メーカー</title>' site/index.html
           ! grep -qE 'fetch\(|XMLHttpRequest|WebSocket' site/index.html
 
-      # enablement: true で、Pages が未設定でもここで有効化を試みる
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
