@@ -40,8 +40,19 @@ https://gamigamiigami.github.io/Answer/
 - `https://gamigamiigami.github.io/Answer/answer-sheet-maker.html` は同じ中身です。
   「名前を付けて保存」で各自のPCに持ち帰る用のリンクとして使えます
 
-**初回だけ設定が要ります。** リポジトリの Settings → Pages → Build and deployment の
-Source を **「GitHub Actions」** にしてください。以後は push するだけで更新されます。
+### 初回だけ、手で有効にしてください
+
+GitHub Pages は、リポジトリの管理者が一度オンにする必要があります（ワークフローからは有効化できません）。
+
+1. https://github.com/gamigamiigami/Answer/settings/pages を開く
+2. **Build and deployment** の **Source** を **「GitHub Actions」** にする
+
+これだけです。以後は push するだけで自動更新されます。
+すでに push 済みなので、有効にしたあとは
+[Actions の画面](https://github.com/gamigamiigami/Answer/actions/workflows/pages.yml)で
+**Run workflow** を押せばすぐ公開されます。
+
+このリポジトリは公開設定なので、Pages は無料で使えます。
 
 公開の中身は `site/` で、`node tools/build-site.mjs` が作ります（リポジトリには入れません）。
 公開前に「タイトルがあるか」「通信のコードが無いか」を自動で点検します。
