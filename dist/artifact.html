@@ -373,16 +373,18 @@ function headerLayout(d){
   const totals = scoreTotals(d);
 
   if (vertical){
-    // 右端2列：タイトル・氏名欄（1文字 = 2行）
+    // 右端2列：タイトル・氏名欄。
+    // お手本は結合セルの縦書きで文字が詰まっているので、1行に1文字で縦に中央ぞろえする。
     const put = (col, str, size) => {
+      const top = 1;                       // お手本と同じく上から（1行目は余白）
       for (let i=0;i<str.length;i++){
-        const r = i*CHAR_ROWS;
+        const r = top + i;
         if (r >= rows) break;
-        texts.push({c:col, r, t:str[i], size, bold:size>=14});
+        if (str[i] !== '　') texts.push({c:col, r, t:str[i], size, bold:size>=14});
       }
       mark(col, 0, 1, rows);
     };
-    put(cols-1, d.paper.title, 14);
+    put(cols-1, d.paper.title, 13);
     put(cols-2, d.paper.nameLabel, 11);
 
     // 得点枠：氏名欄の左3列、下端（お手本の W29:Y47 と同じ位置）
@@ -441,7 +443,7 @@ function scoreTotals(d){
 function contentOrigin(d){
   const box = d.paper.showScoreBox;
   return d.paper.writing==='vertical'
-    ? { c: d.grid.cols - (box ? 6 : 3), r: 0 }
+    ? { c: d.grid.cols - (box ? 6 : 3), r: 1 }      // お手本と同じく1行目は余白
     : { c: 0, r: box ? 10 : 4 };
 }
 
@@ -684,10 +686,15 @@ function buildCells(d, withAnswers){
     const [c,r] = k.split(',').map(Number);
     const v = d.texts[k];
     if (!v || v.t === '') continue;
-    put(c, r, v.t, v.size||11, v.bold, v.align);
+    const vert = d.paper.writing==='vertical';
+    const span = Math.max(1, v.span || 1);
+    // span つきは大問ブロックの幅いっぱいの枠。文字は真ん中に置く
+    const tc = vert ? c + Math.floor((span-1)/2) : c;
+    const tr = vert ? r : r + Math.floor((span-1)/2)*CHAR_ROWS;
+    put(tc, tr, v.t, v.size||11, v.bold, v.align);
     if (v.box){                      // 大問番号・問番号のセルにも枠を引く
-      const h = d.paper.writing==='vertical' ? 1 : CHAR_ROWS;
-      box(c, r, 1, h, 'thin');
+      if (vert) box(c, r, span, 1, 'thin');
+      else      box(c, r, 1, span*CHAR_ROWS, 'thin');
     }
   }
 
@@ -1309,6 +1316,18 @@ async function stamp(key){
   const vertical = doc.paper.writing==='vertical';
   cells.sort((a,b)=> vertical ? (b.c-a.c)||(a.r-b.r) : (a.r-b.r)||(a.c-b.c));
   snapshot();
+  // 大問番号は、お手本のように大問ブロックの幅いっぱいの枠にまとめる
+  const wide = (key==='D' && ui.sel && !ui.extra.length &&
+    (vertical ? (ui.sel.h===1 && ui.sel.w>1) : (ui.sel.w===1 && ui.sel.h>1)));
+  if (wide){
+    const n = vertical ? ui.sel.w : ui.sel.h;
+    for (let i=0;i<n;i++)
+      delete doc.texts[(vertical ? (ui.sel.c+i)+','+ui.sel.r : ui.sel.c+','+(ui.sel.r+i))];
+    doc.texts[ui.sel.c+','+ui.sel.r] = { t:def.fmt(start, doc.paper.numberStyle),
+      size:def.size, bold:true, box:true, span:n };
+    render();
+    return toast('大問番号を'+n+(vertical?'列':'行')+'ぶんの枠にまとめました');
+  }
   cells.forEach((p,i)=>{
     doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle),
       size:def.size, bold:!!def.bold, box:!labels.has(p.c+','+p.r) };
@@ -2224,12 +2243,14 @@ function applyTemplate(subject){
     let cur = { c:head.c, r:head.r };
     let widest = 1, deepest = CHAR_ROWS;
 
-    // 大問の先頭に大問番号（一 二 三…）を置く
+    // 大問の先頭に大問番号（一 二 三…）を置く。幅は大問が決まってから合わせる
     const dlab = labelRect(doc, cur);
+    let dkey = null;
     if (fits([dlab])){
       take([dlab]);
-      doc.texts[cur.c+','+cur.r] = { t: STAMPS.D.fmt(gi+1, doc.paper.numberStyle),
-                                     size: STAMPS.D.size, bold:true, box:true };
+      dkey = cur.c+','+cur.r;
+      doc.texts[dkey] = { t: STAMPS.D.fmt(gi+1, doc.paper.numberStyle),
+                          size: STAMPS.D.size, bold:true, box:true };
       cur = stepOn(cur);
     }
     const contentTop = { c:cur.c, r:cur.r };      // この大問の本文が始まる位置
@@ -2259,6 +2280,16 @@ function applyTemplate(subject){
         deepest = Math.max(deepest, Math.max(got.lab.r+got.lab.h, ...got.rects.map(r=>r.r+r.h)) - head.r);
         cur = vertical ? { c:last.c, r:last.r + last.h }      // 次の番号欄へ（間は空けない）
                        : { c:last.c + last.w, r:last.r };
+      }
+    }
+    // 大問番号の枠を、この大問が使った幅いっぱいに広げる（お手本と同じ見た目）
+    if (dkey && widest > 1){
+      const t = doc.texts[dkey]; delete doc.texts[dkey];
+      if (vertical){
+        for (let i=0;i<widest;i++) take([{c:head.c-i, r:head.r, w:1, h:1}]);
+        doc.texts[(head.c - widest + 1)+','+head.r] = Object.assign({}, t, {span:widest});
+      } else {
+        doc.texts[head.c+','+head.r] = Object.assign({}, t, {span:Math.ceil(deepest/CHAR_ROWS)});
       }
     }
     // 次の大問へ。大問は行を分けるが、間に空の行は作らない
