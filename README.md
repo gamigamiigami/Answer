@@ -19,3 +19,19 @@
 - Excel出力が正本。解答用紙と模範解答の2シート、印刷設定込み。出力後にExcelで手直しできます
 - 必ずA4・1枚。はみ出す置き方はできません
 - Ctrl+Z で何度でも戻せます
+
+## ブラウザですぐ試す
+
+公開ページ: https://claude.ai/artifact/Rww3UhJXSNTyW4jTF8UuRz
+
+操作を試すための画面です。Excel出力と作業ファイルの保存は動きますが、PDFは手元のファイル版でお使いください。
+
+## 公開ページ用の版を作り直す
+
+`answer-sheet-maker.html` を直したら、次のコマンドで公開用の版を作り直します。
+
+```
+node tools/build-artifact.mjs
+```
+
+`dist/artifact.html` ができます。これは `answer-sheet-maker.html` から外枠のタグを外しただけのもので、中身は同じです。手で編集しないでください。
