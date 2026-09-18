@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>解答用紙メーカー</title>
+<style>
+/* ===== 基本 ===== */
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --line:#d7dde3; --ink:#1b2733; --sub:#5b6976;
+  --place:#1a6fd4; --place-bg:#e8f1fd; --input:#12a05a; --input-bg:#e6f6ed;
+  --warn:#b8860b; --warn-bg:#fff6dd; --danger:#c0392b; --danger-bg:#fdecea;
+  --key:#33404d;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:system-ui,"Yu Gothic UI","Yu Gothic","Meiryo",sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; overflow:hidden;
+}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--place);outline-offset:1px}
+
+/* ===== 起動画面 ===== */
+#start{
+  position:fixed; inset:0; z-index:50; background:var(--bg);
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+#start .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:32px; max-width:720px; width:100%; box-shadow:0 8px 28px rgba(0,0,0,.08)}
+#start h1{margin:0 0 4px;font-size:24px}
+#start .lead{color:var(--sub);margin:0 0 24px}
+.start-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.big-btn{
+  flex:1 1 200px; min-height:82px; border:1px solid var(--line); border-radius:10px;
+  background:#fff; cursor:pointer; text-align:left; padding:14px 16px; line-height:1.5;
+}
+.big-btn:hover:not(:disabled){border-color:var(--place);background:var(--place-bg)}
+.big-btn:disabled{opacity:.45;cursor:not-allowed}
+.big-btn b{display:block;font-size:16px;margin-bottom:2px}
+.big-btn span{color:var(--sub);font-size:12px}
+.subject-row{display:flex;gap:8px;flex-wrap:wrap}
+.subject-btn{padding:10px 18px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+.subject-btn:hover{border-color:var(--place);background:var(--place-bg)}
+.note{font-size:12px;color:var(--sub);margin-top:20px;line-height:1.7}
+
+/* ===== アプリ枠 ===== */
+#app{display:none;height:100vh;flex-direction:column}
+#app.on{display:flex}
+
+/* 上部バー */
+#topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:8px 12px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#topbar .logo{font-weight:700;white-space:nowrap}
+#topbar input[type=text]{border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}
+#title-input{width:260px}
+#topbar select{border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:inherit;background:#fff}
+.spacer{flex:1}
+.tb{padding:6px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer;white-space:nowrap}
+.tb:hover{border-color:var(--place);background:var(--place-bg)}
+.tb.primary{background:var(--place);border-color:var(--place);color:#fff;font-weight:600}
+.tb.primary:hover{filter:brightness(1.08)}
+.tb kbd{font-size:10px;color:var(--sub);margin-left:5px}
+.tb.primary kbd{color:#dbe9fb}
+
+/* モード表示帯 */
+#modebar{padding:5px 12px;font-weight:700;font-size:13px;letter-spacing:.02em;
+  border-bottom:1px solid var(--line)}
+#modebar.place{background:var(--place-bg);color:var(--place)}
+#modebar.input{background:var(--input-bg);color:var(--input)}
+
+/* 本体 2カラム */
+#main{flex:1;display:flex;min-height:0}
+#side{width:246px;flex:none;background:var(--panel);border-right:1px solid var(--line);
+  overflow-y:auto;padding:12px}
+#side h2{font-size:11px;color:var(--sub);margin:16px 0 7px;letter-spacing:.08em}
+#side h2:first-child{margin-top:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.tool{border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;
+  padding:7px 4px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1.25}
+.tool:hover{border-color:var(--place);background:var(--place-bg)}
+.tool .nm{font-size:11.5px}
+.tool .k{font-size:10px;font-weight:700;color:#fff;background:var(--key);
+  border-radius:3px;padding:0 5px;letter-spacing:.03em}
+.tool svg{display:block}
+#tabs{display:flex;gap:6px;margin-top:16px}
+.tab{flex:1;padding:8px 4px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  cursor:pointer;font-size:12.5px;text-align:center}
+.tab.on{background:var(--place);border-color:var(--place);color:#fff;font-weight:600}
+
+/* プレビュー */
+#preview{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;align-items:center;gap:10px}
+#paper{background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.14);width:100%;max-width:1180px;margin:0 auto}
+#sheet{display:block;width:100%;height:auto;touch-action:none}
+#status{max-width:1180px;width:100%;display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  font-size:12.5px;color:var(--sub)}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 11px}
+.chip.warn{background:var(--warn-bg);border-color:#e6cc7a;color:var(--warn);font-weight:600}
+.chip.bad{background:var(--danger-bg);border-color:#efb3ac;color:var(--danger);font-weight:600}
+
+/* セル入力欄 */
+#cell-input{position:absolute;display:none;z-index:30;border:2px solid var(--input);
+  border-radius:4px;background:#fff;font:inherit;padding:2px 5px;min-width:120px;
+  box-shadow:0 3px 12px rgba(0,0,0,.18)}
+
+/* トースト */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+  background:rgba(27,39,51,.94);color:#fff;padding:9px 18px;border-radius:999px;
+  font-size:13px;opacity:0;transition:opacity .18s;pointer-events:none;max-width:82vw;text-align:center}
+#toast.on{opacity:1}
+
+/* モーダル */
+.modal{position:fixed;inset:0;z-index:70;background:rgba(20,28,36,.42);
+  display:flex;align-items:center;justify-content:center;padding:20px}
+.modal .card{background:#fff;border-radius:12px;padding:22px;min-width:320px;max-width:560px;
+  width:100%;box-shadow:0 12px 40px rgba(0,0,0,.24);max-height:86vh;overflow:auto}
+.modal h3{margin:0 0 14px;font-size:17px}
+.row{display:flex;align-items:center;gap:10px;margin-bottom:11px;flex-wrap:wrap}
+.row>label{width:112px;flex:none;color:var(--sub);font-size:13px}
+.row input[type=text],.row input[type=number],.row select{
+  border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;flex:1;min-width:90px}
+.row .hint{font-size:11.5px;color:var(--sub);width:100%;margin-left:122px}
+.modal-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{padding:7px 14px;background:#fff;border:0;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--place);color:#fff;font-weight:600}
+.modal .desc{font-size:12.5px;color:var(--sub);line-height:1.8;margin:0 0 14px}
+.modal .desc b{color:var(--ink)}
+
+/* 印刷：A4の1枚にそのまま出す */
+@media print{
+  html,body{background:#fff;overflow:visible;margin:0;padding:0;height:auto}
+  #start,#topbar,#modebar,#side,#status,#toast,.modal,#cell-input{display:none!important}
+  #app{display:block!important;height:auto;overflow:visible}
+  #main{display:block;height:auto;overflow:visible}
+  #preview{padding:0;margin:0;display:block;overflow:visible;height:auto;gap:0}
+  #paper{box-shadow:none;margin:0;padding:0;max-width:none;
+         width:var(--pw)!important;height:var(--ph)!important}
+  #sheet{display:block;width:var(--pw)!important;height:var(--ph)!important;max-width:none}
+  .guide{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 起動画面 ===== -->
+<div id="start">
+  <div class="box">
+    <h1>📄 解答用紙メーカー</h1>
+    <p class="lead">テストの解答用紙と模範解答を、キーボードだけで手早く作ります。オフラインで動き、通信は一切しません。</p>
+    <div class="start-row">
+      <button class="big-btn" id="btn-resume" disabled><b>前回の続き</b><span>このPCに残っている作業を開きます</span></button>
+      <button class="big-btn" id="btn-open"><b>作業ファイルを開く</b><span>保存した .json を読み込みます</span></button>
+    </div>
+    <h2 style="font-size:13px;margin:22px 0 8px">教科テンプレから始める（おすすめ）</h2>
+    <div class="subject-row" id="tpl-row"></div>
+    <h2 style="font-size:13px;margin:22px 0 8px">白紙から始める</h2>
+    <div class="subject-row" id="blank-row"></div>
+    <p class="note">正本は Excel 出力です。PDF は確認用として使ってください。<br>
+    このPCへの一時保存は、ブラウザの設定や共用PCの環境復元で消えることがあります。大事な作業は「作業ファイルを保存」で手元に残してください。</p>
+  </div>
+</div>
+
+<!-- ===== アプリ ===== -->
+<div id="app">
+  <div id="topbar">
+    <span class="logo">📄 解答用紙メーカー</span>
+    <input type="text" id="title-input" title="解答用紙のタイトル">
+    <button class="tb" id="btn-undo">戻す<kbd>Ctrl+Z</kbd></button>
+    <button class="tb" id="btn-redo">やり直す<kbd>Ctrl+Y</kbd></button>
+    <span class="spacer"></span>
+    <button class="tb primary" id="btn-xlsx">Excel出力</button>
+    <button class="tb" id="btn-pdf">PDF（確認用）</button>
+    <button class="tb" id="btn-save">作業ファイルを保存</button>
+    <button class="tb" id="btn-settings" title="設定">⚙</button>
+  </div>
+  <div id="modebar" class="place">🟦 置くモード ─ キーは命令として働きます（文字を入れるには Enter）</div>
+  <div id="main">
+    <div id="side">
+      <h2>欄を置く</h2>
+      <div class="grid3" id="field-tools"></div>
+      <h2>番号を振る（セルを選んでから）</h2>
+      <div class="grid3" id="stamp-tools"></div>
+      <h2>その他</h2>
+      <div class="grid2" id="misc-tools"></div>
+      <div id="tabs">
+        <button class="tab on" data-tab="sheet">解答用紙</button>
+        <button class="tab" data-tab="answer">模範解答</button>
+      </div>
+    </div>
+    <div id="preview">
+      <div id="paper"><svg id="sheet" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div id="status"></div>
+    </div>
+  </div>
+  <input type="text" id="cell-input" autocomplete="off">
+</div>
+
+<div id="toast"></div>
+<input type="file" id="file-open" accept=".json,application/json" style="display:none">
+
+<script>
+"use strict";
+/* =====================================================================
+   解答用紙メーカー v1.0
+   docs/SPEC.md に従う単一HTMLツール。通信なし・外部依存なし。
+   ===================================================================== */
+
+/* ---------------------------------------------------------------
+   1. 寸法の定数
+   お手本Excel（docs/reference）の実測値をそのまま採用する。
+     列幅 6.125（Excel単位）= 48px = 12.7mm（未縮小）
+     行高 13.5pt = 4.7625mm（未縮小）
+     印刷倍率 80% → 1文字マス = 幅10.16mm × 高さ7.62mm
+   --------------------------------------------------------------- */
+const COL_W_EXCEL = 6.125;              // Excel の列幅
+const ROW_H_PT    = 13.5;               // Excel の行高（pt）
+const MM_COL      = 12.7;               // 未縮小の列幅（mm）
+const MM_ROW      = 25.4 * ROW_H_PT / 72; // 未縮小の行高（mm）= 4.7625
+const SCALE       = 0.8;                // 印刷倍率
+const CW          = MM_COL * SCALE;     // 印刷後の列幅 10.16mm
+const RH          = MM_ROW * SCALE;     // 印刷後の行高 3.81mm
+const CHAR_ROWS   = 2;                  // 1文字マス = 2行
+const PAGE = { landscape:{w:297,h:210}, portrait:{w:210,h:297} };
+
+// pt → 印刷後mm（SVG描画用）
+const ptmm = pt => pt * 25.4 / 72 * SCALE;
+
+// 罫線の強さ（同じ辺に複数の指定が来たら強い方を残す）
+const BORDER_RANK = { hair:1, dotted:2, dashed:3, thin:4, mediumDashed:5, medium:6 };
+// 画面描画用の線の見た目（mm）
+const BORDER_VIEW = {
+  hair:        {w:0.12, dash:'0.5 0.5'},
+  dotted:      {w:0.22, dash:'0.35 0.55'},
+  dashed:      {w:0.22, dash:'1 0.7'},
+  thin:        {w:0.26, dash:null},
+  mediumDashed:{w:0.5,  dash:'1.8 1.1'},
+  medium:      {w:0.5,  dash:null}
+};
+
+/* ---------------------------------------------------------------
+   2. 教科ごとの既定
+   --------------------------------------------------------------- */
+const SUBJECTS = {
+  '国語':{orientation:'landscape',writing:'vertical'  ,numberStyle:'kanji'},
+  '数学':{orientation:'portrait' ,writing:'horizontal',numberStyle:'arabic'},
+  '英語':{orientation:'portrait' ,writing:'horizontal',numberStyle:'arabic'},
+  '理科':{orientation:'portrait' ,writing:'horizontal',numberStyle:'arabic'},
+  '社会':{orientation:'portrait' ,writing:'horizontal',numberStyle:'arabic'},
+  'その他':{orientation:'portrait',writing:'horizontal',numberStyle:'arabic'}
+};
+
+const KANJI = ['一','二','三','四','五','六','七','八','九','十',
+               '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+const MARU  = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+const KANA  = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ';
+const kanji = n => (n>=1 && n<=KANJI.length) ? KANJI[n-1] : String(n);
+const maru  = n => (n>=1 && n<=20) ? MARU[n-1] : '('+n+')';
+const kana  = n => (n>=1 && n<=KANA.length) ? KANA[n-1] : String(n);
+
+/* ---------------------------------------------------------------
+   3. ドキュメント（保存されるデータのすべて）
+   --------------------------------------------------------------- */
+let doc = null;          // 現在のドキュメント
+let uid = 1;             // 欄のID採番
+
+function computeGrid(paper){
+  const p = PAGE[paper.orientation];
+  const cols = Math.floor((p.w - paper.marginX*2 + 0.001) / CW);
+  let rows   = Math.floor((p.h - paper.marginY*2 + 0.001) / RH);
+  if (rows % CHAR_ROWS) rows -= rows % CHAR_ROWS;   // 文字マスで割り切れるように
+  return { cols, rows };
+}
+
+function makeTitle(p){
+  const parts = ['第'+p.grade+'学年'];
+  if (p.term)     parts.push(p.term);
+  if (p.testName) parts.push(p.testName);
+  parts.push('解答用紙');
+  return parts.join('　');
+}
+function makeNameLabel(p){
+  return p.nameOrder==='short'
+    ? '　　組　　番　氏名（　　　　　　　）'
+    : p.grade+'年　　組　　番　氏名（　　　　　　　）';
+}
+
+function newDoc(subject){
+  const s = SUBJECTS[subject] || SUBJECTS['その他'];
+  const paper = {
+    subject, orientation:s.orientation, writing:s.writing,
+    marginX:8, marginY:9,
+    grade:'一', term:'', testName:'学年末テスト',
+    nameOrder:'full', showScoreBox:true, numberStyle:s.numberStyle
+  };
+  paper.title = makeTitle(paper);
+  paper.nameLabel = makeNameLabel(paper);
+  const d = {
+    version:1, paper, grid:computeGrid(paper),
+    fields:[], decorations:[], texts:{}, answers:{}
+  };
+  uid = 1;
+  return d;
+}
+
+/* ---------------------------------------------------------------
+   4. ヘッダー（タイトル・氏名欄・得点枠）
+   お手本と同じ位置に自動配置する。ここは欄を置けない予約領域。
+     縦書き：右端＝タイトル、その左＝氏名欄、右下＝得点枠
+     横書き：上＝タイトルと氏名欄、右上＝得点枠
+   --------------------------------------------------------------- */
+const SCORE_ASPECTS = [
+  { key:'合計',    label:'合計' },
+  { key:'思判表',  label:'思・判・表' },
+  { key:'知技',    label:'知・技' }
+];
+const V_SCORE_H = 20;     // 縦書き得点枠の高さ（行）
+const V_SCORE_DIV = 14;   // 得点記入欄との仕切り位置（枠の上からの行数）
+
+function headerLayout(d){
+  const { cols, rows } = d.grid;
+  const vertical = d.paper.writing === 'vertical';
+  const texts = [];      // {c,r,t,size,bold,align}
+  const borders = [];    // {c,r,w,h,style,inner}
+  const reserved = new Set();
+  const mark = (c,r,w,h) => { for(let i=0;i<w;i++) for(let j=0;j<h;j++) reserved.add((c+i)+','+(r+j)); };
+  const totals = scoreTotals(d);
+
+  if (vertical){
+    // 右端2列：タイトル・氏名欄（1文字 = 2行）
+    const put = (col, str, size) => {
+      for (let i=0;i<str.length;i++){
+        const r = i*CHAR_ROWS;
+        if (r >= rows) break;
+        texts.push({c:col, r, t:str[i], size, bold:size>=14});
+      }
+      mark(col, 0, 1, rows);
+    };
+    put(cols-1, d.paper.title, 14);
+    put(cols-2, d.paper.nameLabel, 11);
+
+    // 得点枠：氏名欄の左3列、下端（お手本の W29:Y47 と同じ位置関係）
+    if (d.paper.showScoreBox){
+      const c0 = cols-5, r0 = rows - V_SCORE_H;
+      SCORE_ASPECTS.forEach((a, i) => {
+        const col = c0 + (2 - i);              // 右から 合計→思判表→知技
+        for (let k=0;k<a.label.length;k++)
+          texts.push({c:col, r:r0 + k*CHAR_ROWS, t:a.label[k], size:11});
+        const pts = String(totals[a.key]);
+        const start = r0 + V_SCORE_DIV - pts.length*CHAR_ROWS;
+        for (let k=0;k<pts.length;k++)
+          texts.push({c:col, r:start + k*CHAR_ROWS, t:pts[k], size:11});
+        borders.push({c:col, r:r0, w:1, h:V_SCORE_DIV, style:'thin'});
+        borders.push({c:col, r:r0+V_SCORE_DIV, w:1, h:V_SCORE_H-V_SCORE_DIV, style:'thin'});
+      });
+      borders.push({c:c0, r:r0, w:3, h:V_SCORE_H, style:'medium'});
+      mark(c0, r0, 3, V_SCORE_H);
+    }
+  } else {
+    // 横書き：タイトルと氏名欄は1セルに入れて右へあふれさせる（結合しない）
+    texts.push({c:0, r:0, t:d.paper.title,     size:14, bold:true, align:'left'});
+    texts.push({c:0, r:2, t:d.paper.nameLabel, size:11, align:'left'});
+    mark(0, 0, cols, 4);
+
+    // 得点枠：右上（1区分=2列、ラベル行・配点行・記入行）
+    if (d.paper.showScoreBox){
+      const w = 6, h = 8, c0 = cols - w, r0 = 0;
+      SCORE_ASPECTS.slice().reverse().forEach((a, i) => {   // 左から 知技→思判表→合計
+        const col = c0 + i*2;
+        texts.push({c:col, r:0, t:a.label, size:9, align:'left'});
+        texts.push({c:col, r:2, t:String(totals[a.key]), size:11, align:'left'});
+        if (i>0) borders.push({c:col, r:r0, w:2, h:h, style:'thin'});
+      });
+      borders.push({c:c0, r:r0,   w:w, h:2, style:'thin'});
+      borders.push({c:c0, r:r0+2, w:w, h:2, style:'thin'});
+      borders.push({c:c0, r:r0,   w:w, h:h, style:'medium'});
+      mark(c0, r0, w, h);
+    }
+  }
+  return { texts, borders, reserved };
+}
+
+// 観点別の配点合計（欄の配点を積み上げる）
+function scoreTotals(d){
+  let ki=0, si=0;
+  for (const f of d.fields){
+    const p = Number(f.points)||0;
+    if (f.aspect === '思判表') si += p; else ki += p;
+  }
+  return { '知技':ki, '思判表':si, '合計':ki+si };
+}
+
+// 欄を置き始める位置（ヘッダーと得点枠を避ける）
+function contentOrigin(d){
+  const box = d.paper.showScoreBox;
+  return d.paper.writing==='vertical'
+    ? { c: d.grid.cols - (box ? 6 : 3), r: 0 }
+    : { c: 0, r: box ? 10 : 4 };
+}
+
+/* ---------------------------------------------------------------
+   5. 欄（フィールド）の形
+   欄は矩形の集合。記述が複数列に分かれるため配列で持つ。
+   矩形は読む順に並べる（縦書き＝右の列から左へ、各列は上から下）。
+   --------------------------------------------------------------- */
+const FIELD_DEFS = {
+  1:{ name:'記号',     hint:'記号（一文字）' },
+  2:{ name:'記号複数', hint:'記号をいくつか並べる' },
+  3:{ name:'漢字・語句', hint:'マス目に漢字や語句' },
+  4:{ name:'記述',     hint:'字数指定の記述欄' },
+  5:{ name:'答えのみ', hint:'答えだけを書く欄' },
+  6:{ name:'グラフ',   hint:'グラフ・作図（白枠／方眼）' },
+  7:{ name:'自由枠',   hint:'途中式・証明（罫線なしの大枠）' }
+};
+const BOX5_LEN = 6;      // 答えのみ欄：縦書きの長さ（行）
+const BOX5_W   = 4;      // 答えのみ欄：横書きの幅（列）
+const BOX7_W_V = 4;      // 自由記述枠の幅：縦書き（列）
+const BOX7_W_H = 8;      // 自由記述枠の幅：横書き（列）
+
+// 欄の矩形を組み立てる。置けないときは null と理由を返す。
+function buildRects(d, type, at, opt){
+  const vertical = d.paper.writing==='vertical';
+  const { cols, rows } = d.grid;
+  const rects = [];
+  const n = Math.max(1, Number(opt.n)||1);
+
+  if (type===1 || type===2 || type===3 || type===4){
+    // 文字マスを連ねる欄。記述だけは入り切らないとき複数列に分割する。
+    const per = vertical
+      ? Math.floor((rows - at.r) / CHAR_ROWS)     // 1列に入る文字数
+      : (cols - at.c);                            // 1行に入る文字数
+    if (per < 1) return { error:'この位置には入りません' };
+    if (type!==4 && n > per) return { error:'この位置には '+per+' 文字までしか入りません' };
+
+    let counts;
+    if (n <= per) counts = [n];
+    else {
+      const lines = Math.ceil(n / per);
+      const each  = Math.ceil(n / lines);          // できるだけ均等に割る
+      counts = [];
+      let left = n;
+      for (let i=0;i<lines;i++){ const t = Math.min(each, left); counts.push(t); left -= t; }
+      if (left > 0) return { error:'この位置には入りません' };
+    }
+    counts.forEach((cnt, i) => {
+      if (vertical) rects.push({ c: at.c - i, r: at.r, w:1, h: cnt*CHAR_ROWS });
+      else          rects.push({ c: at.c, r: at.r + i*CHAR_ROWS, w: cnt, h: CHAR_ROWS });
+    });
+  }
+  else if (type===5){
+    // 答えのみ：n個の欄を並べる。入り切らなければ次の列（行）へ折り返す
+    let c = at.c, r = at.r;
+    for (let i=0;i<n;i++){
+      if (vertical){
+        if (r + BOX5_LEN > rows){ c -= 1; r = at.r; }
+        if (c < 0) return { error:'この位置には '+i+' 個までしか入りません' };
+        rects.push({ c, r, w:1, h:BOX5_LEN });
+        r += BOX5_LEN;
+      } else {
+        if (c + BOX5_W > cols){ c = at.c; r += CHAR_ROWS; }
+        if (r + CHAR_ROWS > rows) return { error:'この位置には '+i+' 個までしか入りません' };
+        rects.push({ c, r, w:BOX5_W, h:CHAR_ROWS });
+        c += BOX5_W;
+      }
+    }
+  }
+  else if (type===6){
+    const w = Math.max(1, Number(opt.w)||6), h = Math.max(1, Number(opt.h)||6);
+    if (vertical) rects.push({ c: at.c - w + 1, r: at.r, w, h: h*CHAR_ROWS });
+    else          rects.push({ c: at.c, r: at.r, w, h: h*CHAR_ROWS });
+  }
+  else if (type===7){
+    const w = vertical ? BOX7_W_V : BOX7_W_H;
+    const h = Math.max(1, Number(opt.h)||6) * CHAR_ROWS;
+    if (vertical) rects.push({ c: at.c - w + 1, r: at.r, w, h });
+    else          rects.push({ c: at.c, r: at.r, w, h });
+  }
+
+  for (const r of rects){
+    if (r.c < 0 || r.r < 0 || r.c + r.w > cols || r.r + r.h > rows)
+      return { error:'用紙からはみ出します（A4・1枚に収まる範囲で置いてください）' };
+  }
+  return { rects };
+}
+
+// 欄が実際に使うセル（前置き・後置き文字の分も含む）
+function fieldFootprint(d, f){
+  const cells = [];
+  for (const r of f.rects)
+    for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) cells.push([r.c+i, r.r+j]);
+  for (const [str, side] of [[f.prefix,'before'],[f.suffix,'after']]){
+    if (!str) continue;
+    for (const p of affixCells(d, f, side, str.length)) cells.push([p.c, p.r]);
+  }
+  return cells;
+}
+
+// 前置き・後置き文字を置くセル（欄の直前／直後）
+function affixCells(d, f, side, len){
+  const vertical = d.paper.writing==='vertical';
+  const first = f.rects[0], last = f.rects[f.rects.length-1];
+  const out = [];
+  for (let i=0;i<len;i++){
+    if (side==='before'){
+      if (vertical) out.unshift({ c:first.c, r:first.r - (i+1)*CHAR_ROWS });
+      else          out.unshift({ c:first.c - (i+1), r:first.r });
+    } else {
+      if (vertical) out.push({ c:last.c, r:last.r + last.h + i*CHAR_ROWS });
+      else          out.push({ c:last.c + last.w + i, r:last.r });
+    }
+  }
+  return out.filter(p => p.c>=0 && p.r>=0 && p.c<d.grid.cols && p.r<d.grid.rows);
+}
+
+// 欄の文字マス（模範解答を1文字ずつ並べるための順序つきリスト）
+function charCells(d, f){
+  const vertical = d.paper.writing==='vertical';
+  const out = [];
+  for (const r of f.rects){
+    if (vertical){
+      for (let c = r.c + r.w - 1; c >= r.c; c--)               // 右の列から左へ
+        for (let y = r.r; y < r.r + r.h; y += CHAR_ROWS) out.push({c, r:y});
+    } else {
+      for (let y = r.r; y < r.r + r.h; y += CHAR_ROWS)         // 上の行から下へ
+        for (let c = r.c; c < r.c + r.w; c++) out.push({c, r:y});
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   6. セルの組み立て
+   画面もExcelもこの結果だけを見て描く（ズレを起こさないため）。
+   --------------------------------------------------------------- */
+function buildCells(d, withAnswers){
+  const cells = new Map();
+  const get = (c,r) => {
+    const k = c+','+r;
+    let x = cells.get(k);
+    if (!x){ x = {c,r,t:'',size:11,bold:false,align:'center',b:{}}; cells.set(k,x); }
+    return x;
+  };
+  const line = (c,r,side,style) => {
+    if (c<0||r<0||c>=d.grid.cols||r>=d.grid.rows) return;
+    const x = get(c,r), cur = x.b[side];
+    if (!cur || BORDER_RANK[style] > BORDER_RANK[cur]) x.b[side] = style;
+  };
+  // 矩形の外枠
+  const box = (c,r,w,h,style) => {
+    for (let i=0;i<w;i++){ line(c+i, r, 'top', style); line(c+i, r+h-1, 'bottom', style); }
+    for (let j=0;j<h;j++){ line(c, r+j, 'left', style); line(c+w-1, r+j, 'right', style); }
+  };
+  const put = (c,r,t,size,bold,align) => {
+    if (c<0||r<0||c>=d.grid.cols||r>=d.grid.rows) return;
+    const x = get(c,r); x.t = t; x.size = size||11; x.bold = !!bold; x.align = align||'center';
+  };
+
+  // (1) ヘッダー
+  const head = headerLayout(d);
+  head.borders.forEach(b => box(b.c,b.r,b.w,b.h,b.style));
+  head.texts.forEach(t => put(t.c,t.r,t.t,t.size,t.bold,t.align));
+
+  // (2) 欄
+  const vertical = d.paper.writing==='vertical';
+  for (const f of d.fields){
+    const outer = f.complete ? 'medium' : 'thin';
+    f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
+
+    if (f.type===2 || f.type===3 || f.type===4){
+      // 文字の区切り線（記号複数は実線、漢字と記述は点線）
+      const sep = (f.type===2) ? 'thin' : 'dotted';
+      f.rects.forEach(r => {
+        if (vertical){
+          for (let y = r.r + CHAR_ROWS; y < r.r + r.h; y += CHAR_ROWS)
+            for (let i=0;i<r.w;i++) line(r.c+i, y, 'top', sep);
+        } else {
+          for (let c = r.c + 1; c < r.c + r.w; c++)
+            for (let j=0;j<r.h;j++) line(c, r.r+j, 'left', sep);
+        }
+      });
+      // 8割ライン（「以内」の記述だけ）
+      if (f.type===4 && !f.exact && f.chars >= 5){
+        const at = Math.floor(f.chars * 0.8);
+        const cellsList = charCells(d, f);
+        if (at >= 1 && at < cellsList.length){
+          const p = cellsList[at];
+          const own = f.rects.find(x => p.c>=x.c && p.c<x.c+x.w && p.r>=x.r && p.r<x.r+x.h) || f.rects[0];
+          if (vertical) for (let i=0;i<own.w;i++) line(own.c+i, p.r, 'top', 'mediumDashed');
+          else          for (let j=0;j<own.h;j++) line(p.c, own.r+j, 'left', 'mediumDashed');
+        }
+      }
+    }
+    if (f.type===6 && f.grid){
+      // 方眼：1列 × 3行ごと（約10mm四方。細い破線）
+      const r = f.rects[0];
+      for (let c = r.c+1; c < r.c+r.w; c++)
+        for (let j=0;j<r.h;j++) line(c, r.r+j, 'left', 'hair');
+      for (let y = r.r+3; y < r.r+r.h; y += 3)
+        for (let i=0;i<r.w;i++) line(r.c+i, y, 'top', 'hair');
+    }
+    // 前置き・後置き文字
+    for (const [str, side] of [[f.prefix,'before'],[f.suffix,'after']]){
+      if (!str) continue;
+      const ps = affixCells(d, f, side, str.length);
+      ps.forEach((p,i) => put(p.c, p.r, str[i], 11, false, 'center'));
+    }
+  }
+
+  // (3) 太枠（選択範囲に引いた枠）
+  d.decorations.forEach(v => box(v.c, v.r, v.w, v.h, 'medium'));
+
+  // (4) 入力した文字・振った番号
+  for (const k in d.texts){
+    const [c,r] = k.split(',').map(Number);
+    const v = d.texts[k];
+    if (v && v.t !== '') put(c, r, v.t, v.size||11, v.bold, v.align);
+  }
+
+  // (5) 模範解答
+  if (withAnswers){
+    for (const f of d.fields){
+      const a = d.answers[f.id];
+      if (!a) continue;
+      const list = charCells(d, f);
+      for (let i=0;i<a.length && i<list.length;i++)
+        put(list[i].c, list[i].r, a[i], 11, false, 'center');
+    }
+  }
+  return cells;
+}
+
+/* ---------------------------------------------------------------
+   7. 画面の状態
+   --------------------------------------------------------------- */
+const ui = {
+  mode:'place',          // 'place' | 'input'
+  tab:'sheet',           // 'sheet' | 'answer'
+  cur:{c:0,r:0},         // カーソル
+  sel:null,              // 選択範囲 {c,r,w,h}（矩形）
+  extra:[],              // Ctrl+クリックで足したセル [{c,r}]
+  dirty:false,
+  editTarget:null,       // 入力モードの対象
+  reserved:new Set()
+};
+const history = { sheet:{undo:[],redo:[]}, answer:{undo:[],redo:[]} };
+
+const $  = s => document.querySelector(s);
+const svg = $('#sheet');
+
+function snapshot(){
+  const h = history[ui.tab];
+  h.undo.push(JSON.stringify(doc));
+  if (h.undo.length > 120) h.undo.shift();
+  h.redo.length = 0;
+  ui.dirty = true;
+}
+function undo(){
+  const h = history[ui.tab];
+  if (!h.undo.length) return toast('これ以上は戻せません');
+  h.redo.push(JSON.stringify(doc));
+  doc = JSON.parse(h.undo.pop());
+  render(); toast('戻しました');
+}
+function redo(){
+  const h = history[ui.tab];
+  if (!h.redo.length) return toast('やり直せる操作はありません');
+  h.undo.push(JSON.stringify(doc));
+  doc = JSON.parse(h.redo.pop());
+  render(); toast('やり直しました');
+}
+
+/* ---------------------------------------------------------------
+   8. 描画（SVG。印刷そのままの寸法で描く）
+   --------------------------------------------------------------- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const el = (n, a) => { const e = document.createElementNS(SVGNS,n); for(const k in a) e.setAttribute(k,a[k]); return e; };
+let geo = null;   // {x0,y0,pw,ph} 用紙上のグリッド原点
+
+function render(){
+  const p = PAGE[doc.paper.orientation];
+  const { cols, rows } = doc.grid;
+  const gw = cols*CW, gh = rows*RH;
+  const x0 = (p.w - gw)/2, y0 = (p.h - gh)/2;   // Excel の「中央に印刷」と同じ
+  geo = { x0, y0, pw:p.w, ph:p.h };
+  svg.setAttribute('viewBox', '0 0 '+p.w+' '+p.h);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  fitPreview(p);
+  document.documentElement.style.setProperty('--pw', p.w+'mm');
+  document.documentElement.style.setProperty('--ph', p.h+'mm');
+  setPageRule(doc.paper.orientation);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  svg.appendChild(el('rect',{x:0,y:0,width:p.w,height:p.h,fill:'#fff'}));
+
+  const head = headerLayout(doc);
+  ui.reserved = head.reserved;
+  const cells = buildCells(doc, ui.tab==='answer');
+
+  // 下地：うすいマス目（印刷されない案内線）
+  const guide = el('g',{stroke:'#e3e8ee','stroke-width':0.08,'class':'guide'});
+  for (let c=0;c<=cols;c++) guide.appendChild(el('line',{x1:x0+c*CW,y1:y0,x2:x0+c*CW,y2:y0+gh}));
+  for (let r=0;r<=rows;r+=CHAR_ROWS) guide.appendChild(el('line',{x1:x0,y1:y0+r*RH,x2:x0+gw,y2:y0+r*RH}));
+  svg.appendChild(guide);
+
+  // 予約領域（ヘッダー）の淡い塗り
+  const resg = el('g',{fill:'#f2f5f8','class':'guide'});
+  ui.reserved.forEach(k=>{
+    const [c,r] = k.split(',').map(Number);
+    resg.appendChild(el('rect',{x:x0+c*CW,y:y0+r*RH,width:CW,height:RH}));
+  });
+  svg.appendChild(resg);
+
+  // 選択範囲
+  if (ui.sel){
+    svg.appendChild(el('rect',{x:x0+ui.sel.c*CW, y:y0+ui.sel.r*RH, 'class':'guide',
+      width:ui.sel.w*CW, height:ui.sel.h*RH, fill:'#1a6fd4', 'fill-opacity':0.12}));
+  }
+  ui.extra.forEach(p=>{
+    svg.appendChild(el('rect',{x:x0+p.c*CW, y:y0+p.r*RH, width:CW, height:RH,
+      'class':'guide', fill:'#1a6fd4','fill-opacity':0.18}));
+  });
+
+  // 罫線
+  const lines = el('g',{'stroke-linecap':'square'});
+  cells.forEach(x=>{
+    const X = x0 + x.c*CW, Y = y0 + x.r*RH;
+    const seg = (side) => {
+      const st = x.b[side]; if (!st) return;
+      const v = BORDER_VIEW[st];
+      const a = {stroke:'#000','stroke-width':v.w};
+      if (v.dash) a['stroke-dasharray'] = v.dash;
+      if (side==='top')    Object.assign(a,{x1:X,y1:Y,x2:X+CW,y2:Y});
+      if (side==='bottom') Object.assign(a,{x1:X,y1:Y+RH,x2:X+CW,y2:Y+RH});
+      if (side==='left')   Object.assign(a,{x1:X,y1:Y,x2:X,y2:Y+RH});
+      if (side==='right')  Object.assign(a,{x1:X+CW,y1:Y,x2:X+CW,y2:Y+RH});
+      lines.appendChild(el('line',a));
+    };
+    seg('top'); seg('bottom'); seg('left'); seg('right');
+  });
+  svg.appendChild(lines);
+
+  // 文字
+  const texts = el('g',{'font-family':'"Yu Gothic","Yu Gothic UI","Meiryo",sans-serif'});
+  cells.forEach(x=>{
+    if (!x.t) return;
+    const fs = ptmm(x.size);
+    const a = { y: y0 + x.r*RH + RH/2, 'font-size':fs, fill:'#000',
+                'dominant-baseline':'central' };
+    if (x.align==='left'){ a.x = x0 + x.c*CW + 0.4; a['text-anchor']='start'; }
+    else { a.x = x0 + x.c*CW + CW/2; a['text-anchor']='middle'; }
+    if (x.bold) a['font-weight']='bold';
+    const t = el('text',a); t.textContent = x.t; texts.appendChild(t);
+  });
+  svg.appendChild(texts);
+
+  // カーソル
+  const cu = el('rect',{x:x0+ui.cur.c*CW, y:y0+ui.cur.r*RH, width:CW, height:RH, 'class':'guide',
+    fill:'none', stroke: ui.mode==='input' ? '#12a05a' : '#1a6fd4', 'stroke-width':0.45});
+  svg.appendChild(cu);
+
+  // 用紙の縁
+  svg.appendChild(el('rect',{x:0.1,y:0.1,width:p.w-0.2,height:p.h-0.2,'class':'guide',
+    fill:'none',stroke:'#c9d2db','stroke-width':0.2}));
+
+  drawStatus();
+  $('#title-input').value = doc.paper.title;
+}
+
+function drawStatus(){
+  const t = scoreTotals(doc);
+  const s = $('#status');
+  s.innerHTML = '';
+  const chip = (txt, cls) => { const d2=document.createElement('span'); d2.className='chip'+(cls?' '+cls:''); d2.textContent=txt; s.appendChild(d2); };
+  chip('用紙：A4 '+(doc.paper.orientation==='landscape'?'横':'縦')+' ／ '+doc.grid.cols+'列 × '+doc.grid.rows+'行 ／ 余白'+doc.paper.marginX+'mm・'+doc.paper.marginY+'mm');
+  chip('カーソル：'+(ui.cur.c+1)+'列 '+(ui.cur.r+1)+'行');
+  chip('欄：'+doc.fields.length+'個');
+  const selN = selectedCells().length;
+  if (selN > 1) chip('選択中：'+selN+'セル');
+  if (doc.fields.length === 0) chip('配点：未設定');
+  else if (t['合計'] === 100) chip('配点：合計100（知技'+t['知技']+'／思判表'+t['思判表']+'）');
+  else chip('配点：合計'+t['合計']+'（100になっていません）','warn');
+  chip('1枚に収まっています');
+}
+
+// 印刷時の用紙サイズを常に用紙の向きに合わせておく
+function setPageRule(orientation){
+  let st = document.getElementById('page-rule');
+  if (!st){ st = document.createElement('style'); st.id = 'page-rule'; document.head.appendChild(st); }
+  const want = '@page{size:A4 '+(orientation==='landscape'?'landscape':'portrait')+';margin:0}';
+  if (st.textContent !== want) st.textContent = want;
+}
+
+// 用紙全体が画面に収まる大きさにする
+function fitPreview(p){
+  const pane = document.getElementById('preview');
+  const availW = pane.clientWidth - 36;
+  const availH = pane.clientHeight - 60;
+  if (availW <= 0 || availH <= 0) return;
+  const w = Math.min(availW, availH * p.w / p.h, 1180);
+  document.getElementById('paper').style.width = Math.max(240, Math.floor(w)) + 'px';
+}
+window.addEventListener('resize', ()=>{ if (doc) fitPreview(PAGE[doc.paper.orientation]); });
+
+let toastTimer = null;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('on'), 1900);
+}
+
+/* 画面座標 → セル */
+function pointToCell(ev){
+  const r = svg.getBoundingClientRect();
+  const p = PAGE[doc.paper.orientation];
+  const mx = (ev.clientX - r.left) / r.width  * p.w;
+  const my = (ev.clientY - r.top ) / r.height * p.h;
+  const c = Math.floor((mx - geo.x0)/CW), rr = Math.floor((my - geo.y0)/RH);
+  if (c<0||rr<0||c>=doc.grid.cols||rr>=doc.grid.rows) return null;
+  return {c, r:rr};
+}
+
+/* ---------------------------------------------------------------
+   9. 欄を置く
+   --------------------------------------------------------------- */
+function occupied(d){
+  const set = new Set(ui.reserved);
+  d.fields.forEach(f => fieldFootprint(d,f).forEach(([c,r]) => set.add(c+','+r)));
+  return set;
+}
+
+async function placeField(type){
+  if (ui.tab !== 'sheet') return toast('模範解答タブでは欄を置けません。解答用紙タブに切り替えてください');
+  const vertical = doc.paper.writing==='vertical';
+  const opt = {};
+
+  // 型ごとに必要なことだけ聞く
+  if (type===2) { const v = await ask('記号をいくつ並べますか', [{key:'n',label:'個数',type:'number',value:3,min:1}]); if(!v) return; opt.n=+v.n; }
+  if (type===3) { const v = await ask('マスの数', [{key:'n',label:'マス数',type:'number',value:2,min:1}]); if(!v) return; opt.n=+v.n; }
+  if (type===4) {
+    const v = await ask('記述欄の字数', [
+      {key:'n',label:'字数',type:'number',value:50,min:1},
+      {key:'mode',label:'条件',type:'seg',value:'within',options:[['within','以内（8割ライン）'],['exact','ちょうど']]}
+    ]); if(!v) return; opt.n=+v.n; opt.exact = (v.mode==='exact');
+  }
+  if (type===5) { const v = await ask('答えのみの欄', [{key:'n',label:'欄数',type:'number',value:1,min:1}]); if(!v) return; opt.n=+v.n; }
+  if (type===6) {
+    const v = await ask('グラフ・作図の欄', [
+      {key:'kind',label:'種類',type:'seg',value:'grid',options:[['grid','方眼'],['plain','白枠']]},
+      {key:'w',label:'幅（列）',type:'number',value:8,min:1},
+      {key:'h',label:'高さ（文字分）',type:'number',value:8,min:1}
+    ]); if(!v) return; opt.w=+v.w; opt.h=+v.h; opt.grid = (v.kind==='grid');
+  }
+  if (type===7) { const v = await ask('自由記述枠（途中式・証明）', [{key:'h',label:'高さ（文字分）',type:'number',value:6,min:1}]); if(!v) return; opt.h=+v.h; }
+
+  const at = { c:ui.cur.c, r:ui.cur.r };
+  const built = buildRects(doc, type, at, opt);
+  if (built.error) return toast('⚠ '+built.error);
+
+  // 重なりの確認
+  const used = occupied(doc);
+  for (const r of built.rects)
+    for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
+      if (used.has((r.c+i)+','+(r.r+j)))
+        return toast('⚠ すでに欄かタイトル欄があります。別の場所に置いてください');
+
+  snapshot();
+  const f = {
+    id:'f'+(uid++), type, rects:built.rects,
+    chars: (type===4 ? opt.n : (opt.n||1)), exact: !!opt.exact, grid: !!opt.grid,
+    points:0, aspect:'知技', complete:false, prefix:'', suffix:''
+  };
+  doc.fields.push(f);
+
+  // カーソルを次の位置へ進める
+  const last = built.rects[built.rects.length-1];
+  const minC = Math.min(...built.rects.map(r=>r.c));
+  if (vertical){
+    let nr = last.r + last.h, nc = last.c;
+    if (nr + CHAR_ROWS > doc.grid.rows){ nc = minC - 1; nr = contentOrigin(doc).r; }
+    ui.cur = { c: Math.max(0,nc), r: nr };
+  } else {
+    let nc = last.c + last.w, nr = last.r;
+    if (nc >= doc.grid.cols){ nc = contentOrigin(doc).c; nr = last.r + last.h; }
+    ui.cur = { c: nc, r: Math.min(nr, doc.grid.rows-1) };
+  }
+  ui.sel = null; ui.extra = [];
+  render();
+}
+
+/* 太枠（選択範囲の外枠を太線に） */
+function markComplete(){
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  snapshot();
+  // 選択とぴったり重なる欄があれば「完答」扱い、なければ枠として描く
+  const f = doc.fields.find(f => f.rects.length===1 &&
+    f.rects[0].c===s.c && f.rects[0].r===s.r && f.rects[0].w===s.w && f.rects[0].h===s.h);
+  if (f){ f.complete = !f.complete; toast(f.complete?'完答（太枠）にしました':'太枠を外しました'); }
+  else {
+    const i = doc.decorations.findIndex(v=>v.c===s.c&&v.r===s.r&&v.w===s.w&&v.h===s.h);
+    if (i>=0){ doc.decorations.splice(i,1); toast('太枠を外しました'); }
+    else { doc.decorations.push({c:s.c,r:s.r,w:s.w,h:s.h}); toast('太枠を引きました'); }
+  }
+  render();
+}
+
+/* 消す */
+function clearSelection(){
+  const cells = selectedCells();
+  if (!cells.length) return;
+  snapshot();
+  const keys = new Set(cells.map(p=>p.c+','+p.r));
+  if (ui.tab==='answer'){
+    // 模範解答タブでは答えだけ消す
+    let n=0;
+    doc.fields.forEach(f=>{
+      if (charCells(doc,f).some(p=>keys.has(p.c+','+p.r)) && doc.answers[f.id]){ delete doc.answers[f.id]; n++; }
+    });
+    render(); return toast(n?'答えを消しました':'消すものがありません');
+  }
+  const before = doc.fields.length;
+  doc.fields = doc.fields.filter(f => !fieldFootprint(doc,f).some(([c,r])=>keys.has(c+','+r)));
+  doc.decorations = doc.decorations.filter(v=>{
+    for(let i=0;i<v.w;i++) for(let j=0;j<v.h;j++) if(keys.has((v.c+i)+','+(v.r+j))) return false;
+    return true;
+  });
+  keys.forEach(k=>{ delete doc.texts[k]; });
+  render();
+  toast(before!==doc.fields.length ? '欄を消しました' : '消しました');
+}
+
+// 対象のセル：範囲選択と「離れた選択」を優先し、どちらも無ければカーソルの1マス
+function selectedCells(){
+  const out = [];
+  if (ui.sel)
+    for (let j=0;j<ui.sel.h;j++) for (let i=0;i<ui.sel.w;i++) out.push({c:ui.sel.c+i, r:ui.sel.r+j});
+  ui.extra.forEach(p=>{ if(!out.some(q=>q.c===p.c&&q.r===p.r)) out.push(p); });
+  if (!out.length) out.push({c:ui.cur.c, r:ui.cur.r});
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   10. 番号スタンプ（選んだセルに順番に振る。自動判断はしない）
+   --------------------------------------------------------------- */
+const STAMPS = {
+  D:{ name:'大問',   fmt:(n,st)=> st==='kanji'? kanji(n) : String(n), size:14, bold:true },
+  Q:{ name:'問番号', fmt:(n,st)=> '問'+(st==='kanji'? kanji(n) : String(n)), size:11 },
+  P:{ name:'(1)',    fmt:(n)=> '('+n+')', size:11 },
+  M:{ name:'①',      fmt:(n)=> maru(n), size:14 },
+  A:{ name:'ア',      fmt:(n)=> kana(n), size:14 }
+};
+
+async function stamp(key){
+  if (ui.tab !== 'sheet') return toast('模範解答タブでは番号を振れません');
+  const def = STAMPS[key];
+  const cells = selectedCells();
+  if (!cells.length) return;
+  const v = await ask(def.name+'を振ります（'+cells.length+'か所）',
+    [{key:'start',label:'開始番号',type:'number',value:1,min:1}]);
+  if (!v) return;
+  const start = Math.max(1, +v.start||1);
+  // 読む順に並べ替える
+  const vertical = doc.paper.writing==='vertical';
+  cells.sort((a,b)=> vertical ? (b.c-a.c)||(a.r-b.r) : (a.r-b.r)||(a.c-b.c));
+  snapshot();
+  cells.forEach((p,i)=>{
+    doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle), size:def.size, bold:!!def.bold };
+  });
+  ui.sel = null; ui.extra = [];
+  render();
+  toast(def.name+'を'+cells.length+'か所に振りました');
+}
+
+/* ---------------------------------------------------------------
+   11. 入力モード（ここだけ日本語入力が使える）
+   --------------------------------------------------------------- */
+function enterInput(){
+  const inp = $('#cell-input');
+  if (ui.tab==='answer'){
+    const f = fieldAt(ui.cur.c, ui.cur.r);
+    if (!f) return toast('答えを入れる欄の上でEnterを押してください');
+    ui.editTarget = { kind:'answer', field:f };
+    inp.value = doc.answers[f.id] || '';
+    inp.placeholder = FIELD_DEFS[f.type].name+'の答え';
+  } else {
+    ui.editTarget = { kind:'cell', c:ui.cur.c, r:ui.cur.r };
+    const cur = doc.texts[ui.cur.c+','+ui.cur.r];
+    inp.value = cur ? cur.t : '';
+    inp.placeholder = '文字（1マスに1文字ずつ並びます）';
+  }
+  ui.mode = 'input';
+  const rect = svg.getBoundingClientRect(), p = PAGE[doc.paper.orientation];
+  const sx = rect.width/p.w, sy = rect.height/p.h;
+  inp.style.display = 'block';
+  inp.style.left = (rect.left + window.scrollX + (geo.x0 + ui.cur.c*CW)*sx) + 'px';
+  inp.style.top  = (rect.top  + window.scrollY + (geo.y0 + ui.cur.r*RH)*sy + 20) + 'px';
+  inp.focus(); inp.select();
+  setModeBar();
+  render();
+}
+
+function commitInput(){
+  const inp = $('#cell-input');
+  const val = inp.value;
+  const t = ui.editTarget;
+  if (t){
+    snapshot();
+    if (t.kind==='answer') {
+      if (val) doc.answers[t.field.id] = val; else delete doc.answers[t.field.id];
+    } else {
+      // 1マス1文字で書き方向に並べる
+      const vertical = doc.paper.writing==='vertical';
+      delete doc.texts[t.c+','+t.r];
+      for (let i=0;i<val.length;i++){
+        const c = vertical ? t.c : t.c + i;
+        const r = vertical ? t.r + i*CHAR_ROWS : t.r;
+        if (c>=doc.grid.cols || r>=doc.grid.rows) break;
+        doc.texts[c+','+r] = { t: val[i], size:11 };
+      }
+    }
+  }
+  exitInput();
+}
+function exitInput(){
+  const inp = $('#cell-input');
+  inp.style.display='none'; inp.value='';
+  ui.mode='place'; ui.editTarget=null;
+  setModeBar();
+  document.body.focus();
+  render();
+}
+function setModeBar(){
+  const b = $('#modebar');
+  if (ui.mode==='input'){
+    b.className='input';
+    b.textContent='🟩 入力モード ─ 日本語入力が使えます（Enter で確定 ／ Esc で取り消し）';
+  } else {
+    b.className='place';
+    b.textContent='🟦 置くモード ─ キーは命令として働きます（文字を入れるには Enter）';
+  }
+}
+function fieldAt(c,r){
+  return doc.fields.find(f => f.rects.some(x => c>=x.c && c<x.c+x.w && r>=x.r && r<x.r+x.h));
+}
+
+/* ---------------------------------------------------------------
+   12. キーボード
+   置くモードでは文字入力欄にフォーカスを置かないので、日本語入力が
+   ONでもキーは命令として届く。判定は e.code で行う。
+   --------------------------------------------------------------- */
+const CODE_FIELD = {Digit1:1,Digit2:2,Digit3:3,Digit4:4,Digit5:5,Digit6:6,Digit7:7,
+                    Numpad1:1,Numpad2:2,Numpad3:3,Numpad4:4,Numpad5:5,Numpad6:6,Numpad7:7};
+const CODE_STAMP = {KeyD:'D',KeyQ:'Q',KeyP:'P',KeyM:'M',KeyA:'A'};
+
+document.addEventListener('keydown', ev => {
+  if ($('#start').style.display !== 'none') return;         // 起動画面では何もしない
+  if (document.querySelector('.modal')) return;             // モーダルは各自で処理
+  if (ev.isComposing || ev.keyCode === 229) return;         // 日本語変換中は無視
+
+  // --- 入力モード：Enter と Esc 以外は文字として通す ---
+  if (ui.mode === 'input'){
+    if (ev.key === 'Enter'){ ev.preventDefault(); commitInput(); }
+    else if (ev.key === 'Escape'){ ev.preventDefault(); exitInput(); }
+    return;
+  }
+
+  // --- 置くモード ---
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  if (ctrl){
+    if (ev.code==='KeyZ' && !ev.shiftKey){ ev.preventDefault(); return undo(); }
+    if ((ev.code==='KeyZ' && ev.shiftKey) || ev.code==='KeyY'){ ev.preventDefault(); return redo(); }
+    return;                                                  // 他の Ctrl 系はブラウザに任せる
+  }
+  if (ev.altKey) return;
+
+  // 移動と選択
+  const MOVE = {ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
+  if (MOVE[ev.key]){
+    ev.preventDefault();
+    const [dc,dr] = MOVE[ev.key];
+    const nc = Math.min(doc.grid.cols-1, Math.max(0, ui.cur.c+dc));
+    const nr = Math.min(doc.grid.rows-1, Math.max(0, ui.cur.r+dr));
+    if (ev.shiftKey){
+      const a = ui.selAnchor || {c:ui.cur.c, r:ui.cur.r};
+      ui.selAnchor = a;
+      ui.cur = {c:nc, r:nr};
+      ui.sel = { c:Math.min(a.c,nc), r:Math.min(a.r,nr),
+                 w:Math.abs(a.c-nc)+1, h:Math.abs(a.r-nr)+1 };
+    } else { ui.cur = {c:nc,r:nr}; ui.sel=null; ui.selAnchor=null; }   // 離れた選択は残す
+    render(); return;
+  }
+
+  if (ev.key === 'Enter' || ev.key === 'F2'){ ev.preventDefault(); return enterInput(); }
+  if (ev.key === 'Escape'){ ev.preventDefault(); ui.sel=null; ui.extra=[]; ui.selAnchor=null; render(); return; }
+  if (ev.key === 'Delete' || ev.key === 'Backspace'){ ev.preventDefault(); return clearSelection(); }
+  if (ev.key === ' ' && ev.shiftKey){          // 離れたセルを選択に足す／外す
+    ev.preventDefault();
+    const i = ui.extra.findIndex(q => q.c===ui.cur.c && q.r===ui.cur.r);
+    if (i>=0) ui.extra.splice(i,1); else ui.extra.push({c:ui.cur.c, r:ui.cur.r});
+    render();
+    toast(ui.extra.length ? '選んだセル：'+ui.extra.length+'か所（番号を振るキーを押してください）' : '選択を外しました');
+    return;
+  }
+  if (ev.key === ' '){ ev.preventDefault(); return openFieldPopup(); }
+  if (ev.key === 'Tab'){ ev.preventDefault(); return; }
+
+  if (CODE_FIELD[ev.code]){ ev.preventDefault(); return placeField(CODE_FIELD[ev.code]); }
+  if (CODE_STAMP[ev.code]){ ev.preventDefault(); return stamp(CODE_STAMP[ev.code]); }
+  if (ev.code === 'KeyT'){ ev.preventDefault(); return markComplete(); }
+
+  // 命令に当てはまらない文字キー → 入力モードの案内を出す
+  if (ev.key.length === 1 && !ctrl){ ev.preventDefault(); toast('文字を入れるには Enter'); }
+});
+
+/* クリック操作 */
+svg.addEventListener('mousedown', ev => {
+  if (ui.mode==='input') commitInput();
+  const p = pointToCell(ev); if (!p) return;
+  if (ev.ctrlKey || ev.metaKey){
+    const i = ui.extra.findIndex(q=>q.c===p.c&&q.r===p.r);
+    if (i>=0) ui.extra.splice(i,1); else ui.extra.push(p);
+    render(); return;
+  }
+  if (ev.shiftKey){
+    const a = {c:ui.cur.c, r:ui.cur.r};
+    ui.sel = { c:Math.min(a.c,p.c), r:Math.min(a.r,p.r), w:Math.abs(a.c-p.c)+1, h:Math.abs(a.r-p.r)+1 };
+    ui.selAnchor = a; render(); return;
+  }
+  ui.cur = p; ui.sel = null; ui.extra=[]; ui.selAnchor = p;
+  dragging = true; render();
+});
+let dragging = false;
+svg.addEventListener('mousemove', ev => {
+  if (!dragging) return;
+  const p = pointToCell(ev); if (!p) return;
+  const a = ui.selAnchor;
+  ui.sel = { c:Math.min(a.c,p.c), r:Math.min(a.r,p.r), w:Math.abs(a.c-p.c)+1, h:Math.abs(a.r-p.r)+1 };
+  if (ui.sel.w===1 && ui.sel.h===1) ui.sel = null;
+  render();
+});
+document.addEventListener('mouseup', ()=>{ dragging=false; });
+svg.addEventListener('dblclick', ev => { const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
+
+$('#cell-input').addEventListener('blur', ()=>{ if (ui.mode==='input') commitInput(); });
+
+/* ---------------------------------------------------------------
+   13. 欄の設定（Space またはクリック後の小窓）
+   --------------------------------------------------------------- */
+async function openFieldPopup(){
+  const f = fieldAt(ui.cur.c, ui.cur.r);
+  if (!f) return toast('欄の上にカーソルを置いて Space を押してください');
+  const rows = [
+    {key:'points',label:'配点',type:'number',value:f.points,min:0},
+    {key:'aspect',label:'観点',type:'seg',value:f.aspect,options:[['知技','知・技'],['思判表','思・判・表']]},
+    {key:'complete',label:'完答（太枠）',type:'check',value:f.complete}
+  ];
+  if (f.type===4) rows.push({key:'exact',label:'8割ライン',type:'check',value:!f.exact});
+  if (f.type===5 || f.type===1){
+    rows.push({key:'prefix',label:'前に付ける文字',type:'text',value:f.prefix,hint:'例：x＝'});
+    rows.push({key:'suffix',label:'後に付ける文字',type:'text',value:f.suffix,hint:'例：cm²　g　個'});
+  }
+  const v = await ask(FIELD_DEFS[f.type].name+'の設定', rows);
+  if (!v) return;
+  snapshot();
+  f.points = Math.max(0, +v.points||0);
+  f.aspect = v.aspect;
+  f.complete = !!v.complete;
+  if (f.type===4) f.exact = !v.exact;
+  if ('prefix' in v){
+    f.prefix = v.prefix||''; f.suffix = v.suffix||'';
+    // 用紙の端では前後に文字を置く場所がないので、そのことを伝える
+    const short = [];
+    if (f.prefix && affixCells(doc,f,'before',f.prefix.length).length < f.prefix.length) short.push('前');
+    if (f.suffix && affixCells(doc,f,'after', f.suffix.length).length < f.suffix.length) short.push('後');
+    if (short.length) toast('⚠ 欄の'+short.join('と')+'に場所がないため入り切りません。欄を内側にずらしてください');
+  }
+  render();
+}
+
+/* ---------------------------------------------------------------
+   14. ZIP（無圧縮・格納のみ）
+   xlsx は ZIP。外部ライブラリを使わず、必要最小限を自前で書き出す。
+   --------------------------------------------------------------- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++){
+    let c = n;
+    for (let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf){
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<buf.length;i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files){
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = ((now.getHours()<<11) | (now.getMinutes()<<5) | (now.getSeconds()>>1)) & 0xFFFF;
+  const dosDate = (((now.getFullYear()-1980)<<9) | ((now.getMonth()+1)<<5) | now.getDate()) & 0xFFFF;
+
+  for (const f of files){
+    const name = enc.encode(f.name);
+    const data = enc.encode(f.data);
+    const crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true);
+    lh.setUint16(6, 0x0800, true);      // UTF-8 ファイル名
+    lh.setUint16(8, 0, true);           // 無圧縮
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true);
+    ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  let cdSize = 0; central.forEach(p => cdSize += p.length);
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true);
+  eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true);
+  eo.setUint32(12, cdSize, true); eo.setUint32(16, offset, true);
+  const all = parts.concat(central, [new Uint8Array(eo.buffer)]);
+  let total = 0; all.forEach(p => total += p.length);
+  const out = new Uint8Array(total);
+  let pos = 0; all.forEach(p => { out.set(p, pos); pos += p.length; });
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   15. Excel 出力（正本）
+   セル罫線とセル文字だけ。図形なし・結合なし・縦書きセルなし。
+   --------------------------------------------------------------- */
+const xmlEsc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+function colName(i){                    // 0 → A
+  let s = '';
+  i++;
+  while (i>0){ const m = (i-1)%26; s = String.fromCharCode(65+m)+s; i = (i-1-m)/26; }
+  return s;
+}
+
+function buildXlsx(){
+  const sheets = [
+    { name:'解答用紙', cells: buildCells(doc, false) },
+    { name:'模範解答', cells: buildCells(doc, true)  }
+  ];
+  // スタイル表を作る（フォント・罫線・配置の組み合わせを重複なく集める）
+  const fonts = [], borders = [], xfs = [];
+  const fontKey = new Map(), borderKey = new Map(), xfKey = new Map();
+  const addFont = (sz,bold) => {
+    const k = sz+'/'+bold;
+    if (!fontKey.has(k)){ fontKey.set(k, fonts.length); fonts.push({sz,bold}); }
+    return fontKey.get(k);
+  };
+  const addBorder = b => {
+    const k = (b.left||'')+'|'+(b.right||'')+'|'+(b.top||'')+'|'+(b.bottom||'');
+    if (!borderKey.has(k)){ borderKey.set(k, borders.length); borders.push(b); }
+    return borderKey.get(k);
+  };
+  const addXf = (fi,bi,align) => {
+    const k = fi+'/'+bi+'/'+align;
+    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align}); }
+    return xfKey.get(k);
+  };
+  addFont(11,false); addBorder({});    // 既定
+  addXf(0,0,'center');
+
+  const sheetXml = sheets.map(sh => {
+    const { cols, rows } = doc.grid;
+    let body = '';
+    for (let r=0;r<rows;r++){
+      let rowXml = '';
+      for (let c=0;c<cols;c++){
+        const x = sh.cells.get(c+','+r);
+        if (!x || (!x.t && !x.b.top && !x.b.bottom && !x.b.left && !x.b.right)) continue;
+        const si = addXf(addFont(x.size||11, x.bold), addBorder(x.b), x.align||'center');
+        const ref = colName(c)+(r+1);
+        rowXml += x.t
+          ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(x.t)+'</t></is></c>'
+          : '<c r="'+ref+'" s="'+si+'"/>';
+      }
+      body += '<row r="'+(r+1)+'" ht="'+ROW_H_PT+'" customHeight="1" spans="1:'+cols+'">'+rowXml+'</row>';
+    }
+    const mx = (doc.paper.marginX/25.4).toFixed(6), my = (doc.paper.marginY/25.4).toFixed(6);
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+      '<dimension ref="A1:'+colName(cols-1)+rows+'"/>'+
+      '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'+
+      '<sheetFormatPr defaultColWidth="'+COL_W_EXCEL+'" defaultRowHeight="'+ROW_H_PT+'" customHeight="1"/>'+
+      '<cols><col min="1" max="'+cols+'" width="'+COL_W_EXCEL+'" customWidth="1"/></cols>'+
+      '<sheetData>'+body+'</sheetData>'+
+      '<printOptions horizontalCentered="1" verticalCentered="1"/>'+
+      '<pageMargins left="'+mx+'" right="'+mx+'" top="'+my+'" bottom="'+my+'" header="0" footer="0"/>'+
+      '<pageSetup paperSize="9" scale="'+Math.round(SCALE*100)+'" orientation="'+doc.paper.orientation+'"/>'+
+      '</worksheet>';
+  });
+
+  const fontsXml = '<fonts count="'+fonts.length+'">'+fonts.map(f =>
+    '<font>'+(f.bold?'<b/>':'')+'<sz val="'+f.sz+'"/><color rgb="FF000000"/><name val="游ゴシック"/><family val="3"/><charset val="128"/></font>'
+  ).join('')+'</fonts>';
+  const bordersXml = '<borders count="'+borders.length+'">'+borders.map(b => {
+    const s = (side,key) => b[key] ? '<'+side+' style="'+b[key]+'"><color rgb="FF000000"/></'+side+'>' : '<'+side+'/>';
+    return '<border>'+s('left','left')+s('right','right')+s('top','top')+s('bottom','bottom')+'<diagonal/></border>';
+  }).join('')+'</borders>';
+  const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
+    '<xf numFmtId="0" fontId="'+x.fi+'" fillId="0" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1">'+
+    '<alignment horizontal="'+(x.align==='left'?'left':'center')+'" vertical="center"/></xf>'
+  ).join('')+'</cellXfs>';
+  const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    fontsXml+
+    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'+
+    bordersXml+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    xfsXml+
+    '<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>'+
+    '</styleSheet>';
+
+  const lastRef = '$'+colName(doc.grid.cols-1)+'$'+doc.grid.rows;
+  const workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    '<sheets>'+sheets.map((s,i)=>'<sheet name="'+xmlEsc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets>'+
+    '<definedNames>'+sheets.map((s,i)=>
+      '<definedName name="_xlnm.Print_Area" localSheetId="'+i+'">'+xmlEsc(s.name)+'!$A$1:'+lastRef+'</definedName>').join('')+
+    '</definedNames></workbook>';
+
+  const files = [
+    { name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+      sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
+      '</Types>' },
+    { name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'+
+      '</Relationships>' },
+    { name:'xl/workbook.xml', data:workbook },
+    { name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')+
+      '<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+      '</Relationships>' },
+    { name:'xl/styles.xml', data:styles }
+  ];
+  sheets.forEach((s,i)=> files.push({ name:'xl/worksheets/sheet'+(i+1)+'.xml', data:sheetXml[i] }));
+  return zipStore(files);
+}
+
+function baseName(){
+  const d2 = new Date();
+  const ymd = d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+  return doc.paper.subject+'_'+doc.paper.grade+'年_'+ymd;
+}
+function download(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+/* ファイルに書き出す。
+   ブラウザで直接HTMLを開くとダウンロード名が失われることがあるため、
+   使える環境では保存ダイアログを出し、そうでなければファイル名を画面で知らせる。 */
+async function saveBytes(data, name, mime, accept){
+  if (window.showSaveFilePicker){
+    try{
+      const h = await window.showSaveFilePicker({ suggestedName:name, types:[{description:name, accept}] });
+      const w = await h.createWritable();
+      await w.write(data); await w.close();
+      return 'picker';
+    } catch(e){
+      if (e && e.name === 'AbortError') return 'cancel';
+    }
+  }
+  download(new Blob([data], {type:mime}), name);
+  return 'download';
+}
+
+async function exportXlsx(){
+  const name = '解答用紙_'+baseName()+'.xlsx';
+  const how = await saveBytes(buildXlsx(), name,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']});
+  if (how === 'cancel') return;
+  toast(how==='picker'
+    ? 'Excelを保存しました（解答用紙・模範解答の2シート）'
+    : 'Excelを書き出しました。ファイル名は「'+name+'」です');
+}
+
+/* ---------------------------------------------------------------
+   16. 保存・読み込み・一時保存
+   --------------------------------------------------------------- */
+const BK_KEY = 'answer-sheet-maker/backup';
+const OPT_KEY = 'answer-sheet-maker/options';
+let options = { backupAnswers:false, clearOnExit:false };
+try { const o = localStorage.getItem(OPT_KEY); if (o) options = Object.assign(options, JSON.parse(o)); } catch(e){}
+const saveOptions = () => { try{ localStorage.setItem(OPT_KEY, JSON.stringify(options)); }catch(e){} };
+
+let fileHandle = null;   // 上書き保存用（対応ブラウザのみ）
+
+function docJson(forBackup){
+  const copy = JSON.parse(JSON.stringify(doc));
+  if (forBackup && !options.backupAnswers) copy.answers = {};
+  return JSON.stringify(copy);
+}
+function backup(){
+  try { localStorage.setItem(BK_KEY, docJson(true)); } catch(e){}
+}
+async function saveWork(){
+  const name = baseName()+'.json';
+  const text = docJson(false);
+  if (window.showSaveFilePicker && fileHandle){
+    try{                                   // 2回目からは上書き保存
+      const w = await fileHandle.createWritable();
+      await w.write(text); await w.close();
+      ui.dirty = false; return toast('上書き保存しました');
+    } catch(e){ fileHandle = null; }
+  }
+  if (window.showSaveFilePicker){
+    try{
+      fileHandle = await window.showSaveFilePicker({ suggestedName:name,
+        types:[{description:'解答用紙メーカーの作業ファイル', accept:{'application/json':['.json']}}] });
+      const w = await fileHandle.createWritable();
+      await w.write(text); await w.close();
+      ui.dirty = false; return toast('保存しました（次からは上書き保存になります）');
+    } catch(e){
+      fileHandle = null;
+      if (e && e.name==='AbortError') return;
+    }
+  }
+  download(new Blob([text],{type:'application/json'}), name);
+  ui.dirty = false;
+  toast('作業ファイルを書き出しました。ファイル名は「'+name+'」です');
+}
+function loadWork(text){
+  const d = JSON.parse(text);
+  if (!d || !d.paper || !d.grid) throw new Error('形式が違います');
+  doc = d;
+  doc.grid = computeGrid(doc.paper);            // 余白設定に合わせ直す
+  uid = 1; doc.fields.forEach(f => { const n = +String(f.id).replace('f',''); if (n>=uid) uid = n+1; });
+  history.sheet = {undo:[],redo:[]}; history.answer = {undo:[],redo:[]};
+  startApp();
+}
+
+/* ---------------------------------------------------------------
+   17. モーダル（小窓）
+   --------------------------------------------------------------- */
+function ask(title, rows){
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    const vals = {};
+    let html = '<div class="card"><h3>'+xmlEsc(title)+'</h3>';
+    rows.forEach((f,i) => {
+      vals[f.key] = f.value;
+      html += '<div class="row"><label>'+xmlEsc(f.label)+'</label>';
+      if (f.type==='number') html += '<input type="number" data-k="'+f.key+'" value="'+f.value+'" min="'+(f.min||0)+'" '+(i===0?'autofocus':'')+'>';
+      else if (f.type==='text') html += '<input type="text" data-k="'+f.key+'" value="'+xmlEsc(f.value||'')+'">';
+      else if (f.type==='check') html += '<input type="checkbox" data-k="'+f.key+'" '+(f.value?'checked':'')+' style="flex:none;width:18px;height:18px">';
+      else if (f.type==='seg'){
+        html += '<div class="seg" data-k="'+f.key+'">'+f.options.map(o =>
+          '<button type="button" data-v="'+o[0]+'" class="'+(o[0]===f.value?'on':'')+'">'+xmlEsc(o[1])+'</button>').join('')+'</div>';
+      }
+      if (f.hint) html += '<div class="hint">'+xmlEsc(f.hint)+'</div>';
+      html += '</div>';
+    });
+    html += '<div class="modal-actions"><button class="tb" data-act="cancel">やめる</button>'+
+            '<button class="tb primary" data-act="ok">決定<kbd>Enter</kbd></button></div></div>';
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+
+    wrap.querySelectorAll('.seg').forEach(seg => {
+      seg.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on'); vals[seg.dataset.k] = b.dataset.v;
+      });
+    });
+    const close = (ok) => {
+      if (ok) wrap.querySelectorAll('input[data-k]').forEach(inp => {
+        vals[inp.dataset.k] = (inp.type==='checkbox') ? inp.checked : inp.value;
+      });
+      wrap.remove();
+      document.body.focus();
+      resolve(ok ? vals : null);
+    };
+    wrap.addEventListener('click', e => {
+      const b = e.target.closest('button[data-act]');
+      if (b) close(b.dataset.act==='ok');
+      else if (e.target===wrap) close(false);
+    });
+    wrap.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.isComposing || e.keyCode===229) return;
+      if (e.key==='Enter'){ e.preventDefault(); close(true); }
+      if (e.key==='Escape'){ e.preventDefault(); close(false); }
+    });
+    const first = wrap.querySelector('input');
+    if (first){ first.focus(); if (first.select) first.select(); }
+  });
+}
+
+/* ---------------------------------------------------------------
+   18. 設定（⚙）
+   --------------------------------------------------------------- */
+async function openSettings(){
+  const p = doc.paper;
+  const v = await ask('用紙と表示の設定', [
+    {key:'grade',label:'学年',type:'text',value:p.grade,hint:'例：一／1'},
+    {key:'term',label:'学期',type:'text',value:p.term,hint:'例：２学期中間（空欄でも可）'},
+    {key:'testName',label:'テスト名',type:'text',value:p.testName,hint:'例：学年末テスト'},
+    {key:'writing',label:'文字の向き',type:'seg',value:p.writing,options:[['vertical','縦書き'],['horizontal','横書き']]},
+    {key:'orientation',label:'用紙の向き',type:'seg',value:p.orientation,options:[['landscape','A4横'],['portrait','A4縦']]},
+    {key:'numberStyle',label:'番号',type:'seg',value:p.numberStyle,options:[['kanji','漢数字'],['arabic','算用数字']]},
+    {key:'nameOrder',label:'氏名欄',type:'seg',value:p.nameOrder,options:[['full','○年○組○番'],['short','○組○番']]},
+    {key:'margin',label:'余白',type:'seg',value:String(p.marginX),options:[['8','狭い 8mm'],['10','10mm'],['12','12mm']]},
+    {key:'showScoreBox',label:'観点別得点枠',type:'check',value:p.showScoreBox},
+    {key:'backupAnswers',label:'一時保存に模範解答も含める',type:'check',value:options.backupAnswers,
+      hint:'共用PCでは外したままを推奨します'},
+    {key:'clearOnExit',label:'閉じるときに一時保存を消す',type:'check',value:options.clearOnExit}
+  ]);
+  if (!v) return;
+  snapshot();
+  p.grade = v.grade || '一'; p.term = v.term || ''; p.testName = v.testName || '';
+  p.writing = v.writing; p.orientation = v.orientation; p.numberStyle = v.numberStyle;
+  p.nameOrder = v.nameOrder; p.showScoreBox = !!v.showScoreBox;
+  p.marginX = +v.margin; p.marginY = (+v.margin===8) ? 9 : +v.margin;
+  p.title = makeTitle(p); p.nameLabel = makeNameLabel(p);
+  doc.grid = computeGrid(p);
+  ui.cur = { c: Math.min(ui.cur.c, doc.grid.cols-1), r: Math.min(ui.cur.r, doc.grid.rows-1) };
+  options.backupAnswers = !!v.backupAnswers; options.clearOnExit = !!v.clearOnExit;
+  saveOptions();
+  render();
+}
+
+/* ---------------------------------------------------------------
+   19. 印刷（PDFは確認用）
+   --------------------------------------------------------------- */
+async function printSheet(){
+  const v = await ask('PDFで保存する前に', [
+    {key:'ok',label:'確認しました',type:'check',value:true,
+     hint:'印刷画面で「用紙サイズ：A4」「余白：なし」「倍率：100%」「ヘッダーとフッター：オフ」にしてください。正本は Excel 出力です。'}
+  ]);
+  if (!v || !v.ok) return;
+  setPageRule(doc.paper.orientation);
+  window.print();
+}
+
+/* ---------------------------------------------------------------
+   20. 教科テンプレ（定期テストの標準構成）
+   --------------------------------------------------------------- */
+const TEMPLATES = {
+  // 大問ごとにまとめる。縦書きは大問ごとに列を変え、横書きは行を変える。
+  '国語':[ [{type:1,times:5}], [{type:3,n:2,times:4}], [{type:4,n:50}] ],
+  '数学':[ [{type:5,times:5}], [{type:7,h:6}], [{type:6,w:8,h:8,grid:true}] ],
+  '英語':[ [{type:1,times:5}], [{type:3,n:6,times:4}], [{type:4,n:20}] ],
+  '理科':[ [{type:1,times:5}], [{type:3,n:4,times:4}], [{type:6,w:8,h:6,grid:true}], [{type:4,n:30}] ],
+  '社会':[ [{type:1,times:5}], [{type:3,n:4,times:5}], [{type:4,n:40}] ]
+};
+
+function applyTemplate(subject){
+  const groups = TEMPLATES[subject] || [];
+  const vertical = doc.paper.writing==='vertical';
+  const origin = contentOrigin(doc);
+  const used = new Set(headerLayout(doc).reserved);
+  const fits = rects => rects.every(r => {
+    if (r.c<0||r.r<0||r.c+r.w>doc.grid.cols||r.r+r.h>doc.grid.rows) return false;
+    for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) if (used.has((r.c+i)+','+(r.r+j))) return false;
+    return true;
+  });
+  const take = rects => rects.forEach(r => {
+    for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) used.add((r.c+i)+','+(r.r+j));
+  });
+
+  let cur = { c:origin.c, r:origin.r };     // 大問の先頭位置
+  let head = { c:origin.c, r:origin.r };    // 今の大問の開始位置
+
+  for (const group of groups){
+    cur = { c:head.c, r:head.r };
+    let widest = 1, deepest = CHAR_ROWS;
+    for (const step of group){
+      for (let k=0; k<(step.times||1); k++){
+        const opt = {n:step.n, w:step.w, h:step.h};
+        let built = buildRects(doc, step.type, {c:cur.c,r:cur.r}, opt);
+        if (built.error || !fits(built.rects)){
+          // その場に置けなければ、次の列（横書きは次の行）で置き直す
+          cur = vertical ? { c:cur.c-1, r:head.r } : { c:origin.c, r:cur.r + CHAR_ROWS*2 };
+          built = buildRects(doc, step.type, {c:cur.c,r:cur.r}, opt);
+          if (built.error || !fits(built.rects)) continue;
+        }
+        take(built.rects);
+        doc.fields.push({ id:'f'+(uid++), type:step.type, rects:built.rects,
+          chars:(step.type===4 ? step.n : (step.n||1)), exact:false, grid:!!step.grid,
+          points:0, aspect:'知技', complete:false, prefix:'', suffix:'' });
+        const last = built.rects[built.rects.length-1];
+        const minC = Math.min(...built.rects.map(r=>r.c));
+        const maxR = Math.max(...built.rects.map(r=>r.r+r.h));
+        widest  = Math.max(widest,  head.c - minC + 1);
+        deepest = Math.max(deepest, maxR - head.r);
+        if (vertical) cur = { c:last.c, r:last.r + last.h + CHAR_ROWS };   // 欄と欄の間を1マス空ける
+        else          cur = { c:last.c + last.w + 1, r:last.r };
+      }
+    }
+    // 次の大問へ（縦書きは左へ、横書きは下へ。間を1つ空ける）
+    if (vertical) head = { c: head.c - widest - 1, r: origin.r };
+    else          head = { c: origin.c, r: head.r + deepest + CHAR_ROWS };
+    if (vertical ? head.c < 0 : head.r >= doc.grid.rows) break;
+  }
+}
+
+/* ---------------------------------------------------------------
+   21. サイドバーのボタン（キーを印字し、小さな見本図を付ける）
+   --------------------------------------------------------------- */
+function icon(type){
+  const g = (inner) => '<svg width="34" height="20" viewBox="0 0 34 20">'+inner+'</svg>';
+  const box = (x,y,w,h,extra) => '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#33404d" stroke-width="1"'+(extra||'')+'/>';
+  switch(type){
+    case 1: return g(box(12,4,10,12));
+    case 2: return g(box(4,4,26,12)+'<line x1="12.6" y1="4" x2="12.6" y2="16" stroke="#33404d"/><line x1="21.3" y1="4" x2="21.3" y2="16" stroke="#33404d"/>');
+    case 3: return g(box(3,4,28,12)+'<line x1="17" y1="4" x2="17" y2="16" stroke="#33404d" stroke-dasharray="2 2"/>');
+    case 4: return g(box(2,5,30,10)+'<line x1="10" y1="5" x2="10" y2="15" stroke="#33404d" stroke-dasharray="2 2"/><line x1="18" y1="5" x2="18" y2="15" stroke="#33404d" stroke-dasharray="2 2"/><line x1="25" y1="5" x2="25" y2="15" stroke="#b8860b" stroke-width="1.6" stroke-dasharray="3 2"/>');
+    case 5: return g(box(6,5,22,10));
+    case 6: return g(box(5,2,24,16)+'<line x1="13" y1="2" x2="13" y2="18" stroke="#9aa7b4" stroke-dasharray="1.5 1.5"/><line x1="21" y1="2" x2="21" y2="18" stroke="#9aa7b4" stroke-dasharray="1.5 1.5"/><line x1="5" y1="7.3" x2="29" y2="7.3" stroke="#9aa7b4" stroke-dasharray="1.5 1.5"/><line x1="5" y1="12.6" x2="29" y2="12.6" stroke="#9aa7b4" stroke-dasharray="1.5 1.5"/>');
+    case 7: return g(box(3,2,28,16));
+    default: return '';
+  }
+}
+function buildTools(){
+  const fw = $('#field-tools');
+  fw.innerHTML = Object.keys(FIELD_DEFS).map(k =>
+    '<button class="tool" data-field="'+k+'" title="'+FIELD_DEFS[k].hint+'">'+icon(+k)+
+    '<span class="nm">'+FIELD_DEFS[k].name+'</span><span class="k">'+k+'</span></button>').join('');
+  fw.querySelectorAll('[data-field]').forEach(b =>
+    b.addEventListener('click', ()=>placeField(+b.dataset.field)));
+
+  const sw = $('#stamp-tools');
+  sw.innerHTML = Object.keys(STAMPS).map(k =>
+    '<button class="tool" data-stamp="'+k+'"><span class="nm">'+STAMPS[k].name+'</span><span class="k">'+k+'</span></button>').join('');
+  sw.querySelectorAll('[data-stamp]').forEach(b =>
+    b.addEventListener('click', ()=>stamp(b.dataset.stamp)));
+
+  const mw = $('#misc-tools');
+  mw.innerHTML =
+    '<button class="tool" id="t-bold"><span class="nm">太枠（完答）</span><span class="k">T</span></button>'+
+    '<button class="tool" id="t-del"><span class="nm">消す</span><span class="k">Delete</span></button>'+
+    '<button class="tool" id="t-edit"><span class="nm">文字を入れる</span><span class="k">Enter</span></button>'+
+    '<button class="tool" id="t-prop"><span class="nm">欄の設定</span><span class="k">Space</span></button>'+
+    '<button class="tool" id="t-pick" style="grid-column:1/-1"><span class="nm">離れたセルを選ぶ（番号を振る前に）</span><span class="k">Shift+Space</span></button>';
+  $('#t-pick').onclick = () => {
+    const i = ui.extra.findIndex(q => q.c===ui.cur.c && q.r===ui.cur.r);
+    if (i>=0) ui.extra.splice(i,1); else ui.extra.push({c:ui.cur.c, r:ui.cur.r});
+    render();
+    toast(ui.extra.length ? '選んだセル：'+ui.extra.length+'か所' : '選択を外しました');
+  };
+  $('#t-bold').onclick = markComplete;
+  $('#t-del').onclick  = clearSelection;
+  $('#t-edit').onclick = enterInput;
+  $('#t-prop').onclick = openFieldPopup;
+}
+
+/* ---------------------------------------------------------------
+   22. 起動
+   --------------------------------------------------------------- */
+function startApp(){
+  $('#start').style.display = 'none';
+  $('#app').classList.add('on');
+  ui.mode='place'; ui.tab='sheet'; ui.sel=null; ui.extra=[];
+  ui.cur = Object.assign({}, contentOrigin(doc));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.tab==='sheet'));
+  setModeBar();
+  render();
+}
+
+function initStart(){
+  const subjects = Object.keys(SUBJECTS);
+  $('#tpl-row').innerHTML = Object.keys(TEMPLATES).map(s =>
+    '<button class="subject-btn" data-tpl="'+s+'">'+s+'</button>').join('');
+  $('#blank-row').innerHTML = subjects.map(s =>
+    '<button class="subject-btn" data-blank="'+s+'">'+s+'</button>').join('');
+  $('#tpl-row').addEventListener('click', e => {
+    const b = e.target.closest('[data-tpl]'); if(!b) return;
+    doc = newDoc(b.dataset.tpl); applyTemplate(b.dataset.tpl); startApp();
+  });
+  $('#blank-row').addEventListener('click', e => {
+    const b = e.target.closest('[data-blank]'); if(!b) return;
+    doc = newDoc(b.dataset.blank); startApp();
+  });
+  let bk = null;
+  try { bk = localStorage.getItem(BK_KEY); } catch(e){}
+  if (bk){
+    const btn = $('#btn-resume');
+    btn.disabled = false;
+    btn.onclick = () => { try { loadWork(bk); } catch(e){ toast('前回の作業を開けませんでした'); } };
+  }
+  $('#btn-open').onclick = () => $('#file-open').click();
+  $('#file-open').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { try { loadWork(rd.result); } catch(err){ alert('この作業ファイルは開けませんでした。'); } };
+    rd.readAsText(f);
+    e.target.value = '';
+  });
+}
+
+/* 上部バーの配線 */
+$('#btn-undo').onclick = undo;
+$('#btn-redo').onclick = redo;
+$('#btn-xlsx').onclick = exportXlsx;
+$('#btn-pdf').onclick  = printSheet;
+$('#btn-save').onclick = saveWork;
+$('#btn-settings').onclick = openSettings;
+$('#title-input').addEventListener('change', e => {
+  snapshot(); doc.paper.title = e.target.value; render();
+});
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  if (ui.mode==='input') commitInput();
+  ui.tab = t.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x===t));
+  ui.sel=null; ui.extra=[];
+  render();
+  toast(ui.tab==='answer' ? '模範解答タブ：欄の上で Enter を押すと答えを入れられます' : '解答用紙タブ');
+});
+
+/* 作業が消えないように確認する */
+window.addEventListener('beforeunload', e => {
+  if (options.clearOnExit){ try{ localStorage.removeItem(BK_KEY); }catch(err){} }
+  else if (doc) backup();
+  if (ui.dirty){ e.preventDefault(); e.returnValue = ''; return ''; }
+});
+setInterval(()=>{ if (doc && ui.dirty) backup(); }, 20000);
+
+buildTools();
+initStart();
+</script>
+</body>
+</html>
