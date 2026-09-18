@@ -432,10 +432,10 @@ function scoreLine(label, points){
 // 観点別の配点合計（欄の配点を積み上げる）
 function scoreTotals(d){
   let ki=0, si=0;
-  for (const f of d.fields){
-    const p = Number(f.points)||0;
-    if (f.aspect === '思判表') si += p; else ki += p;
-  }
+  const add = o => { const p = Number(o.points)||0;
+    if (o.aspect === '思判表') si += p; else ki += p; };
+  d.fields.forEach(add);
+  (d.decorations || []).forEach(add);     // シンプル枠にも配点を入れられる
   return { '知技':ki, '思判表':si, '合計':ki+si };
 }
 
@@ -443,7 +443,7 @@ function scoreTotals(d){
 function contentOrigin(d){
   const box = d.paper.showScoreBox;
   return d.paper.writing==='vertical'
-    ? { c: d.grid.cols - (box ? 6 : 3), r: 1 }      // お手本と同じく1行目は余白
+    ? { c: d.grid.cols - (box ? 7 : 3), r: 1 }      // お手本と同じく1行目は余白
     : { c: 0, r: box ? 10 : 4 };
 }
 
@@ -1020,7 +1020,7 @@ async function placeField(type){
     const v = await ask('記述の解答欄', [
       {key:'n',label:'字数',type:'number',value:50,min:1},
       {key:'mode',label:'条件',type:'seg',value:'within',options:[['within','以内（8割ライン）'],['exact','ちょうど']]}
-    ]); if(!v) return; opt.n=num(v.n,1,50); opt.exact = (v.mode==='exact');
+    ]); if(!v) return; opt.n=num(v.n,1,50); opt.exact=(v.mode==='exact');
   }
   if (type===4){
     const v = await ask('長方形の解答欄', [
@@ -1036,57 +1036,88 @@ async function placeField(type){
   }
 
   // カーソル位置は「番号欄」。解答欄はその次から始まる（お手本と同じ並び）
-  const used = occupied(doc);
-  const clash = (r) => {
+  const clash = (used, r) => {
     if (r.c<0 || r.r<0 || r.c+r.w>doc.grid.cols || r.r+r.h>doc.grid.rows) return true;
     for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
       if (used.has((r.c+i)+','+(r.r+j))) return true;
     return false;
   };
-  const tryAt = (at) => {
+  const tryAt = (used, at) => {
     const lab = labelRect(doc, at);
     const b = buildRects(doc, type, boxStart(doc, at), opt);
-    if (b.error || clash(lab) || b.rects.some(clash)) return null;
-    return { at, lab, rects:b.rects };
+    if (b.error || clash(used, lab) || b.rects.some(x => clash(used, x))) return null;
+    return { lab, rects:b.rects };
   };
 
-  let got = tryAt({ c:ui.cur.c, r:ui.cur.r });
-  let wrapped = false;
-  if (!got){
-    // 下に入らないときは、行を開けずに次の行（縦書きは左の列）の頭へ
-    const top = contentOrigin(doc);
-    got = tryAt(vertical ? { c:ui.cur.c-1, r:top.r } : { c:top.c, r:ui.cur.r+CHAR_ROWS });
-    wrapped = !!got;
-  }
-  if (!got) return toast('⚠ ここには置けません（用紙からはみ出すか、ほかの欄があります）');
-  const { lab } = got;
-  const built = { rects: got.rects };
-
-  snapshot();
-  const f = {
-    id:'f'+(uid++), type, rects:built.rects, label:lab,
-    chars: (type===3 ? opt.n : 1), exact: !!opt.exact,
-    points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end'
-  };
-  doc.fields.push(f);
-
-  // カーソルを次の番号欄の位置へ進める（欄と欄の間は空けない）
-  const last = built.rects[built.rects.length-1];
-  const minC = Math.min(...built.rects.map(r=>r.c));
+  // 1つ置いて、カーソルを次の番号欄へ進める
   const top = contentOrigin(doc);
-  if (vertical){
-    let nr = last.r + last.h, nc = last.c;
-    if (nr + 1 + CHAR_ROWS > doc.grid.rows){ nc = minC - 1; nr = top.r; }   // 行を開けずに改行
-    ui.cur = { c: Math.max(0,nc), r: nr };
-  } else {
-    let nc = last.c + last.w, nr = last.r;
-    if (nc + 1 >= doc.grid.cols){ nc = top.c; nr = last.r + last.h; }
-    ui.cur = { c: Math.min(nc, doc.grid.cols-1), r: Math.min(nr, doc.grid.rows-1) };
+  const placeOne = () => {
+    const used = occupied(doc);
+    let got = tryAt(used, { c:ui.cur.c, r:ui.cur.r });
+    let wrap = false;
+    if (!got){                                   // 下に入らなければ行を開けずに改行
+      got = tryAt(used, vertical ? { c:ui.cur.c-1, r:top.r } : { c:top.c, r:ui.cur.r+CHAR_ROWS });
+      wrap = !!got;
+    }
+    if (!got) return null;
+    doc.fields.push({
+      id:'f'+(uid++), type, rects:got.rects, label:got.lab,
+      chars:(type===3 ? opt.n : 1), exact:!!opt.exact,
+      points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end'
+    });
+    const last = got.rects[got.rects.length-1];
+    const minC = Math.min(...got.rects.map(r=>r.c));
+    if (vertical){
+      // 幅のある欄は左へ広がるので、次の番号欄は「右端の列」に戻す（左へずれていかないように）
+      let nr = last.r + last.h, nc = last.c + last.w - 1;
+      if (nr + 1 + CHAR_ROWS > doc.grid.rows){ nc = minC - 1; nr = top.r; }
+      ui.cur = { c: Math.max(0,nc), r: nr };
+    } else {
+      let nc = last.c + last.w, nr = last.r;
+      if (nc + 1 >= doc.grid.cols){ nc = top.c; nr = last.r + last.h; }
+      ui.cur = { c: Math.min(nc, doc.grid.cols-1), r: Math.min(nr, doc.grid.rows-1) };
+    }
+    return wrap;
+  };
+
+  // 範囲を選んでいたら、その中に入るだけ並べる。選んでいなければ1つだけ
+  const area = ui.sel;
+  const inArea = () => {
+    if (!area) return true;
+    const f = doc.fields[doc.fields.length-1];
+    const rs = [...f.rects, f.label];
+    return rs.every(r => r.c >= area.c && r.r >= area.r &&
+                         r.c + r.w <= area.c + area.w && r.r + r.h <= area.r + area.h);
+  };
+  if (area){ ui.cur = { c: doc.paper.writing==='vertical' ? area.c + area.w - 1 : area.c, r: area.r }; }
+  const want = area ? 200 : 1;
+  snapshot();
+  let made = 0, wrapped = false;
+  for (let k=0; k<want; k++){
+    const before = doc.fields.length;
+    const was = { c: ui.cur.c, r: ui.cur.r };      // 置く前のカーソル
+    let w = placeOne();
+    if (w !== null && !inArea()){
+      // 範囲からはみ出したので戻し、次の行（列）の頭でもう一度だけ試す
+      doc.fields.length = before;
+      ui.cur = vertical ? { c: was.c - 1, r: area ? area.r : top.r }
+                        : { c: area ? area.c : top.c, r: was.r + CHAR_ROWS };
+      w = placeOne();
+      if (w !== null && !inArea()){ doc.fields.length = before; w = null; }
+    }
+    if (w === null) break;
+    made++; wrapped = wrapped || w;
+  }
+  if (!made){
+    const h = history[ui.tab];
+    if (h.undo.length) restore(h.undo.pop());
+    return toast('⚠ ここには置けません（用紙からはみ出すか、ほかの欄があります）');
   }
   ui.sel = null; ui.extra = [];
   render();
-  if (wrapped) toast(vertical ? '下に入らないため、次の行（左の列）に置きました'
-                              : '右に入らないため、次の行に置きました');
+  if (made > 1) toast(made+'個置きました');
+  else if (wrapped) toast(vertical ? '下に入らないため、次の行（左の列）に置きました'
+                                   : '右に入らないため、次の行に置きました');
 }
 
 /* シンプル枠：選んだ範囲の外側に罫線を引く（今の線の太さで） */
@@ -1105,7 +1136,8 @@ function simpleFrame(){
     const f = doc.fields.find(f => f.rects.length===1 &&
       f.rects[0].c===s.c && f.rects[0].r===s.r && f.rects[0].w===s.w && f.rects[0].h===s.h);
     if (f){ f.complete = (ui.line==='medium'); toast(f.complete?'この欄を太線にしました':'この欄を普通の線にしました'); }
-    else { doc.decorations.push({c:s.c,r:s.r,w:s.w,h:s.h,style:ui.line,note:'',notePos:'end'});
+    else { doc.decorations.push({c:s.c,r:s.r,w:s.w,h:s.h,style:ui.line,
+                                 note:'',notePos:'end',points:0,aspect:'知技'});
            toast(ui.line==='medium' ? '太い枠を引きました' : '枠を引きました');
            // 記号用と同じく、引いたら次の位置へ進む
            const vertical = doc.paper.writing==='vertical';
@@ -1498,20 +1530,22 @@ document.addEventListener('keydown', ev => {
 
   // --- 置くモード ---
   const ctrl = ev.ctrlKey || ev.metaKey;
+  const MOVE = {ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
   if (ctrl){
     if (ev.code==='KeyZ' && !ev.shiftKey){ ev.preventDefault(); return undo(); }
     if ((ev.code==='KeyZ' && ev.shiftKey) || ev.code==='KeyY'){ ev.preventDefault(); return redo(); }
-    return;                                                  // 他の Ctrl 系はブラウザに任せる
+    if (!MOVE[ev.key]) return;                               // 他の Ctrl 系はブラウザに任せる
   }
   if (ev.altKey) return;
 
-  // 移動と選択
-  const MOVE = {ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]};
+  // 移動と選択。Ctrl を足すと端まで一気に動く（Excel と同じ）
   if (MOVE[ev.key]){
     ev.preventDefault();
     const [dc,dr] = MOVE[ev.key];
-    const nc = Math.min(doc.grid.cols-1, Math.max(0, ui.cur.c+dc));
-    const nr = Math.min(doc.grid.rows-1, Math.max(0, ui.cur.r+dr));
+    const nc = ctrl ? (dc ? (dc>0 ? doc.grid.cols-1 : 0) : ui.cur.c)
+                    : Math.min(doc.grid.cols-1, Math.max(0, ui.cur.c+dc));
+    const nr = ctrl ? (dr ? (dr>0 ? doc.grid.rows-1 : 0) : ui.cur.r)
+                    : Math.min(doc.grid.rows-1, Math.max(0, ui.cur.r+dr));
     if (ev.shiftKey){
       const a = ui.selAnchor || {c:ui.cur.c, r:ui.cur.r};
       ui.selAnchor = a;
@@ -1601,10 +1635,45 @@ $('#cell-input').addEventListener('blur', ()=>{ if (ui.mode==='input') commitInp
    13. 欄の設定（Space またはクリック後の小窓）
    --------------------------------------------------------------- */
 async function openFieldPopup(){
+  // 選んだ範囲にかかる欄・枠をすべて集める（まとめて配点を入れられる）
+  const cells = new Set(selectedCells().map(p => p.c+','+p.r));
+  const inSel = o => {
+    const rs = o.rects || [o];
+    for (const r of rs)
+      for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
+        if (cells.has((r.c+i)+','+(r.r+j))) return true;
+    if (o.label)
+      for (let i=0;i<o.label.w;i++) for (let j=0;j<o.label.h;j++)
+        if (cells.has((o.label.c+i)+','+(o.label.r+j))) return true;
+    return false;
+  };
+  const targets = [...doc.fields.filter(inSel), ...doc.decorations.filter(inSel)];
+
+  // 複数かかっていれば、まとめて配点・観点を設定する
+  if (targets.length > 1){
+    const v = await ask(targets.length+'個の欄にまとめて設定', [
+      {key:'points',label:'配点（1つあたり）',type:'number',value:0,min:0,
+       hint:targets.length+'個ぶんが合計に足されます'},
+      {key:'aspect',label:'観点',type:'seg',value:'知技',
+       options:[['知技','知・技'],['思判表','思・判・表']]},
+      {key:'complete',label:'太線にする',type:'check',value:false}
+    ]);
+    if (!v) return;
+    snapshot();
+    const pt = num(v.points,0,0);
+    targets.forEach(o => {
+      o.points = pt; o.aspect = v.aspect;
+      if (o.rects) o.complete = !!v.complete;
+      else o.style = v.complete ? 'medium' : 'thin';
+    });
+    render();
+    return toast(targets.length+'個に'+pt+'点ずつ入れました（合計'+(pt*targets.length)+'点）');
+  }
+
   const f = fieldAt(ui.cur.c, ui.cur.r);
   if (!f){
     const v = decorationAt(ui.cur.c, ui.cur.r);
-    if (v) return editNote(v, 'シンプル枠');
+    if (v) return openFramePopup(v);
     return toast('欄の上にカーソルを置いて Space を押してください');
   }
   const rows = [
@@ -1629,6 +1698,24 @@ async function openFieldPopup(){
     toast('⚠ 文字が欄いっぱいで、答えを書く場所が残りません。欄を大きくしてください');
   else { f.note = note; f.notePos = v.notePos || 'end'; }
   render();
+}
+
+// シンプル枠の設定（配点も入れられる。証明の枠などに使う）
+async function openFramePopup(v0){
+  const v = await ask('シンプル枠の設定', [
+    {key:'points',label:'配点',type:'number',value:v0.points||0,min:0},
+    {key:'aspect',label:'観点',type:'seg',value:v0.aspect||'知技',
+     options:[['知技','知・技'],['思判表','思・判・表']]},
+    {key:'note',label:'枠に入れる文字',type:'text',value:v0.note||'',hint:'例：証明　求め方'},
+    {key:'notePos',label:'その位置',type:'seg',value:v0.notePos||'end',
+     options:[['start','先頭'],['center','中央'],['end','お尻']]}
+  ]);
+  if (!v) return;
+  snapshot();
+  v0.points = num(v.points,0,0); v0.aspect = v.aspect;
+  v0.note = v.note || ''; v0.notePos = v.notePos || 'end';
+  render();
+  toast('シンプル枠に'+v0.points+'点を入れました');
 }
 
 /* ---------------------------------------------------------------
@@ -2083,7 +2170,8 @@ function loadWork(text){
     f.points = Number(f.points) || 0; f.aspect = f.aspect || '知技';
   });
   d.decorations = arr(d.decorations).filter(v => v && v.w > 0 && v.h > 0);
-  d.decorations.forEach(v => { v.note = v.note || ''; v.notePos = v.notePos || 'end'; });
+  d.decorations.forEach(v => { v.note = v.note || ''; v.notePos = v.notePos || 'end';
+    v.points = Number(v.points) || 0; v.aspect = v.aspect || '知技'; });
   d.drawings = arr(d.drawings);
   d.texts = obj(d.texts);
   d.answers = obj(d.answers);
