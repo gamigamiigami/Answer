@@ -1,4 +1,4 @@
-<title>解答用紙メーカー</title>
+<title>てすとも君</title>
 <style>
 /* ===== 基本 ===== */
 :root{
@@ -178,8 +178,8 @@ button{font:inherit;color:inherit}
 <!-- ===== 起動画面 ===== -->
 <div id="start">
   <div class="box">
-    <h1>📄 解答用紙メーカー</h1>
-    <p class="lead">テストの解答用紙と模範解答を、キーボードだけで手早く作ります。オフラインで動き、通信は一切しません。</p>
+    <h1>✏️ てすとも君</h1>
+    <p class="lead">テスト作成のお供です。解答用紙と模範解答を、キーボードだけで手早く作ります。オフラインで動き、通信は一切しません。</p>
     <div class="start-row">
       <button class="big-btn" id="btn-resume" disabled><b>前回の続き</b><span>このPCに残っている作業を開きます</span></button>
       <button class="big-btn" id="btn-open"><b>作業ファイルを開く</b><span>保存した .json を読み込みます</span></button>
@@ -196,7 +196,7 @@ button{font:inherit;color:inherit}
 <!-- ===== アプリ ===== -->
 <div id="app">
   <div id="topbar">
-    <span class="logo">📄 解答用紙メーカー</span>
+    <span class="logo">✏️ てすとも君</span>
     <input type="text" id="title-input" title="解答用紙のタイトル">
     <button class="tb" id="btn-undo">戻す<kbd>Ctrl+Z</kbd></button>
     <button class="tb" id="btn-redo">やり直す<kbd>Ctrl+Y</kbd></button>
@@ -245,7 +245,7 @@ button{font:inherit;color:inherit}
 <script>
 "use strict";
 /* =====================================================================
-   解答用紙メーカー v1.0
+   てすとも君（テスト作成のお供）v1.0
    docs/SPEC.md に従う単一HTMLツール。通信なし・外部依存なし。
    ===================================================================== */
 
@@ -2136,7 +2136,7 @@ async function saveWork(){
   if (window.showSaveFilePicker){
     try{
       fileHandle = await window.showSaveFilePicker({ suggestedName:name,
-        types:[{description:'解答用紙メーカーの作業ファイル', accept:{'application/json':['.json']}}] });
+        types:[{description:'てすとも君の作業ファイル', accept:{'application/json':['.json']}}] });
       const w = await fileHandle.createWritable();
       await w.write(text); await w.close();
       ui.dirty = false; return toast('保存しました（次からは上書き保存になります）');

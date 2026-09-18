@@ -1,4 +1,4 @@
-# 解答用紙メーカーを GitHub Pages に公開する。
+# てすとも君を GitHub Pages に公開する。
 # 既定ブランチに push すると、site/ の中身がそのまま公開される。
 name: Deploy to GitHub Pages
 
@@ -39,7 +39,7 @@ jobs:
       - name: Sanity check
         run: |
           test -s site/index.html
-          grep -q '<title>解答用紙メーカー</title>' site/index.html
+          grep -q '<title>てすとも君</title>' site/index.html
           ! grep -qE 'fetch\(|XMLHttpRequest|WebSocket' site/index.html
 
       - uses: actions/configure-pages@v5
