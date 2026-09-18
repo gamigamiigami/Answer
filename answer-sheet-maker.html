@@ -869,22 +869,31 @@ async function placeField(type){
   if (type===7) { const v = await ask('自由記述枠（途中式・証明）', [{key:'h',label:'高さ（文字分）',type:'number',value:6,min:1}]); if(!v) return; opt.h=+v.h; }
 
   // カーソル位置は「番号欄」。解答欄はその次から始まる（お手本と同じ並び）
-  const at  = { c:ui.cur.c, r:ui.cur.r };
-  const lab = labelRect(doc, at);
-  const built = buildRects(doc, type, boxStart(doc, at), opt);
-  if (built.error) return toast('⚠ '+built.error);
-  if (lab.c+lab.w > doc.grid.cols || lab.r+lab.h > doc.grid.rows)
-    return toast('⚠ 番号欄の場所がありません');
-
-  // 重なりの確認
   const used = occupied(doc);
   const clash = (r) => {
+    if (r.c<0 || r.r<0 || r.c+r.w>doc.grid.cols || r.r+r.h>doc.grid.rows) return true;
     for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
       if (used.has((r.c+i)+','+(r.r+j))) return true;
     return false;
   };
-  if (clash(lab) || built.rects.some(clash))
-    return toast('⚠ すでに欄かタイトル欄があります。別の場所に置いてください');
+  const tryAt = (at) => {
+    const lab = labelRect(doc, at);
+    const b = buildRects(doc, type, boxStart(doc, at), opt);
+    if (b.error || clash(lab) || b.rects.some(clash)) return null;
+    return { at, lab, rects:b.rects };
+  };
+
+  let got = tryAt({ c:ui.cur.c, r:ui.cur.r });
+  let wrapped = false;
+  if (!got){
+    // 下に入らないときは、行を開けずに次の行（縦書きは左の列）の頭へ
+    const top = contentOrigin(doc);
+    got = tryAt(vertical ? { c:ui.cur.c-1, r:top.r } : { c:top.c, r:ui.cur.r+CHAR_ROWS });
+    wrapped = !!got;
+  }
+  if (!got) return toast('⚠ ここには置けません（用紙からはみ出すか、ほかの欄があります）');
+  const { lab } = got;
+  const built = { rects: got.rects };
 
   snapshot();
   const f = {
@@ -894,20 +903,23 @@ async function placeField(type){
   };
   doc.fields.push(f);
 
-  // カーソルを次の位置へ進める
+  // カーソルを次の番号欄の位置へ進める（欄と欄の間は空けない）
   const last = built.rects[built.rects.length-1];
   const minC = Math.min(...built.rects.map(r=>r.c));
+  const top = contentOrigin(doc);
   if (vertical){
     let nr = last.r + last.h, nc = last.c;
-    if (nr + CHAR_ROWS > doc.grid.rows){ nc = minC - 1; nr = contentOrigin(doc).r; }
+    if (nr + 1 + CHAR_ROWS > doc.grid.rows){ nc = minC - 1; nr = top.r; }   // 行を開けずに改行
     ui.cur = { c: Math.max(0,nc), r: nr };
   } else {
     let nc = last.c + last.w, nr = last.r;
-    if (nc >= doc.grid.cols){ nc = contentOrigin(doc).c; nr = last.r + last.h; }
-    ui.cur = { c: nc, r: Math.min(nr, doc.grid.rows-1) };
+    if (nc + 1 >= doc.grid.cols){ nc = top.c; nr = last.r + last.h; }
+    ui.cur = { c: Math.min(nc, doc.grid.cols-1), r: Math.min(nr, doc.grid.rows-1) };
   }
   ui.sel = null; ui.extra = [];
   render();
+  if (wrapped) toast(vertical ? '下に入らないため、次の行（左の列）に置きました'
+                              : '右に入らないため、次の行に置きました');
 }
 
 /* 太枠（選択範囲の外枠を太線に） */
@@ -1640,15 +1652,15 @@ function applyTemplate(subject){
     let cur = { c:head.c, r:head.r };
     let widest = 1, deepest = CHAR_ROWS;
 
-    // 大問の先頭に「問一」を置く
-    const qlab = labelRect(doc, cur);
-    if (fits([qlab])){
-      take([qlab]);
-      doc.texts[cur.c+','+cur.r] = { t: STAMPS.Q.fmt(gi+1, doc.paper.numberStyle),
-                                     size: STAMPS.Q.size, box:true };
+    // 大問の先頭に大問番号（一 二 三…）を置く
+    const dlab = labelRect(doc, cur);
+    if (fits([dlab])){
+      take([dlab]);
+      doc.texts[cur.c+','+cur.r] = { t: STAMPS.D.fmt(gi+1, doc.paper.numberStyle),
+                                     size: STAMPS.D.size, bold:true, box:true };
       cur = stepOn(cur);
     }
-
+    const contentTop = { c:cur.c, r:cur.r };      // この大問の本文が始まる位置
     let no = 0;                                   // 小問の番号
     for (const step of group){
       for (let k=0; k<(step.times||1); k++){
@@ -1659,8 +1671,8 @@ function applyTemplate(subject){
           return (b.error || !fits([lab]) || !fits(b.rects)) ? null : {lab, rects:b.rects};
         };
         let got = place(cur);
-        if (!got){                                // 入らなければ次の列（行）へ
-          cur = vertical ? { c:cur.c-1, r:head.r } : { c:origin.c, r:cur.r + CHAR_ROWS*2 };
+        if (!got){                                // 入らなければ行を開けずに改行
+          cur = vertical ? { c:cur.c-1, r:contentTop.r } : { c:contentTop.c, r:cur.r + CHAR_ROWS };
           got = place(cur);
           if (!got) continue;
         }
@@ -1671,15 +1683,15 @@ function applyTemplate(subject){
         no++;
         doc.texts[got.lab.c+','+got.lab.r] = { t: STAMPS.P.fmt(no), size: STAMPS.P.size };
         const last = got.rects[got.rects.length-1];
-        widest  = Math.max(widest,  head.c - Math.min(...got.rects.map(r=>r.c)) + 1);
-        deepest = Math.max(deepest, Math.max(...got.rects.map(r=>r.r+r.h)) - head.r);
+        widest  = Math.max(widest,  head.c - Math.min(got.lab.c, ...got.rects.map(r=>r.c)) + 1);
+        deepest = Math.max(deepest, Math.max(got.lab.r+got.lab.h, ...got.rects.map(r=>r.r+r.h)) - head.r);
         cur = vertical ? { c:last.c, r:last.r + last.h }      // 次の番号欄へ（間は空けない）
                        : { c:last.c + last.w, r:last.r };
       }
     }
-    // 次の大問へ（縦書きは左へ、横書きは下へ。間を1つ空ける）
-    if (vertical) head = { c: head.c - widest - 1, r: origin.r };
-    else          head = { c: origin.c, r: head.r + deepest + CHAR_ROWS };
+    // 次の大問へ。大問は行を分けるが、間に空の行は作らない
+    if (vertical) head = { c: head.c - widest, r: origin.r };
+    else          head = { c: origin.c, r: head.r + deepest };
   });
 }
 
