@@ -1090,9 +1090,7 @@ function insertCells(){
   const move = o => { if (vertical) o.r += n; else o.c += n; };
   const grow = o => { if (vertical) o.h += n; else o.w += n; };
 
-  // 文字マスの欄を広げるときは、マスの区切りに合わせる
-  const charField = doc.fields.find(f => (f.type===2||f.type===3) && f.rects.some(isGrow));
-  if (charField && n % CHAR_ROWS) n += CHAR_ROWS - (n % CHAR_ROWS);
+  // 差し込む量は選んだマスの数そのまま（Excel の挿入と同じ）。切り上げはしない。
 
   // はみ出さないか先に確かめる
   const fits = o => alLo(o) + alLen(o) + n <= limit;
