@@ -75,6 +75,13 @@ button{font:inherit;color:inherit}
 .tb.primary{background:var(--place);border-color:var(--place);color:#fff;font-weight:600}
 .tb.primary:hover{filter:brightness(1.08)}
 .tb kbd{font-size:10px;color:var(--sub);margin-left:5px}
+.zoom{display:flex;gap:0}
+.zoom .tb{border-radius:0;margin-left:-1px}
+.zoom .tb:first-child{border-radius:7px 0 0 7px;margin-left:0}
+.zoom .tb:last-child{border-radius:0 7px 7px 0}
+#zoom-label{font-size:12px;min-width:84px;display:inline-block;text-align:center}
+.tool.line.on{background:var(--place);border-color:var(--place);color:#fff}
+.tool.line.on .k{background:rgba(255,255,255,.28)}
 .tb.primary kbd{color:#dbe9fb}
 
 /* モード表示帯 */
@@ -199,6 +206,7 @@ button{font:inherit;color:inherit}
     <button class="tb primary" id="btn-xlsx">Excel出力</button>
     <button class="tb" id="btn-pdf">PDF（確認用）</button>
     <button class="tb" id="btn-save">作業ファイルを保存</button>
+    <span class="zoom"><button class="tb" id="btn-zo" title="縮小（−キー）">−</button><button class="tb" id="btn-zfit" title="画面に合わせる（0キー）"><span id="zoom-label">画面に合わせる</span></button><button class="tb" id="btn-zi" title="拡大（＋キー）">＋</button></span>
     <button class="tb" id="btn-settings" title="設定">⚙</button>
   </div>
   <div id="modebar" class="place">🟦 置くモード ─ キーは命令として働きます（文字を入れるには Enter）</div>
@@ -208,6 +216,8 @@ button{font:inherit;color:inherit}
       <div class="grid3" id="field-tools"></div>
       <h2>番号を振る（セルを選んでから）</h2>
       <div class="grid3" id="stamp-tools"></div>
+      <h2>罫線（基本）</h2>
+      <div class="grid3" id="basic-tools"></div>
       <h2>その他</h2>
       <div class="grid2" id="misc-tools"></div>
       <div id="tabs">
@@ -341,8 +351,12 @@ const SCORE_ASPECTS = [
   { key:'思判表',  label:'思・判・表' },
   { key:'知技',    label:'知・技' }
 ];
+// お手本 R6 の得点枠（W29:Y47）に合わせる。
+// 太めの外枠1つだけで、中に「合計　１００／思・判・表　５０／知・技　５０」。
+// 仕切り線は引かない（余白が得点の書き込み場所になる）。
 const V_SCORE_H = 20;     // 縦書き得点枠の高さ（行）
-const V_SCORE_DIV = 14;   // 得点記入欄との仕切り位置（枠の上からの行数）
+const H_SCORE_W = 6;      // 横書き得点枠の幅（列）
+const H_SCORE_H = 8;      // 横書き得点枠の高さ（行）
 
 function headerLayout(d){
   const { cols, rows } = d.grid;
@@ -366,19 +380,16 @@ function headerLayout(d){
     put(cols-1, d.paper.title, 14);
     put(cols-2, d.paper.nameLabel, 11);
 
-    // 得点枠：氏名欄の左3列、下端（お手本の W29:Y47 と同じ位置関係）
+    // 得点枠：氏名欄の左3列、下端（お手本の W29:Y47 と同じ位置）
     if (d.paper.showScoreBox){
       const c0 = cols-5, r0 = rows - V_SCORE_H;
       SCORE_ASPECTS.forEach((a, i) => {
-        const col = c0 + (2 - i);              // 右から 合計→思判表→知技
-        for (let k=0;k<a.label.length;k++)
-          texts.push({c:col, r:r0 + k*CHAR_ROWS, t:a.label[k], size:11});
-        const pts = String(totals[a.key]);
-        const start = r0 + V_SCORE_DIV - pts.length*CHAR_ROWS;
-        for (let k=0;k<pts.length;k++)
-          texts.push({c:col, r:start + k*CHAR_ROWS, t:pts[k], size:11});
-        borders.push({c:col, r:r0, w:1, h:V_SCORE_DIV, style:'thin'});
-        borders.push({c:col, r:r0+V_SCORE_DIV, w:1, h:V_SCORE_H-V_SCORE_DIV, style:'thin'});
+        const col = c0 + (2 - i);              // 右から 合計 → 思・判・表 → 知・技
+        const line = a.label + '　' + String(totals[a.key]);
+        for (let k=0;k<line.length;k++){
+          const r = r0 + 1 + k*CHAR_ROWS;
+          if (r < r0 + V_SCORE_H) texts.push({c:col, r, t:line[k], size:11});
+        }
       });
       borders.push({c:c0, r:r0, w:3, h:V_SCORE_H, style:'medium'});
       mark(c0, r0, 3, V_SCORE_H);
@@ -389,19 +400,15 @@ function headerLayout(d){
     texts.push({c:0, r:2, t:d.paper.nameLabel, size:11, align:'left'});
     mark(0, 0, cols, 4);
 
-    // 得点枠：右上（1区分=2列、ラベル行・配点行・記入行）
+    // 得点枠：右上。縦書きと同じく太枠1つの中に3区分を並べる
     if (d.paper.showScoreBox){
-      const w = 6, h = 8, c0 = cols - w, r0 = 0;
-      SCORE_ASPECTS.slice().reverse().forEach((a, i) => {   // 左から 知技→思判表→合計
-        const col = c0 + i*2;
-        texts.push({c:col, r:0, t:a.label, size:9, align:'left'});
-        texts.push({c:col, r:2, t:String(totals[a.key]), size:11, align:'left'});
-        if (i>0) borders.push({c:col, r:r0, w:2, h:h, style:'thin'});
+      const c0 = cols - H_SCORE_W, r0 = 0;
+      SCORE_ASPECTS.slice().reverse().forEach((a, i) => {   // 左から 知・技 → 思・判・表 → 合計
+        texts.push({c:c0, r:r0 + 1 + i*CHAR_ROWS,
+                    t:a.label + '　' + String(totals[a.key]), size:10, align:'left'});
       });
-      borders.push({c:c0, r:r0,   w:w, h:2, style:'thin'});
-      borders.push({c:c0, r:r0+2, w:w, h:2, style:'thin'});
-      borders.push({c:c0, r:r0,   w:w, h:h, style:'medium'});
-      mark(c0, r0, w, h);
+      borders.push({c:c0, r:r0, w:H_SCORE_W, h:H_SCORE_H, style:'medium'});
+      mark(c0, r0, H_SCORE_W, H_SCORE_H);
     }
   }
   return { texts, borders, reserved };
@@ -587,9 +594,11 @@ function buildCells(d, withAnswers){
     for (let i=0;i<w;i++){ line(c+i, r, 'top', style); line(c+i, r+h-1, 'bottom', style); }
     for (let j=0;j<h;j++){ line(c, r+j, 'left', style); line(c+w-1, r+j, 'right', style); }
   };
-  const put = (c,r,t,size,bold,align) => {
+  // mid=true なら1文字マス（2行）の真ん中に置く（Excelでは2行を結合する）
+  const put = (c,r,t,size,bold,align,mid) => {
     if (c<0||r<0||c>=d.grid.cols||r>=d.grid.rows) return;
     const x = get(c,r); x.t = t; x.size = size||11; x.bold = !!bold; x.align = align||'center';
+    x.mid = !!mid && (r+1 < d.grid.rows);
   };
 
   // (1) ヘッダー
@@ -640,12 +649,12 @@ function buildCells(d, withAnswers){
     for (const [str, side] of [[f.prefix,'before'],[f.suffix,'after']]){
       if (!str) continue;
       const ps = affixCells(d, f, side, str.length);
-      ps.forEach((p,i) => put(p.c, p.r, str[i], 11, false, 'center'));
+      ps.forEach((p,i) => put(p.c, p.r, str[i], 11, false, 'center', true));
     }
   }
 
   // (3) 太枠（選択範囲に引いた枠）
-  d.decorations.forEach(v => box(v.c, v.r, v.w, v.h, 'medium'));
+  d.decorations.forEach(v => box(v.c, v.r, v.w, v.h, v.style || 'medium'));
 
   // (4) 入力した文字・振った番号
   for (const k in d.texts){
@@ -666,7 +675,7 @@ function buildCells(d, withAnswers){
       if (!a) continue;
       const list = answerCells(d, f);
       for (let i=0;i<a.length && i<list.length;i++)
-        put(list[i].c, list[i].r, a[i], 11, false, 'center');
+        put(list[i].c, list[i].r, a[i], 11, false, 'center', true);
     }
   }
   return cells;
@@ -676,6 +685,8 @@ function buildCells(d, withAnswers){
    7. 画面の状態
    --------------------------------------------------------------- */
 const ui = {
+  zoom:0,                // 0 = 画面に合わせる。それ以外は倍率
+  line:'thin',           // 罫線の太さ（'thin' 普通 / 'medium' 太線）
   mode:'place',          // 'place' | 'input'
   tab:'sheet',           // 'sheet' | 'answer'
   cur:{c:0,r:0},         // カーソル
@@ -690,9 +701,21 @@ const history = { sheet:{undo:[],redo:[]}, answer:{undo:[],redo:[]} };
 const $  = s => document.querySelector(s);
 const svg = $('#sheet');
 
+// 履歴には「選んでいた範囲」も一緒に残す
+function state(){
+  return JSON.stringify({ doc, cur:ui.cur, sel:ui.sel, extra:ui.extra });
+}
+function restore(json){
+  const st = JSON.parse(json);
+  doc = st.doc;
+  ui.cur = st.cur || {c:0,r:0};
+  ui.sel = st.sel || null;
+  ui.extra = st.extra || [];
+  ui.selAnchor = null;
+}
 function snapshot(){
   const h = history[ui.tab];
-  h.undo.push(JSON.stringify(doc));
+  h.undo.push(state());
   if (h.undo.length > 120) h.undo.shift();
   h.redo.length = 0;
   ui.dirty = true;
@@ -700,15 +723,15 @@ function snapshot(){
 function undo(){
   const h = history[ui.tab];
   if (!h.undo.length) return toast('これ以上は戻せません');
-  h.redo.push(JSON.stringify(doc));
-  doc = JSON.parse(h.undo.pop());
-  render(); toast('戻しました');
+  h.redo.push(state());
+  restore(h.undo.pop());
+  render(); toast('戻しました（選んだ範囲はそのままです）');
 }
 function redo(){
   const h = history[ui.tab];
   if (!h.redo.length) return toast('やり直せる操作はありません');
-  h.undo.push(JSON.stringify(doc));
-  doc = JSON.parse(h.redo.pop());
+  h.undo.push(state());
+  restore(h.redo.pop());
   render(); toast('やり直しました');
 }
 
@@ -786,7 +809,7 @@ function render(){
   cells.forEach(x=>{
     if (!x.t) return;
     const fs = ptmm(x.size);
-    const a = { y: y0 + x.r*RH + RH/2, 'font-size':fs, fill:'#000',
+    const a = { y: y0 + x.r*RH + (x.mid ? RH : RH/2), 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
     if (x.align==='left'){ a.x = x0 + x.c*CW + 0.4; a['text-anchor']='start'; }
     else { a.x = x0 + x.c*CW + CW/2; a['text-anchor']='middle'; }
@@ -832,16 +855,34 @@ function setPageRule(orientation){
   if (st.textContent !== want) st.textContent = want;
 }
 
-// 用紙全体が画面に収まる大きさにする
+// 用紙の表示の大きさ。ui.zoom が 0 なら画面に収まる大きさ
 function fitPreview(p){
   const pane = document.getElementById('preview');
   const availW = pane.clientWidth - 36;
   const availH = pane.clientHeight - 60;
   if (availW <= 0 || availH <= 0) return;
-  const w = Math.min(availW, availH * p.w / p.h, 1180);
+  const fitW = Math.min(availW, availH * p.w / p.h, 1180);
+  const w = ui.zoom ? fitW * ui.zoom : fitW;
   document.getElementById('paper').style.width = Math.max(240, Math.floor(w)) + 'px';
+  const z = document.getElementById('zoom-label');
+  if (z) z.textContent = ui.zoom ? Math.round(ui.zoom*100)+'%' : '画面に合わせる';
 }
 window.addEventListener('resize', ()=>{ if (doc) fitPreview(PAGE[doc.paper.orientation]); });
+
+const ZOOMS = [0.6,0.75,0.9,1,1.25,1.5,2,2.5,3];
+function setZoom(dir){
+  if (dir === 0){ ui.zoom = 0; }
+  else {
+    const cur = ui.zoom || 1;
+    const i = ZOOMS.findIndex(z => z > cur + 0.001);
+    if (dir > 0) ui.zoom = ZOOMS[i < 0 ? ZOOMS.length-1 : i];
+    else {
+      const j = [...ZOOMS].reverse().find(z => z < cur - 0.001);
+      ui.zoom = j || ZOOMS[0];
+    }
+  }
+  fitPreview(PAGE[doc.paper.orientation]);
+}
 
 let toastTimer = null;
 function toast(msg){
@@ -924,7 +965,7 @@ async function placeField(type){
   const f = {
     id:'f'+(uid++), type, rects:built.rects, label:lab,
     chars: (type===4 ? opt.n : (opt.n||1)), exact: !!opt.exact, grid: !!opt.grid,
-    points:0, aspect:'知技', complete:false, prefix:'', suffix:''
+    points:0, aspect:'知技', complete:(ui.line==='medium'), prefix:'', suffix:''
   };
   doc.fields.push(f);
 
@@ -947,20 +988,80 @@ async function placeField(type){
                               : '右に入らないため、次の行に置きました');
 }
 
-/* 太枠（選択範囲の外枠を太線に） */
-function markComplete(){
+/* シンプル枠：選んだ範囲の外側に罫線を引く（今の線の太さで） */
+function simpleFrame(){
   const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
   snapshot();
-  // 選択とぴったり重なる欄があれば「完答」扱い、なければ枠として描く
-  const f = doc.fields.find(f => f.rects.length===1 &&
-    f.rects[0].c===s.c && f.rects[0].r===s.r && f.rects[0].w===s.w && f.rects[0].h===s.h);
-  if (f){ f.complete = !f.complete; toast(f.complete?'完答（太枠）にしました':'太枠を外しました'); }
+  const i = doc.decorations.findIndex(v=>v.c===s.c&&v.r===s.r&&v.w===s.w&&v.h===s.h);
+  if (i>=0){ doc.decorations.splice(i,1); toast('枠を外しました'); }
   else {
-    const i = doc.decorations.findIndex(v=>v.c===s.c&&v.r===s.r&&v.w===s.w&&v.h===s.h);
-    if (i>=0){ doc.decorations.splice(i,1); toast('太枠を外しました'); }
-    else { doc.decorations.push({c:s.c,r:s.r,w:s.w,h:s.h}); toast('太枠を引きました'); }
+    // 選択とぴったり重なる欄があれば、その欄の太さを切り替える
+    const f = doc.fields.find(f => f.rects.length===1 &&
+      f.rects[0].c===s.c && f.rects[0].r===s.r && f.rects[0].w===s.w && f.rects[0].h===s.h);
+    if (f){ f.complete = (ui.line==='medium'); toast(f.complete?'この欄を太線にしました':'この欄を普通の線にしました'); }
+    else { doc.decorations.push({c:s.c,r:s.r,w:s.w,h:s.h,style:ui.line});
+           toast(ui.line==='medium' ? '太い枠を引きました' : '枠を引きました'); }
   }
   render();
+}
+
+/* 線の太さを切り替える */
+function setLine(kind){
+  ui.line = kind;
+  document.querySelectorAll('[data-line]').forEach(b=>b.classList.toggle('on', b.dataset.line===kind));
+  setModeBar();
+  toast(kind==='medium' ? '太線モードにしました' : '普通線モードにしました');
+}
+
+/* 挿入：選んだ分だけ空きを作り、続きを押し出す
+   縦書き＝同じ列の下へ、横書き＝同じ行の右へ */
+function insertCells(){
+  const vertical = doc.paper.writing==='vertical';
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const n = vertical ? s.h : s.w;                 // 押し出す量
+  const lo = vertical ? s.c : s.r;                // 対象の列（行）の範囲
+  const hi = vertical ? s.c + s.w - 1 : s.r + s.h - 1;
+  const from = vertical ? s.r : s.c;              // ここから先を押し出す
+  const limit = vertical ? doc.grid.rows : doc.grid.cols;
+
+  const inRange = (c,r) => vertical ? (c>=lo && c<=hi) : (r>=lo && r<=hi);
+  const pos     = (c,r) => vertical ? r : c;
+  const moved   = [];                             // 押し出すもの
+
+  // はみ出さないか先に確かめる
+  const check = (c,r,w,h) => {
+    const end = vertical ? r+h : c+w;
+    return end + n <= limit;
+  };
+  for (const f of doc.fields)
+    for (const rc of f.rects)
+      if (inRange(rc.c, rc.r) && pos(rc.c, rc.r) >= from && !check(rc.c,rc.r,rc.w,rc.h))
+        return toast('⚠ 押し出すと用紙からはみ出します');
+  for (const v of doc.decorations)
+    if (inRange(v.c, v.r) && pos(v.c, v.r) >= from && !check(v.c,v.r,v.w,v.h))
+      return toast('⚠ 押し出すと用紙からはみ出します');
+  for (const k in doc.texts){
+    const [c,r] = k.split(',').map(Number);
+    if (inRange(c,r) && pos(c,r) >= from && pos(c,r)+n >= limit)
+      return toast('⚠ 押し出すと用紙からはみ出します');
+  }
+
+  snapshot();
+  const shift = (o) => { if (vertical) o.r += n; else o.c += n; };
+  doc.fields.forEach(f => {
+    f.rects.forEach(rc => { if (inRange(rc.c,rc.r) && pos(rc.c,rc.r) >= from) shift(rc); });
+    if (f.label && inRange(f.label.c,f.label.r) && pos(f.label.c,f.label.r) >= from) shift(f.label);
+  });
+  doc.decorations.forEach(v => { if (inRange(v.c,v.r) && pos(v.c,v.r) >= from) shift(v); });
+  const nt = {};
+  for (const k in doc.texts){
+    const [c,r] = k.split(',').map(Number);
+    if (inRange(c,r) && pos(c,r) >= from) nt[vertical ? c+','+(r+n) : (c+n)+','+r] = doc.texts[k];
+    else nt[k] = doc.texts[k];
+  }
+  doc.texts = nt;
+  render();
+  toast(vertical ? n+'行ぶん空けて、下へ押し出しました' : n+'列ぶん空けて、右へ押し出しました');
 }
 
 /* 消す */
@@ -996,6 +1097,26 @@ function selectedCells(){
   ui.extra.forEach(p=>{ if(!out.some(q=>q.c===p.c&&q.r===p.r)) out.push(p); });
   if (!out.length) out.push({c:ui.cur.c, r:ui.cur.r});
   return out;
+}
+
+// 罫線と文字をすべて消す（タイトル・氏名欄・得点枠は残る）
+async function clearAll(){
+  if (!doc.fields.length && !doc.decorations.length && !Object.keys(doc.texts).length
+      && !Object.keys(doc.answers).length)
+    return toast('消すものがありません');
+  const v = await ask('解答欄をすべて消しますか', [
+    {key:'ok', label:'', type:'none',
+     hint:'罫線と入力した文字、模範解答をすべて消します。\n'+
+          'テストのタイトル・氏名欄・得点枠は残ります。\n\n'+
+          'Ctrl+Z で元に戻せます。'}
+  ]);
+  if (!v) return;
+  snapshot();
+  doc.fields = []; doc.decorations = []; doc.texts = {}; doc.answers = {};
+  ui.cur = Object.assign({}, contentOrigin(doc));
+  ui.sel = null; ui.extra = [];
+  render();
+  toast('すべて消しました（Ctrl+Z で戻せます）');
 }
 
 /* ---------------------------------------------------------------
@@ -1044,8 +1165,7 @@ async function stamp(key){
     doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle),
       size:def.size, bold:!!def.bold, box:!labels.has(p.c+','+p.r) };
   });
-  ui.sel = null; ui.extra = [];
-  render();
+  render();                       // 選んだ範囲はそのまま残す
   toast(def.name+'を'+cells.length+'か所に振りました'+(usedLabels?'（番号欄だけ）':''));
 }
 
@@ -1114,7 +1234,8 @@ function setModeBar(){
     b.textContent='🟩 入力モード ─ 日本語入力が使えます（Enter で確定 ／ Esc で取り消し）';
   } else {
     b.className='place';
-    b.textContent='🟦 置くモード ─ キーは命令として働きます（文字を入れるには Enter）';
+    b.textContent='🟦 置くモード ─ 罫線は'+(ui.line==='medium'?'太線':'普通線')
+      +'（T で切替）／ キーは命令として働きます（文字を入れるには Enter）';
   }
 }
 // その位置にある欄（番号欄の上でも見つかる）
@@ -1186,7 +1307,12 @@ document.addEventListener('keydown', ev => {
 
   if (CODE_FIELD[ev.code]){ ev.preventDefault(); return placeField(CODE_FIELD[ev.code]); }
   if (CODE_STAMP[ev.code]){ ev.preventDefault(); return stamp(CODE_STAMP[ev.code]); }
-  if (ev.code === 'KeyT'){ ev.preventDefault(); return markComplete(); }
+  if (ev.code === 'KeyW'){ ev.preventDefault(); return simpleFrame(); }
+  if (ev.code === 'KeyI'){ ev.preventDefault(); return insertCells(); }
+  if (ev.code === 'KeyT'){ ev.preventDefault(); return setLine(ui.line==='thin'?'medium':'thin'); }
+  if (ev.code === 'Minus'){ ev.preventDefault(); return setZoom(-1); }
+  if (ev.code === 'Equal' || ev.code === 'Semicolon'){ ev.preventDefault(); return setZoom(1); }
+  if (ev.code === 'Digit0'){ ev.preventDefault(); return setZoom(0); }
 
   // 命令に当てはまらない文字キー → 入力モードの案内を出す
   if (ev.key.length === 1 && !ctrl){ ev.preventDefault(); toast('文字を入れるには Enter'); }
@@ -1360,6 +1486,7 @@ function buildXlsx(){
 
   const sheetXml = sheets.map(sh => {
     const { cols, rows } = doc.grid;
+    const merges = [];
     let body = '';
     for (let r=0;r<rows;r++){
       let rowXml = '';
@@ -1368,6 +1495,7 @@ function buildXlsx(){
         if (!x || (!x.t && !x.b.top && !x.b.bottom && !x.b.left && !x.b.right)) continue;
         const si = addXf(addFont(x.size||11, x.bold), addBorder(x.b), x.align||'center');
         const ref = colName(c)+(r+1);
+        if (x.mid) merges.push(ref+':'+colName(c)+(r+2));   // 1文字マスの2行を結合
         rowXml += x.t
           ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(x.t)+'</t></is></c>'
           : '<c r="'+ref+'" s="'+si+'"/>';
@@ -1382,6 +1510,8 @@ function buildXlsx(){
       '<sheetFormatPr defaultColWidth="'+COL_W_EXCEL+'" defaultRowHeight="'+ROW_H_PT+'" customHeight="1"/>'+
       '<cols><col min="1" max="'+cols+'" width="'+COL_W_EXCEL+'" customWidth="1"/></cols>'+
       '<sheetData>'+body+'</sheetData>'+
+      (merges.length ? '<mergeCells count="'+merges.length+'">'+
+        merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>' : '')+
       '<printOptions horizontalCentered="1" verticalCentered="1"/>'+
       '<pageMargins left="'+mx+'" right="'+mx+'" top="'+my+'" bottom="'+my+'" header="0" footer="0"/>'+
       '<pageSetup paperSize="9" scale="'+Math.round(SCALE*100)+'" orientation="'+doc.paper.orientation+'"/>'+
@@ -1637,7 +1767,8 @@ function ask(title, rows){
       if (e.key==='Enter'){ e.preventDefault(); close(true); }
       if (e.key==='Escape'){ e.preventDefault(); close(false); }
     });
-    const first = wrap.querySelector('input');
+    // 入力欄が無い小窓（説明だけのもの）は決定ボタンに合わせる
+    const first = wrap.querySelector('input') || wrap.querySelector('[data-act="ok"]');
     if (first){ first.focus(); if (first.select) first.select(); }
   });
 }
@@ -1797,10 +1928,23 @@ function buildTools(){
   sw.querySelectorAll('[data-stamp]').forEach(b =>
     b.addEventListener('click', ()=>stamp(b.dataset.stamp)));
 
+  // 罫線（基本）
+  const bw = $('#basic-tools');
+  bw.innerHTML =
+    '<button class="tool" id="t-frame"><span class="nm">シンプル枠</span><span class="k">W</span></button>'+
+    '<button class="tool" id="t-ins"><span class="nm">挿入</span><span class="k">I</span></button>'+
+    '<button class="tool" id="t-del"><span class="nm">消す</span><span class="k">Delete</span></button>'+
+    '<button class="tool line on" data-line="thin"><span class="nm">普通線モード</span><span class="k">T</span></button>'+
+    '<button class="tool line" data-line="medium"><span class="nm">太線モード</span><span class="k">T</span></button>'+
+    '<button class="tool" id="t-clear"><span class="nm">全部消す</span></button>';
+  $('#t-frame').onclick = simpleFrame;
+  $('#t-ins').onclick   = insertCells;
+  $('#t-del').onclick   = clearSelection;
+  $('#t-clear').onclick = clearAll;
+  bw.querySelectorAll('[data-line]').forEach(b => b.onclick = () => setLine(b.dataset.line));
+
   const mw = $('#misc-tools');
   mw.innerHTML =
-    '<button class="tool" id="t-bold"><span class="nm">太枠（完答）</span><span class="k">T</span></button>'+
-    '<button class="tool" id="t-del"><span class="nm">消す</span><span class="k">Delete</span></button>'+
     '<button class="tool" id="t-edit"><span class="nm">文字を入れる</span><span class="k">Enter</span></button>'+
     '<button class="tool" id="t-prop"><span class="nm">欄の設定</span><span class="k">Space</span></button>'+
     '<button class="tool" id="t-pick" style="grid-column:1/-1"><span class="nm">離れたセルを選ぶ（番号を振る前に）</span><span class="k">Shift+Space</span></button>';
@@ -1810,8 +1954,6 @@ function buildTools(){
     render();
     toast(ui.extra.length ? '選んだセル：'+ui.extra.length+'か所' : '選択を外しました');
   };
-  $('#t-bold').onclick = markComplete;
-  $('#t-del').onclick  = clearSelection;
   $('#t-edit').onclick = enterInput;
   $('#t-prop').onclick = openFieldPopup;
 }
@@ -1867,6 +2009,9 @@ $('#btn-xlsx').onclick = exportXlsx;
 $('#btn-pdf').onclick  = printSheet;
 $('#btn-save').onclick = saveWork;
 $('#btn-settings').onclick = openSettings;
+$('#btn-zo').onclick   = ()=>setZoom(-1);
+$('#btn-zi').onclick   = ()=>setZoom(1);
+$('#btn-zfit').onclick = ()=>setZoom(0);
 $('#title-input').addEventListener('change', e => {
   snapshot(); doc.paper.title = e.target.value; render();
 });
