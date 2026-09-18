@@ -414,8 +414,9 @@ const FIELD_DEFS = {
   6:{ name:'グラフ',   hint:'グラフ・作図（白枠／方眼）' },
   7:{ name:'自由枠',   hint:'途中式・証明（罫線なしの大枠）' }
 };
-const BOX5_LEN = 6;      // 答えのみ欄：縦書きの長さ（行）
-const BOX5_W   = 4;      // 答えのみ欄：横書きの幅（列）
+const BOX5_LEN = 8;      // 答えのみ欄：縦書きの長さ（行）＝4文字分
+const BOX5_W   = 8;      // 答えのみ欄：横書きの幅（列）＝8文字分。
+                         //   「x＝」と「cm²」を入れても答えを書く場所が残る大きさ
 const BOX7_W_V = 4;      // 自由記述枠の幅：縦書き（列）
 const BOX7_W_H = 8;      // 自由記述枠の幅：横書き（列）
 
@@ -485,33 +486,42 @@ function buildRects(d, type, at, opt){
   return { rects };
 }
 
-// 欄が実際に使うセル（前置き・後置き文字の分も含む）
+// 番号欄の位置と大きさ（お手本と同じく、解答欄の直前に置く小さなマス）
+//   縦書き：解答欄の1行上（高さ1行）／横書き：解答欄の1列左（高さは解答欄と同じ）
+function labelRect(d, at){
+  return d.paper.writing==='vertical'
+    ? { c:at.c, r:at.r, w:1, h:1 }
+    : { c:at.c, r:at.r, w:1, h:CHAR_ROWS };
+}
+// 番号欄を置いたとき、解答欄が始まる位置
+function boxStart(d, at){
+  return d.paper.writing==='vertical'
+    ? { c:at.c, r:at.r+1 }
+    : { c:at.c+1, r:at.r };
+}
+
+// 欄が実際に使うセル（番号欄・前置き・後置き文字の分も含む）
 function fieldFootprint(d, f){
   const cells = [];
   for (const r of f.rects)
     for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) cells.push([r.c+i, r.r+j]);
-  for (const [str, side] of [[f.prefix,'before'],[f.suffix,'after']]){
-    if (!str) continue;
-    for (const p of affixCells(d, f, side, str.length)) cells.push([p.c, p.r]);
-  }
+  if (f.label)
+    for (let i=0;i<f.label.w;i++) for (let j=0;j<f.label.h;j++) cells.push([f.label.c+i, f.label.r+j]);
   return cells;
 }
 
-// 前置き・後置き文字を置くセル（欄の直前／直後）
+// 前置き・後置き文字を置くマス。
+// 隣の欄とぶつからないよう、欄の内側（先頭のマス／末尾のマス）に入れる。
 function affixCells(d, f, side, len){
-  const vertical = d.paper.writing==='vertical';
-  const first = f.rects[0], last = f.rects[f.rects.length-1];
-  const out = [];
-  for (let i=0;i<len;i++){
-    if (side==='before'){
-      if (vertical) out.unshift({ c:first.c, r:first.r - (i+1)*CHAR_ROWS });
-      else          out.unshift({ c:first.c - (i+1), r:first.r });
-    } else {
-      if (vertical) out.push({ c:last.c, r:last.r + last.h + i*CHAR_ROWS });
-      else          out.push({ c:last.c + last.w + i, r:last.r });
-    }
-  }
-  return out.filter(p => p.c>=0 && p.r>=0 && p.c<d.grid.cols && p.r<d.grid.rows);
+  const list = charCells(d, f);
+  return side==='before' ? list.slice(0, len) : list.slice(Math.max(0, list.length-len));
+}
+
+// 模範解答が入るマス（前置き・後置き文字の分をよける）
+function answerCells(d, f){
+  const list = charCells(d, f);
+  const a = (f.prefix||'').length, b = (f.suffix||'').length;
+  return list.slice(a, list.length - b);
 }
 
 // 欄の文字マス（模範解答を1文字ずつ並べるための順序つきリスト）
@@ -567,6 +577,7 @@ function buildCells(d, withAnswers){
   for (const f of d.fields){
     const outer = f.complete ? 'medium' : 'thin';
     f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
+    if (f.label) box(f.label.c, f.label.r, f.label.w, f.label.h, 'thin');   // 番号欄
 
     if (f.type===2 || f.type===3 || f.type===4){
       // 文字の区切り線（記号複数は実線、漢字と記述は点線）
@@ -615,7 +626,12 @@ function buildCells(d, withAnswers){
   for (const k in d.texts){
     const [c,r] = k.split(',').map(Number);
     const v = d.texts[k];
-    if (v && v.t !== '') put(c, r, v.t, v.size||11, v.bold, v.align);
+    if (!v || v.t === '') continue;
+    put(c, r, v.t, v.size||11, v.bold, v.align);
+    if (v.box){                      // 大問番号・問番号のセルにも枠を引く
+      const h = d.paper.writing==='vertical' ? 1 : CHAR_ROWS;
+      box(c, r, 1, h, 'thin');
+    }
   }
 
   // (5) 模範解答
@@ -623,7 +639,7 @@ function buildCells(d, withAnswers){
     for (const f of d.fields){
       const a = d.answers[f.id];
       if (!a) continue;
-      const list = charCells(d, f);
+      const list = answerCells(d, f);
       for (let i=0;i<a.length && i<list.length;i++)
         put(list[i].c, list[i].r, a[i], 11, false, 'center');
     }
@@ -852,20 +868,27 @@ async function placeField(type){
   }
   if (type===7) { const v = await ask('自由記述枠（途中式・証明）', [{key:'h',label:'高さ（文字分）',type:'number',value:6,min:1}]); if(!v) return; opt.h=+v.h; }
 
-  const at = { c:ui.cur.c, r:ui.cur.r };
-  const built = buildRects(doc, type, at, opt);
+  // カーソル位置は「番号欄」。解答欄はその次から始まる（お手本と同じ並び）
+  const at  = { c:ui.cur.c, r:ui.cur.r };
+  const lab = labelRect(doc, at);
+  const built = buildRects(doc, type, boxStart(doc, at), opt);
   if (built.error) return toast('⚠ '+built.error);
+  if (lab.c+lab.w > doc.grid.cols || lab.r+lab.h > doc.grid.rows)
+    return toast('⚠ 番号欄の場所がありません');
 
   // 重なりの確認
   const used = occupied(doc);
-  for (const r of built.rects)
+  const clash = (r) => {
     for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
-      if (used.has((r.c+i)+','+(r.r+j)))
-        return toast('⚠ すでに欄かタイトル欄があります。別の場所に置いてください');
+      if (used.has((r.c+i)+','+(r.r+j))) return true;
+    return false;
+  };
+  if (clash(lab) || built.rects.some(clash))
+    return toast('⚠ すでに欄かタイトル欄があります。別の場所に置いてください');
 
   snapshot();
   const f = {
-    id:'f'+(uid++), type, rects:built.rects,
+    id:'f'+(uid++), type, rects:built.rects, label:lab,
     chars: (type===4 ? opt.n : (opt.n||1)), exact: !!opt.exact, grid: !!opt.grid,
     points:0, aspect:'知技', complete:false, prefix:'', suffix:''
   };
@@ -952,22 +975,41 @@ const STAMPS = {
 async function stamp(key){
   if (ui.tab !== 'sheet') return toast('模範解答タブでは番号を振れません');
   const def = STAMPS[key];
-  const cells = selectedCells();
+  let cells = selectedCells();
   if (!cells.length) return;
+
+  // 選んだ範囲に「番号欄」が含まれていれば、そこだけに振る。
+  // （欄をまとめて選んでも、解答欄のマスには番号が入らない）
+  const labels = new Set();
+  doc.fields.forEach(f => { if (f.label) labels.add(f.label.c+','+f.label.r); });
+  const onLabels = cells.filter(p => labels.has(p.c+','+p.r));
+  const usedLabels = onLabels.length > 0;
+  if (usedLabels) cells = onLabels;
+  else {
+    // 解答欄の中には振らない
+    const inside = new Set();
+    doc.fields.forEach(f => f.rects.forEach(r => {
+      for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) inside.add((r.c+i)+','+(r.r+j));
+    }));
+    const outside = cells.filter(p => !inside.has(p.c+','+p.r));
+    if (outside.length) cells = outside;
+  }
+
   const v = await ask(def.name+'を振ります（'+cells.length+'か所）',
     [{key:'start',label:'開始番号',type:'number',value:1,min:1}]);
   if (!v) return;
   const start = Math.max(1, +v.start||1);
-  // 読む順に並べ替える
+  // 読む順に並べ替える（縦書きは右の列から、各列は上から）
   const vertical = doc.paper.writing==='vertical';
   cells.sort((a,b)=> vertical ? (b.c-a.c)||(a.r-b.r) : (a.r-b.r)||(a.c-b.c));
   snapshot();
   cells.forEach((p,i)=>{
-    doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle), size:def.size, bold:!!def.bold };
+    doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle),
+      size:def.size, bold:!!def.bold, box:!labels.has(p.c+','+p.r) };
   });
   ui.sel = null; ui.extra = [];
   render();
-  toast(def.name+'を'+cells.length+'か所に振りました');
+  toast(def.name+'を'+cells.length+'か所に振りました'+(usedLabels?'（番号欄だけ）':''));
 }
 
 /* ---------------------------------------------------------------
@@ -1038,8 +1080,10 @@ function setModeBar(){
     b.textContent='🟦 置くモード ─ キーは命令として働きます（文字を入れるには Enter）';
   }
 }
+// その位置にある欄（番号欄の上でも見つかる）
 function fieldAt(c,r){
-  return doc.fields.find(f => f.rects.some(x => c>=x.c && c<x.c+x.w && r>=x.r && r<x.r+x.h));
+  const hit = x => c>=x.c && c<x.c+x.w && r>=x.r && r<x.r+x.h;
+  return doc.fields.find(f => f.rects.some(hit) || (f.label && hit(f.label)));
 }
 
 /* ---------------------------------------------------------------
@@ -1166,12 +1210,13 @@ async function openFieldPopup(){
   f.complete = !!v.complete;
   if (f.type===4) f.exact = !v.exact;
   if ('prefix' in v){
-    f.prefix = v.prefix||''; f.suffix = v.suffix||'';
-    // 用紙の端では前後に文字を置く場所がないので、そのことを伝える
-    const short = [];
-    if (f.prefix && affixCells(doc,f,'before',f.prefix.length).length < f.prefix.length) short.push('前');
-    if (f.suffix && affixCells(doc,f,'after', f.suffix.length).length < f.suffix.length) short.push('後');
-    if (short.length) toast('⚠ 欄の'+short.join('と')+'に場所がないため入り切りません。欄を内側にずらしてください');
+    const total = charCells(doc, f).length;
+    const pre = (v.prefix||''), suf = (v.suffix||'');
+    if (pre.length + suf.length >= total){
+      toast('⚠ 文字が欄いっぱいで、答えを書く場所が残りません。欄を大きくしてください');
+    } else {
+      f.prefix = pre; f.suffix = suf;
+    }
   }
   render();
 }
@@ -1587,40 +1632,55 @@ function applyTemplate(subject){
     for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) used.add((r.c+i)+','+(r.r+j));
   });
 
-  let cur = { c:origin.c, r:origin.r };     // 大問の先頭位置
   let head = { c:origin.c, r:origin.r };    // 今の大問の開始位置
+  const labH = vertical ? 1 : CHAR_ROWS;
+  const stepOn = (p) => vertical ? {c:p.c, r:p.r+labH} : {c:p.c+1, r:p.r};
 
-  for (const group of groups){
-    cur = { c:head.c, r:head.r };
+  groups.forEach((group, gi) => {
+    let cur = { c:head.c, r:head.r };
     let widest = 1, deepest = CHAR_ROWS;
+
+    // 大問の先頭に「問一」を置く
+    const qlab = labelRect(doc, cur);
+    if (fits([qlab])){
+      take([qlab]);
+      doc.texts[cur.c+','+cur.r] = { t: STAMPS.Q.fmt(gi+1, doc.paper.numberStyle),
+                                     size: STAMPS.Q.size, box:true };
+      cur = stepOn(cur);
+    }
+
+    let no = 0;                                   // 小問の番号
     for (const step of group){
       for (let k=0; k<(step.times||1); k++){
         const opt = {n:step.n, w:step.w, h:step.h};
-        let built = buildRects(doc, step.type, {c:cur.c,r:cur.r}, opt);
-        if (built.error || !fits(built.rects)){
-          // その場に置けなければ、次の列（横書きは次の行）で置き直す
+        const place = (at) => {
+          const lab = labelRect(doc, at);
+          const b = buildRects(doc, step.type, boxStart(doc, at), opt);
+          return (b.error || !fits([lab]) || !fits(b.rects)) ? null : {lab, rects:b.rects};
+        };
+        let got = place(cur);
+        if (!got){                                // 入らなければ次の列（行）へ
           cur = vertical ? { c:cur.c-1, r:head.r } : { c:origin.c, r:cur.r + CHAR_ROWS*2 };
-          built = buildRects(doc, step.type, {c:cur.c,r:cur.r}, opt);
-          if (built.error || !fits(built.rects)) continue;
+          got = place(cur);
+          if (!got) continue;
         }
-        take(built.rects);
-        doc.fields.push({ id:'f'+(uid++), type:step.type, rects:built.rects,
+        take([got.lab]); take(got.rects);
+        doc.fields.push({ id:'f'+(uid++), type:step.type, rects:got.rects, label:got.lab,
           chars:(step.type===4 ? step.n : (step.n||1)), exact:false, grid:!!step.grid,
           points:0, aspect:'知技', complete:false, prefix:'', suffix:'' });
-        const last = built.rects[built.rects.length-1];
-        const minC = Math.min(...built.rects.map(r=>r.c));
-        const maxR = Math.max(...built.rects.map(r=>r.r+r.h));
-        widest  = Math.max(widest,  head.c - minC + 1);
-        deepest = Math.max(deepest, maxR - head.r);
-        if (vertical) cur = { c:last.c, r:last.r + last.h + CHAR_ROWS };   // 欄と欄の間を1マス空ける
-        else          cur = { c:last.c + last.w + 1, r:last.r };
+        no++;
+        doc.texts[got.lab.c+','+got.lab.r] = { t: STAMPS.P.fmt(no), size: STAMPS.P.size };
+        const last = got.rects[got.rects.length-1];
+        widest  = Math.max(widest,  head.c - Math.min(...got.rects.map(r=>r.c)) + 1);
+        deepest = Math.max(deepest, Math.max(...got.rects.map(r=>r.r+r.h)) - head.r);
+        cur = vertical ? { c:last.c, r:last.r + last.h }      // 次の番号欄へ（間は空けない）
+                       : { c:last.c + last.w, r:last.r };
       }
     }
     // 次の大問へ（縦書きは左へ、横書きは下へ。間を1つ空ける）
     if (vertical) head = { c: head.c - widest - 1, r: origin.r };
     else          head = { c: origin.c, r: head.r + deepest + CHAR_ROWS };
-    if (vertical ? head.c < 0 : head.r >= doc.grid.rows) break;
-  }
+  });
 }
 
 /* ---------------------------------------------------------------
