@@ -953,6 +953,13 @@ function setZoom(dir){
   fitPreview(PAGE[doc.paper.orientation]);
 }
 
+// 文字が使うマスの範囲。大問番号のように幅をまたぐものも正しく数える
+function textRect(d, c, r, v){
+  const span = Math.max(1, (v && v.span) || 1);
+  return d.paper.writing==='vertical'
+    ? { c, r, w:span, h:1 }
+    : { c, r, w:1, h:span*CHAR_ROWS };
+}
 const outsideCount = d => countOutside(d, d.grid);
 // 指定のマス目からはみ出しているものの数を数える
 function countOutside(d, grid){
@@ -966,8 +973,13 @@ function countOutside(d, grid){
   d.decorations.forEach(v => { if (out(v)) n++; });
   for (const k in d.texts){
     const [c,r] = k.split(',').map(Number);
-    if (c < 0 || r < 0 || c >= cols || r >= rows) n++;
+    if (out(textRect(d, c, r, d.texts[k]))) n++;
   }
+  // 描いた線と点も数える（用紙の外に出ていたら印刷されない）
+  (d.drawings || []).forEach(g => {
+    const off = (x,y) => x < 0 || y < 0 || x > cols || y > rows;
+    if (g.k === 'line' ? (off(g.x1,g.y1) || off(g.x2,g.y2)) : off(g.x,g.y)) n++;
+  });
   return n;
 }
 
@@ -1155,8 +1167,8 @@ function insertCells(){
   for (const v of doc.decorations) if (!check(v)) return toast('⚠ 差し込むと用紙からはみ出します');
   for (const k in doc.texts){
     const [c,r] = k.split(',').map(Number);
-    const cell = {c,r,w:1,h:1};
-    if (isMove(cell) && !fits(cell)) return toast('⚠ 差し込むと用紙からはみ出します');
+    const cell = textRect(doc, c, r, doc.texts[k]);
+    if ((isMove(cell) || isGrow(cell)) && !fits(cell)) return toast('⚠ 差し込むと用紙からはみ出します');
   }
 
   snapshot();
@@ -1172,7 +1184,8 @@ function insertCells(){
   const nt = {};
   for (const k in doc.texts){
     const [c,r] = k.split(',').map(Number);
-    if (isMove({c,r,w:1,h:1})) nt[vertical ? c+','+(r+n) : (c+n)+','+r] = doc.texts[k];
+    if (isMove(textRect(doc, c, r, doc.texts[k])))
+      nt[vertical ? c+','+(r+n) : (c+n)+','+r] = doc.texts[k];
     else nt[k] = doc.texts[k];
   }
   doc.texts = nt;
@@ -1202,7 +1215,9 @@ function insertLine(){
   for (const v of doc.decorations) if (over(v.c,v.r,v.w,v.h)) return toast('⚠ 押し出すと用紙からはみ出します');
   for (const k in doc.texts){
     const [c,r] = k.split(',').map(Number);
-    if (hit(c,r) && (vertical ? c - n < 0 : r + n >= limit)) return toast('⚠ 押し出すと用紙からはみ出します');
+    const t = textRect(doc, c, r, doc.texts[k]);
+    if (hit(c,r) && (vertical ? c - n < 0 : r + t.h + n > limit))
+      return toast('⚠ 押し出すと用紙からはみ出します');
   }
 
   snapshot();
@@ -1664,16 +1679,16 @@ function drawEnd(){
   }
   render();
 }
-// 近くの描画を消す
+// 近くの描画を消す（一番近いものを1つだけ）
 function eraseNear(g){
-  const near = (x,y) => Math.hypot((x-g.x)*CW, (y-g.y)*RH) < 3;   // 3mm以内
-  let hit = -1;
+  const dist = (x,y) => Math.hypot((x-g.x)*CW, (y-g.y)*RH);
+  let hit = -1, best = 3;                                        // 3mm以内から選ぶ
   doc.drawings.forEach((d,i) => {
-    if (d.k==='dot' && near(d.x,d.y)) hit = i;
-    if (d.k==='line'){
-      for (let t=0;t<=1;t+=0.02)
-        if (near(d.x1+(d.x2-d.x1)*t, d.y1+(d.y2-d.y1)*t)) { hit = i; break; }
-    }
+    let m = Infinity;
+    if (d.k==='dot') m = dist(d.x, d.y);
+    else for (let t=0;t<=1;t+=0.02)
+      m = Math.min(m, dist(d.x1+(d.x2-d.x1)*t, d.y1+(d.y2-d.y1)*t));
+    if (m < best){ best = m; hit = i; }
   });
   if (hit < 0) return toast('消すものが見つかりません');
   snapshot();
