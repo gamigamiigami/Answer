@@ -28,10 +28,29 @@
 
 ---
 
+## 公開（GitHub Pages）
+
+既定ブランチに push すると、GitHub Actions が自動で公開します。
+
+```
+https://gamigamiigami.github.io/Answer/
+```
+
+- このURLを開くと、そのまま道具が使えます。ポータルサイトからはここにリンクしてください
+- `https://gamigamiigami.github.io/Answer/answer-sheet-maker.html` は同じ中身です。
+  「名前を付けて保存」で各自のPCに持ち帰る用のリンクとして使えます
+
+**初回だけ設定が要ります。** リポジトリの Settings → Pages → Build and deployment の
+Source を **「GitHub Actions」** にしてください。以後は push するだけで更新されます。
+
+公開の中身は `site/` で、`node tools/build-site.mjs` が作ります（リポジトリには入れません）。
+公開前に「タイトルがあるか」「通信のコードが無いか」を自動で点検します。
+
 ## ポータルサイトに載せる場合
 
-`answer-sheet-maker.html` を**そのままアップロードするだけ**です。1ファイルで完結していて、
-外部のライブラリもフォントも読み込みません。サーバー側の設定も要りません。
+上の GitHub Pages のURLにリンクするのが一番簡単です。
+自分のサーバーに置きたい場合は、`answer-sheet-maker.html` を**そのままアップロードするだけ**です。
+1ファイルで完結していて、外部のライブラリもフォントも読み込みません。サーバー側の設定も要りません。
 
 - リンクから開いてそのまま使えます
 - 「右クリック→名前を付けて保存」で各自のPCに持ち帰り、オフラインで使うこともできます
@@ -46,12 +65,13 @@
 
 ---
 
-## 公開用の版を作り直す
+## 開発
 
-`answer-sheet-maker.html` を直したら次を実行します。
+`answer-sheet-maker.html` が唯一の本体です。ここだけ直します。
 
 ```
-node tools/build-artifact.mjs
+node tools/build-site.mjs      # GitHub Pages 用の site/ を作る
+node tools/build-artifact.mjs  # claude.ai の公開ページ用 dist/artifact.html を作る
 ```
 
-`dist/artifact.html` ができます。これは外枠のタグを外しただけで中身は同じです。手で編集しないでください。
+どちらも本体から作り直すだけで、中身は同じです。手で編集しないでください。

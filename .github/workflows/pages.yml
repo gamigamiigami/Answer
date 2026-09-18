@@ -1,0 +1,50 @@
+# 解答用紙メーカーを GitHub Pages に公開する。
+# 既定ブランチに push すると、site/ の中身がそのまま公開される。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/youthful-cerf-ypzjhe
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 公開する HTML は 1 ファイルで完結している。依存関係の取得はしない。
+      - name: Build site
+        run: node tools/build-site.mjs
+
+      # 中身が変わっていないか、簡単に確かめてから公開する
+      - name: Sanity check
+        run: |
+          test -s site/index.html
+          grep -q '<title>解答用紙メーカー</title>' site/index.html
+          ! grep -qE 'fetch\(|XMLHttpRequest|WebSocket' site/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
