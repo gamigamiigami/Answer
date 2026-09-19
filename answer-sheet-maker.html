@@ -1243,9 +1243,10 @@ async function placeField(type){
     if (h.undo.length) restore(h.undo.pop());
     return toast('⚠ ここには置けません（用紙からはみ出すか、ほかの欄があります）');
   }
-  ui.sel = null; ui.extra = [];
+  if (!(made > 1 && area)) ui.sel = null;      // まとめて置いたときは選んだまま残す
+  ui.extra = [];
   render();
-  if (made > 1) toast(made+'個置きました');
+  if (made > 1) toast(made+'個置きました（そのまま番号のキーを押せます）');
   else if (wrapped) toast(vertical ? '下に入らないため、次の行（左の列）に置きました'
                                    : '右に入らないため、次の行に置きました');
 }
@@ -1695,6 +1696,43 @@ async function stamp(key){
 /* ---------------------------------------------------------------
    11. 入力モード（ここだけ日本語入力が使える）
    --------------------------------------------------------------- */
+
+// 選んだ範囲にかかる欄を、読む順（縦書きは右の列から上→下）に並べて返す
+function fieldsInArea(){
+  const cells = new Set(selectedCells().map(p => p.c+','+p.r));
+  const hit = f => fieldFootprint(doc, f).some(([c,r]) => cells.has(c+','+r));
+  const vertical = doc.paper.writing==='vertical';
+  const key = f => {
+    const right = Math.max(...f.rects.map(r => r.c + r.w - 1));
+    const top   = Math.min(...f.rects.map(r => r.r));
+    return vertical ? [-right, top] : [top, Math.min(...f.rects.map(r => r.c))];
+  };
+  return doc.fields.filter(hit)
+    .sort((a,b) => { const x = key(a), y = key(b); return (x[0]-y[0]) || (x[1]-y[1]); });
+}
+
+// 範囲の中の欄の答えを、1行に1問ずつまとめて入れる
+async function bulkAnswers(list){
+  const v = await ask(list.length+'問ぶんの答えをまとめて入れる', [
+    {key:'t', type:'area', rows:Math.min(16, Math.max(6, list.length)),
+     value:list.map(f => doc.answers[f.id] || '').join('\n'),
+     hint:'1行に1問ずつ、読む順（'+(doc.paper.writing==='vertical' ? '右の列から上→下' : '上の行から左→右')+
+          '）に入れてください。\n空の行はその問の答えを消します。決定は Ctrl+Enter。'}
+  ]);
+  if (!v) return;
+  snapshot();
+  const lines = String(v.t || '').replace(/\r/g,'').split('\n');
+  let put = 0, over = 0;
+  list.forEach((f,i) => {
+    const t = (lines[i] || '').trim();
+    if (t){
+      doc.answers[f.id] = t; put++;
+      if (t.length > answerCells(doc, f).length) over++;
+    } else delete doc.answers[f.id];
+  });
+  render();
+  toast(put+'問ぶん入れました'+(over ? '（'+over+'問は欄に入りきりません）' : ''));
+}
 async function enterInput(){
   const inp = $('#cell-input');
   const many = selectedCells();
@@ -1721,6 +1759,8 @@ async function enterInput(){
   }
 
   if (ui.tab==='answer'){
+    const list = (ui.sel || ui.extra.length) ? fieldsInArea() : [];
+    if (list.length > 1) return bulkAnswers(list);
     const f = fieldAt(ui.cur.c, ui.cur.r) ||
               (ui.sel && fieldAt(ui.sel.c, ui.sel.r));
     if (!f) return toast('答えを入れる欄の上にカーソルを置いて Enter を押してください');
@@ -1843,6 +1883,13 @@ document.addEventListener('keydown', ev => {
   if (ctrl){
     if (ev.code==='KeyZ' && !ev.shiftKey){ ev.preventDefault(); return undo(); }
     if ((ev.code==='KeyZ' && ev.shiftKey) || ev.code==='KeyY'){ ev.preventDefault(); return redo(); }
+    if (ev.code==='KeyA'){                                              // ぜんぶ選ぶ
+      ev.preventDefault();
+      ui.sel = { c:0, r:0, w:doc.grid.cols, h:doc.grid.rows }; ui.extra = []; ui.selAnchor = null;
+      render();
+      return toast(ui.tab==='answer' ? 'ぜんぶ選びました（Enter でまとめて答えを入れられます）'
+                                     : 'ぜんぶ選びました');
+    }
     if (ev.code==='KeyX'){ ev.preventDefault(); return cutCells(); }    // 移動（切り取り）
     if (ev.code==='KeyV'){ ev.preventDefault(); return pasteCells(); }  // 移動（貼り付け）
     if (!MOVE[ev.key]) return;                               // 他の Ctrl 系はブラウザに任せる
@@ -2534,6 +2581,10 @@ function ask(title, rows){
       else if (f.type==='number') html += '<input type="number" data-k="'+f.key+'" value="'+f.value+'" min="'+(f.min||0)+'" '+(i===0?'autofocus':'')+'>';
       else if (f.type==='text') html += '<input type="text" data-k="'+f.key+'" value="'+xmlEsc(f.value||'')+'">';
       else if (f.type==='check') html += '<input type="checkbox" data-k="'+f.key+'" '+(f.value?'checked':'')+' style="flex:none;width:18px;height:18px">';
+      else if (f.type==='area') html += '<textarea data-k="'+f.key+'" rows="'+(f.rows||10)+'" '+
+        'style="flex:1;min-width:200px;font:inherit;line-height:1.7;border:1px solid var(--line);'+
+        'border-radius:9px;padding:8px 10px;background:var(--field);color:inherit;resize:vertical">'+
+        xmlEsc(f.value||'')+'</textarea>';
       else if (f.type==='seg'){
         html += '<div class="seg" data-k="'+f.key+'">'+f.options.map(o =>
           '<button type="button" data-v="'+o[0]+'" class="'+(o[0]===f.value?'on':'')+'">'+xmlEsc(o[1])+'</button>').join('')+'</div>';
@@ -2543,7 +2594,8 @@ function ask(title, rows){
       html += '</div>';
     });
     html += '<div class="modal-actions"><button class="tb" data-act="cancel">やめる</button>'+
-            '<button class="tb primary" data-act="ok">決定<kbd>Enter</kbd></button></div></div>';
+            '<button class="tb primary" data-act="ok">決定<kbd>'+
+            (rows.some(f=>f.type==='area') ? 'Ctrl+Enter' : 'Enter')+'</kbd></button></div></div>';
     wrap.innerHTML = html;
     document.body.appendChild(wrap);
 
@@ -2555,7 +2607,7 @@ function ask(title, rows){
       });
     });
     const close = (ok) => {
-      if (ok) wrap.querySelectorAll('input[data-k]').forEach(inp => {
+      if (ok) wrap.querySelectorAll('input[data-k],textarea[data-k]').forEach(inp => {
         vals[inp.dataset.k] = (inp.type==='checkbox') ? inp.checked : inp.value;
       });
       wrap.remove();
@@ -2570,11 +2622,15 @@ function ask(title, rows){
     wrap.addEventListener('keydown', e => {
       e.stopPropagation();
       if (e.isComposing || e.keyCode===229) return;
-      if (e.key==='Enter'){ e.preventDefault(); close(true); }
+      if (e.key==='Enter'){
+        if (e.target.tagName==='TEXTAREA' && !(e.ctrlKey||e.metaKey)) return;  // 改行として使う
+        e.preventDefault(); close(true);
+      }
       if (e.key==='Escape'){ e.preventDefault(); close(false); }
     });
     // 入力欄が無い小窓（説明だけのもの）は決定ボタンに合わせる
-    const first = wrap.querySelector('input') || wrap.querySelector('[data-act="ok"]');
+    const first = wrap.querySelector('textarea') || wrap.querySelector('input') ||
+                  wrap.querySelector('[data-act="ok"]');
     if (first){ first.focus(); if (first.select) first.select(); }
   });
 }
