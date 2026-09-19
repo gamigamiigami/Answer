@@ -346,7 +346,7 @@ function newDoc(subject){
   paper.title = makeTitle(paper);
   paper.nameLabel = makeNameLabel(paper);
   const d = {
-    version:2, paper, grid:computeGrid(paper),
+    version:3, paper, grid:computeGrid(paper),
     fields:[], decorations:[], texts:{}, answers:{}, drawings:[]
   };
   uid = 1;
@@ -359,17 +359,39 @@ function newDoc(subject){
      縦書き：右端＝タイトル、その左＝氏名欄、右下＝得点枠
      横書き：上＝タイトルと氏名欄、右上＝得点枠
    --------------------------------------------------------------- */
+// お手本 R6 の得点枠にそろえる（上から 知・技／思・判・表／合計）。
+// 1区分＝見出しを上に中央ぞろえ、点数を下に右ぞろえ。字は横書き。
 const SCORE_ASPECTS = [
-  { key:'合計',    label:'合計' },
-  { key:'思判表',  label:'思・判・表' },
-  { key:'知技',    label:'知・技' }
+  { key:'知技',    label:'知・技',    size:13 },
+  { key:'思判表',  label:'思・判・表', size:10 },
+  { key:'合計',    label:'合計',      size:13 }
 ];
-// お手本 R6 の得点枠（W29:Y47）に合わせる。
-// 太めの外枠1つだけで、中に「合計　１００／思・判・表　５０／知・技　５０」。
-// 仕切り線は引かない（余白が得点の書き込み場所になる）。
-const V_SCORE_H = 20;     // 縦書き得点枠の高さ（行）
-const H_SCORE_W = 6;      // 横書き得点枠の幅（列）
-const H_SCORE_H = 8;      // 横書き得点枠の高さ（行）
+const SCORE_SEC   = 6;    // 1区分の高さ（行）
+const V_SCORE_W   = 3;    // 縦書き得点枠の幅（列）
+const V_SCORE_H   = SCORE_SEC * SCORE_ASPECTS.length;   // 18行
+const V_SCORE_TOP = 22;   // 用紙の下から何行目に置くか（お手本の29行目にそろえる）
+const H_SCORE_SEC = 2;    // 横書きは3区分を横に並べる（1区分2列）
+const H_SCORE_W   = H_SCORE_SEC * SCORE_ASPECTS.length; // 6列
+const H_SCORE_H   = SCORE_SEC;
+
+// 得点枠の中身を組み立てる。区分ごとに「見出し」「点数」を連結したマスに置く
+function scoreBoxParts(c0, r0, w, h, stackDown, totals){
+  const texts = [], borders = [];
+  SCORE_ASPECTS.forEach((a, i) => {
+    const c = stackDown ? c0 : c0 + i*H_SCORE_SEC;
+    const r = stackDown ? r0 + i*SCORE_SEC : r0;
+    const sw = stackDown ? w : H_SCORE_SEC;
+    const sh = SCORE_SEC;
+    const half = Math.floor(sh/2);
+    borders.push({ c, r, w:sw, h:sh, style:'thin' });            // 区分の仕切り
+    texts.push({ c, r, t:a.label, size:a.size, align:'center', mg:{w:sw, h:half} });
+    const pt = totals[a.key];
+    texts.push({ c, r:r+half, t: pt > 0 ? toFullWidth(pt) : '',  // 配点前は空けておく
+                 size:12, align:'right', mg:{w:sw, h:sh-half} });
+  });
+  borders.push({ c:c0, r:r0, w, h, style:'medium' });            // 外枠は太線
+  return { texts, borders };
+}
 
 function headerLayout(d){
   const { cols, rows } = d.grid;
@@ -395,19 +417,13 @@ function headerLayout(d){
     put(cols-1, d.paper.title, 13);
     put(cols-2, d.paper.nameLabel, 11);
 
-    // 得点枠：氏名欄の左3列、下端（お手本の W29:Y47 と同じ位置）
+    // 得点枠：氏名欄の左3列、下のほう（お手本と同じ位置）
     if (d.paper.showScoreBox){
-      const c0 = cols-5, r0 = rows - V_SCORE_H;
-      SCORE_ASPECTS.forEach((a, i) => {
-        const col = c0 + (2 - i);              // 右から 合計 → 思・判・表 → 知・技
-        const line = scoreLine(a.label, totals[a.key]);
-        for (let k=0;k<line.length;k++){
-          const r = r0 + 1 + k;                      // 1行に1文字（お手本と同じ詰まり具合）
-          if (r < r0 + V_SCORE_H && line[k] !== '　') texts.push({c:col, r, t:line[k], size:11});
-        }
-      });
-      borders.push({c:c0, r:r0, w:3, h:V_SCORE_H, style:'medium'});
-      mark(c0, r0, 3, V_SCORE_H);
+      const c0 = cols - 5, r0 = rows - V_SCORE_TOP;
+      const sb = scoreBoxParts(c0, r0, V_SCORE_W, V_SCORE_H, true, totals);
+      sb.texts.forEach(t => texts.push(t));
+      sb.borders.forEach(b => borders.push(b));
+      mark(c0, r0, V_SCORE_W, V_SCORE_H);
     }
   } else {
     // 横書き：タイトルと氏名欄は1セルに入れて右へあふれさせる（結合しない）
@@ -415,27 +431,20 @@ function headerLayout(d){
     texts.push({c:0, r:2, t:d.paper.nameLabel, size:11, align:'left'});
     mark(0, 0, cols, 4);
 
-    // 得点枠：右上。縦書きと同じく太枠1つの中に3区分を並べる
+    // 得点枠：右上。縦書きと同じ形を、3区分を横に並べて置く
     if (d.paper.showScoreBox){
       const c0 = cols - H_SCORE_W, r0 = 0;
-      SCORE_ASPECTS.slice().reverse().forEach((a, i) => {   // 左から 知・技 → 思・判・表 → 合計
-        texts.push({c:c0, r:r0 + 1 + i*CHAR_ROWS,
-                    t:scoreLine(a.label, totals[a.key]), size:10, align:'left'});
-      });
-      borders.push({c:c0, r:r0, w:H_SCORE_W, h:H_SCORE_H, style:'medium'});
+      const sb = scoreBoxParts(c0, r0, H_SCORE_W, H_SCORE_H, false, totals);
+      sb.texts.forEach(t => texts.push(t));
+      sb.borders.forEach(b => borders.push(b));
       mark(c0, r0, H_SCORE_W, H_SCORE_H);
     }
   }
   return { texts, borders, reserved };
 }
 
-// 得点枠の1行。お手本と同じく「合計　　　１００」のように、
-// ラベルを5文字にそろえて全角数字を続ける（縦に並べたとき数字の位置がそろう）
+// 点数は全角で出す（お手本と同じ見た目）
 const toFullWidth = n => String(n).replace(/[0-9]/g, d => String.fromCharCode(d.charCodeAt(0)+0xFEE0));
-function scoreLine(label, points){
-  // 配点を入れていないうちは数字を出さない（書き込み用の空欄にする）
-  return (label + '　　　　　').slice(0,5) + (points > 0 ? toFullWidth(points) : '');
-}
 
 // 観点別の配点合計（欄の配点を積み上げる）
 function scoreTotals(d){
@@ -463,30 +472,38 @@ function contentOrigin(d){
 const FIELD_DEFS = {
   1:{ name:'シンプル枠', hint:'選んだ範囲に罫線を引く（解答欄ではなく枠だけ）' },
   2:{ name:'記号用',    hint:'記号1文字の解答欄（セル3つぶんの大きさ）' },
-  3:{ name:'語句',      hint:'2〜5文字の語句を書く解答欄（8割ラインなし）' },
-  4:{ name:'記述',      hint:'字数を決めた記述の解答欄（8割ラインを選べます）' },
-  5:{ name:'長方形',    hint:'縦×横のマス数で四角い解答欄' },
-  6:{ name:'グラフ',    hint:'xyグラフ（原点 O）' },
-  7:{ name:'書き抜き',  hint:'最初と最後の○字ずつを書き抜く解答欄' }
+  3:{ name:'始終',      hint:'最初と最後の○字ずつを書き抜く解答欄（始・終の見出しつき・太線）' },
+  4:{ name:'語句',      hint:'2〜5文字の語句を書く解答欄（8割ラインなし）' },
+  5:{ name:'記述',      hint:'字数を決めた記述の解答欄（8割ラインを選べます）' },
+  6:{ name:'長方形',    hint:'縦×横のマス数で四角い解答欄' },
+  7:{ name:'グラフ',    hint:'xyグラフ（原点 O）' }
 };
 const GRAPH_ROWS = 3;    // グラフの1マス＝3行（約1cm四方になる）
 const MARK_ROWS  = 3;    // 記号用のマス＝セル3つぶん
-const CHAR_TYPES = [3,4];// 文字マスを字数ぶん並べる欄（語句・記述）
-const EXTRACT_MARKS = ['初め','終わり'];   // 書き抜き欄の見出し
+const CHAR_TYPES = [4,5];// 文字マスを字数ぶん並べる欄（語句・記述）
+const EXTRACT_TYPE = 3;  // 始終の欄
+const EXTRACT_MARKS = ['始','終'];   // 始終の欄の見出し
+const MARK_LEN = 1;      // 見出しのマス＝セル1つぶん
 
-// 書き抜き欄の中身（見出し・文字マス・見出し・文字マス）を、枠の大きさから割り出す
+// 始終の欄の中身（見出し・文字マス・見出し・文字マス）を、枠の大きさから割り出す
+//   縦書き： 1行 ＋ ○字×2行 ＋ 1行 ＋ ○字×2行
+//   横書き： 1列 ＋ ○字ぶんの列 ＋ 1列 ＋ ○字ぶんの列
 function extractParts(d, f){
   const r = f.rects && f.rects[0];
   if (!r) return null;
   const vertical = d.paper.writing==='vertical';
-  const units = vertical ? Math.floor(r.h/CHAR_ROWS) : r.w;   // 1文字ぶんを1つと数える
-  if (units < 4) return null;
-  const n = Math.floor((units-2)/2);
-  const seg = (start, len) => vertical
-    ? { c:r.c, r:r.r + start*CHAR_ROWS, w:r.w, h:len*CHAR_ROWS }
-    : { c:r.c + start, r:r.r, w:len, h:r.h };
-  return { n, m1:seg(0,1), a:seg(1,n), m2:seg(1+n,1), b:seg(2+n,n) };
+  const CL = vertical ? CHAR_ROWS : 1;            // 文字マス1つぶんの長さ
+  const len = vertical ? r.h : r.w;
+  const n = Math.floor((len - 2*MARK_LEN) / (2*CL));
+  if (n < 1) return null;
+  const seg = (start, size) => vertical
+    ? { c:r.c, r:r.r + start, w:r.w, h:size }
+    : { c:r.c + start, r:r.r, w:size, h:r.h };
+  const aLen = n*CL;
+  return { n, m1:seg(0, MARK_LEN), a:seg(MARK_LEN, aLen),
+           m2:seg(MARK_LEN+aLen, MARK_LEN), b:seg(2*MARK_LEN+aLen, aLen) };
 }
+const extractLen = n => 2*MARK_LEN + 2*n;   // 横書きのときの長さ（列数）
 
 // 欄の矩形を組み立てる。置けないときは null と理由を返す。
 function buildRects(d, type, at, opt){
@@ -498,12 +515,11 @@ function buildRects(d, type, at, opt){
     // 記号用：セル3つぶんの大きさの1マス
     rects.push({ c: at.c, r: at.r, w:1, h: MARK_ROWS });
   }
-  else if (type===7){
-    // 書き抜き：見出し・○字・見出し・○字 をひとつづきに並べる
+  else if (type===EXTRACT_TYPE){
+    // 始終：見出し1マス・○字・見出し1マス・○字 をひとつづきに並べる
     const n = Math.max(1, Number(opt.n)||5);
-    const units = 2*n + 2;
-    if (vertical) rects.push({ c: at.c, r: at.r, w:1, h: units*CHAR_ROWS });
-    else          rects.push({ c: at.c, r: at.r, w: units, h: CHAR_ROWS });
+    if (vertical) rects.push({ c: at.c, r: at.r, w:1, h: 2*MARK_LEN + 2*n*CHAR_ROWS });
+    else          rects.push({ c: at.c, r: at.r, w: extractLen(n), h: CHAR_ROWS });
   }
   else if (CHAR_TYPES.indexOf(type) >= 0){
     // 文字マスを連ねる欄。入り切らないときは複数の行（列）に分ける
@@ -528,7 +544,7 @@ function buildRects(d, type, at, opt){
       else          rects.push({ c: at.c, r: at.r + i*CHAR_ROWS, w: cnt, h: CHAR_ROWS });
     });
   }
-  else if (type===5){
+  else if (type===6){
     // 長方形：縦（マス）× 横（マス）
     const tate = Math.max(1, Number(opt.tate)||3);
     const yoko = Math.max(1, Number(opt.yoko)||4);
@@ -536,7 +552,7 @@ function buildRects(d, type, at, opt){
     if (vertical) rects.push({ c: at.c - yoko + 1, r: at.r, w:yoko, h });
     else          rects.push({ c: at.c, r: at.r, w:yoko, h });
   }
-  else if (type===6){
+  else if (type===7){
     // グラフ：原点が真ん中に来るよう、縦横とも偶数マスにする
     let w = Math.max(2, Number(opt.w)||8), h = Math.max(2, Number(opt.h)||8);
     if (w % 2) w++;
@@ -604,7 +620,7 @@ function noteSlots(d, rects){
 function placeNote(d, obj){
   const t = obj.note || '';
   if (!t) return [];
-  const list = (obj.type===2 || obj.type===7)
+  const list = (obj.type===2 || obj.type===EXTRACT_TYPE)
     ? charCells(d, obj).map(p => ({c:p.c, r:p.r}))
     : noteSlots(d, obj.rects || [obj]);
   const n = Math.min(t.length, list.length);
@@ -625,8 +641,8 @@ function answerCells(d, f){
 function charCells(d, f){
   // 記号用は、セル3つぶんをまとめた1マスに1文字
   if (f.type===2) return f.rects.map(r => ({ c:r.c, r:r.r, full:true, mh:r.h }));
-  // 書き抜きは、見出しのマスを飛ばして文字マスだけに入れる
-  if (f.type===7){
+  // 始終は、見出しのマスを飛ばして文字マスだけに入れる
+  if (f.type===EXTRACT_TYPE){
     const p = extractParts(d, f);
     if (!p) return [];
     return rectCells(d, [p.a, p.b]);
@@ -689,7 +705,10 @@ function buildCells(d, withAnswers){
   // (1) ヘッダー
   const head = headerLayout(d);
   head.borders.forEach(b => box(b.c,b.r,b.w,b.h,b.style));
-  head.texts.forEach(t => put(t.c,t.r,t.t,t.size,t.bold,t.align));
+  head.texts.forEach(t => {
+    put(t.c,t.r,t.t,t.size,t.bold,t.align);
+    if (t.mg) merge(t.c, t.r, t.mg.w, t.mg.h);
+  });
 
   // (2) 欄
   const vertical = d.paper.writing==='vertical';
@@ -717,7 +736,7 @@ function buildCells(d, withAnswers){
     if (CHAR_TYPES.indexOf(f.type) >= 0){
       dots(f.rects);
       // 8割ラインは記述の欄だけ（語句には引かない）
-      if (f.type===4 && !f.exact && f.chars >= 5){
+      if (f.type===5 && !f.exact && f.chars >= 5){
         const at = Math.floor(f.chars * 0.8);
         const cellsList = charCells(d, f);
         if (at >= 1 && at < cellsList.length){
@@ -728,8 +747,11 @@ function buildCells(d, withAnswers){
         }
       }
     }
-    if (f.type===7){
-      // 書き抜き：見出し／文字マス／見出し／文字マスに区切って、見出しの文字を入れる
+    if (f.type===EXTRACT_TYPE){
+      // 始終：見出し／文字マス／見出し／文字マスに区切る。
+      // 番号欄の外枠と、解答欄ぜんたいの外枠は必ず太線にする
+      if (f.label) box(f.label.c, f.label.r, f.label.w, f.label.h, 'medium');
+      f.rects.forEach(r => box(r.c, r.r, r.w, r.h, 'medium'));
       const pt = extractParts(d, f);
       if (pt){
         [pt.m1, pt.a, pt.m2, pt.b].forEach(x => box(x.c, x.r, x.w, x.h, 'thin'));
@@ -737,11 +759,11 @@ function buildCells(d, withAnswers){
         const mk = f.marks && f.marks.length===2 ? f.marks : EXTRACT_MARKS;
         [[pt.m1, mk[0]], [pt.m2, mk[1]]].forEach(([x, t]) => {
           merge(x.c, x.r, x.w, x.h);
-          put(x.c, x.r, t, 8);
+          put(x.c, x.r, t, 9);
         });
       }
     }
-    if (f.type===6){
+    if (f.type===7){
       // xyグラフ：細い破線の方眼＋真ん中を通るx軸y軸＋原点のO
       const r = f.rects[0];
       const gw = r.w, gh = r.h / GRAPH_ROWS;
@@ -941,6 +963,7 @@ function render(){
     const a = { y: y0 + x.r*RH + mh*RH/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
     if (x.align==='left'){ a.x = x0 + x.c*CW + 0.4; a['text-anchor']='start'; }
+    else if (x.align==='right'){ a.x = x0 + (x.c+mw)*CW - 1.2; a['text-anchor']='end'; }
     else { a.x = x0 + x.c*CW + mw*CW/2; a['text-anchor']='middle'; }
     if (x.bold) a['font-weight']='bold';
     const t = el('text',a); t.textContent = x.t; texts.appendChild(t);
@@ -1090,6 +1113,10 @@ function occupied(d){
   return set;
 }
 
+// 1マスだけのシンプル枠は「番号を振るためのマス」とみなす。
+// 番号を振る対象に入れ、まとめて配点を入れるときは数えない。
+const isNumberCell = v => v.w === 1 && v.h <= CHAR_ROWS;
+
 const TAB_NAME = { sheet:'解答用紙', answer:'模範解答', draw:'描画' };
 // 解答用紙タブでしかできない操作は、ここで止める
 function needSheet(what){
@@ -1106,34 +1133,34 @@ async function placeField(type){
   const vertical = doc.paper.writing==='vertical';
   const opt = {};
 
-  if (type===3){
+  if (type===4){
     const v = await ask('語句の解答欄', [
       {key:'n',label:'字数',type:'number',value:LAST.word,min:1,hint:'2〜5文字くらいの語句むけ。8割ラインは引きません'}
     ]); if(!v) return; opt.n=num(v.n,1,LAST.word); LAST.word=opt.n; opt.exact=true;
   }
-  if (type===4){
+  if (type===5){
     const v = await ask('記述の解答欄', [
       {key:'n',label:'字数',type:'number',value:LAST.desc,min:1},
       {key:'mode',label:'条件',type:'seg',value:LAST.descMode,options:[['within','以内（8割ライン）'],['exact','ちょうど']]}
     ]); if(!v) return; opt.n=num(v.n,1,LAST.desc); LAST.desc=opt.n;
     opt.exact=(v.mode==='exact'); LAST.descMode=v.mode;
   }
-  if (type===5){
+  if (type===6){
     const v = await ask('長方形の解答欄', [
       {key:'tate',label:'縦（マス）',type:'number',value:3,min:1},
       {key:'yoko',label:'横（マス）',type:'number',value:4,min:1}
     ]); if(!v) return; opt.tate=num(v.tate,1,3); opt.yoko=num(v.yoko,1,4);
   }
-  if (type===6){
+  if (type===7){
     const v = await ask('xyグラフ', [
       {key:'w',label:'横（マス）',type:'number',value:8,min:2},
       {key:'h',label:'縦（マス）',type:'number',value:8,min:2,hint:'原点が真ん中に来るよう偶数にそろえます'}
     ]); if(!v) return; opt.w=num(v.w,2,8); opt.h=num(v.h,2,8);
   }
-  if (type===7){
-    const v = await ask('書き抜きの解答欄', [
+  if (type===EXTRACT_TYPE){
+    const v = await ask('始終の解答欄', [
       {key:'n',label:'最初と最後の字数',type:'number',value:LAST.ext,min:1,
-       hint:'「初め」○字・「終わり」○字 の順に並べます。字数は同じです'}
+       hint:'「始」○字・「終」○字 の順に並べます。字数は同じです'}
     ]); if(!v) return; opt.n=num(v.n,1,LAST.ext); LAST.ext=opt.n;
   }
 
@@ -1307,7 +1334,7 @@ function insertCells(){
     if (CHAR_TYPES.indexOf(f.type) >= 0){             // 字数を実際のマス数に合わせ直す
       f.chars = f.rects.reduce((a,rc)=> a + (vertical ? Math.floor(rc.h/CHAR_ROWS) : rc.w), 0);
     }
-    if (f.type===7){ const pt = extractParts(doc, f); if (pt) f.chars = pt.n; }
+    if (f.type===EXTRACT_TYPE){ const pt = extractParts(doc, f); if (pt) f.chars = pt.n; }
   });
   doc.decorations.forEach(v => { if (isGrow(v)){ grow(v); grew++; } else if (isMove(v)) move(v); });
   const nt = {};
@@ -1423,7 +1450,7 @@ function removeBand(alongRow, from, n, lo, hi, pullBefore){
     if (CHAR_TYPES.indexOf(f.type) >= 0)
       f.chars = Math.max(1, f.rects.reduce((a,rc)=>
         a + (doc.paper.writing==='vertical' ? Math.floor(rc.h/CHAR_ROWS) : rc.w), 0));
-    if (f.type===7){ const pt = extractParts(doc, f); if (pt) f.chars = pt.n; }
+    if (f.type===EXTRACT_TYPE){ const pt = extractParts(doc, f); if (pt) f.chars = pt.n; }
   });
   doc.decorations = doc.decorations.filter(shrink);
   const nt = {};
@@ -1618,11 +1645,13 @@ async function stamp(key){
   let cells = selectedCells();
   if (!cells.length) return;
 
-  // 選んだ範囲に「番号欄」が含まれていれば、そこだけに振る。
+  // 選んだ範囲に「番号欄」や「1マスのシンプル枠」が含まれていれば、そこだけに振る。
   // （欄をまとめて選んでも、解答欄のマスには番号が入らない）
   const labels = new Set();
   doc.fields.forEach(f => { if (f.label) labels.add(f.label.c+','+f.label.r); });
-  const onLabels = cells.filter(p => labels.has(p.c+','+p.r));
+  const marks = new Set(labels);
+  doc.decorations.forEach(v => { if (isNumberCell(v)) marks.add(v.c+','+v.r); });
+  const onLabels = cells.filter(p => marks.has(p.c+','+p.r));
   const usedLabels = onLabels.length > 0;
   if (usedLabels) cells = onLabels;
   else {
@@ -1657,10 +1686,10 @@ async function stamp(key){
   }
   cells.forEach((p,i)=>{
     doc.texts[p.c+','+p.r] = { t:def.fmt(start+i, doc.paper.numberStyle),
-      size:def.size, bold:!!def.bold, box:!labels.has(p.c+','+p.r) };
+      size:def.size, bold:!!def.bold, box:!marks.has(p.c+','+p.r) };
   });
   render();                       // 選んだ範囲はそのまま残す
-  toast(def.name+'を'+cells.length+'か所に振りました'+(usedLabels?'（番号欄だけ）':''));
+  toast(def.name+'を'+cells.length+'か所に振りました'+(usedLabels?'（番号のマスだけ）':''));
 }
 
 /* ---------------------------------------------------------------
@@ -1930,7 +1959,10 @@ async function openFieldPopup(){
         if (cells.has((o.label.c+i)+','+(o.label.r+j))) return true;
     return false;
   };
-  const targets = [...doc.fields.filter(inSel), ...doc.decorations.filter(inSel)];
+  let targets = [...doc.fields.filter(inSel), ...doc.decorations.filter(inSel)];
+  // まとめて入れるときは、番号を振るための1マスの枠は数えない
+  const scored = targets.filter(o => o.rects || !isNumberCell(o));
+  if (scored.length && scored.length !== targets.length) targets = scored;
 
   // 複数かかっていれば、まとめて配点・観点を設定する
   if (targets.length > 1){
@@ -1964,7 +1996,7 @@ async function openFieldPopup(){
     {key:'aspect',label:'観点',type:'seg',value:f.aspect,options:[['知技','知・技'],['思判表','思・判・表']]},
     {key:'complete',label:'完答（太枠）',type:'check',value:f.complete}
   ];
-  if (f.type===4) rows.push({key:'exact',label:'8割ライン',type:'check',value:!f.exact});
+  if (f.type===5) rows.push({key:'exact',label:'8割ライン',type:'check',value:!f.exact});
   rows.push({key:'note',label:'欄に入れる文字',type:'text',value:f.note||'',hint:'例：から。　x＝　cm²'});
   rows.push({key:'notePos',label:'その位置',type:'seg',value:f.notePos||'end',
              options:[['start','先頭'],['center','中央'],['end','お尻']]});
@@ -1974,7 +2006,7 @@ async function openFieldPopup(){
   f.points = num(v.points,0,0);
   f.aspect = v.aspect;
   f.complete = !!v.complete;
-  if (f.type===4) f.exact = !v.exact;
+  if (f.type===5) f.exact = !v.exact;
   const total = charCells(doc, f).length;
   const note = v.note || '';
   if (note.length >= total && note.length)
@@ -2259,7 +2291,7 @@ function buildXlsx(){
   }).join('')+'</borders>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
     '<xf numFmtId="0" fontId="'+x.fi+'" fillId="0" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1">'+
-    '<alignment horizontal="'+(x.align==='left'?'left':'center')+'" vertical="center"/></xf>'
+    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="center"/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
@@ -2455,12 +2487,13 @@ function loadWork(text){
   const arr = v => Array.isArray(v) ? v : [];
   const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   d.fields = arr(d.fields).filter(f => f && Array.isArray(f.rects) && f.rects.length);
-  // 版1のファイルは欄の番号が違う（3=文字数 → 4=記述／4=長方形 → 5／5=グラフ → 6）
-  if (!(Number(d.version) >= 2)){
-    d.fields.forEach(f => {
-      if (f.type===5) f.type = 6; else if (f.type===4) f.type = 5; else if (f.type===3) f.type = 4;
-    });
-    d.version = 2;
+  // 古いファイルは欄の番号が違うので読み替える
+  const ver = Number(d.version) || 1;
+  if (ver < 3){
+    const map = ver < 2 ? {3:5, 4:6, 5:7}          // 版1：文字数→記述／長方形→6／グラフ→7
+                        : {3:4, 4:5, 5:6, 6:7, 7:3}; // 版2：語句→4・記述→5・長方形→6・グラフ→7・書き抜き→始終3
+    d.fields.forEach(f => { if (map[f.type]) f.type = map[f.type]; });
+    d.version = 3;
   }
   d.fields.forEach(f => {
     f.note = f.note || ''; f.notePos = f.notePos || 'end';
@@ -2614,11 +2647,11 @@ async function printSheet(){
    --------------------------------------------------------------- */
 const TEMPLATES = {
   // 大問ごとにまとめる。縦書きは大問ごとに行（列）を分け、横書きは行を分ける。
-  '国語':[ [{type:2,times:5}], [{type:3,n:4,times:4}], [{type:7,n:5}], [{type:4,n:50}] ],
-  '数学':[ [{type:5,tate:1,yoko:6,times:4}], [{type:5,tate:5,yoko:8}], [{type:6,w:8,h:8}] ],
-  '英語':[ [{type:2,times:5}], [{type:5,tate:1,yoko:6,times:4}], [{type:4,n:20}] ],
-  '理科':[ [{type:2,times:5}], [{type:5,tate:1,yoko:4,times:4}], [{type:6,w:6,h:6}], [{type:4,n:30}] ],
-  '社会':[ [{type:2,times:5}], [{type:5,tate:1,yoko:4,times:5}], [{type:4,n:40}] ]
+  '国語':[ [{type:2,times:5}], [{type:4,n:4,times:4}], [{type:3,n:5}], [{type:5,n:50}] ],
+  '数学':[ [{type:6,tate:1,yoko:6,times:4}], [{type:6,tate:5,yoko:8}], [{type:7,w:8,h:8}] ],
+  '英語':[ [{type:2,times:5}], [{type:6,tate:1,yoko:6,times:4}], [{type:5,n:20}] ],
+  '理科':[ [{type:2,times:5}], [{type:6,tate:1,yoko:4,times:4}], [{type:7,w:6,h:6}], [{type:5,n:30}] ],
+  '社会':[ [{type:2,times:5}], [{type:6,tate:1,yoko:4,times:5}], [{type:5,n:40}] ]
 };
 
 function applyTemplate(subject){
@@ -2672,7 +2705,7 @@ function applyTemplate(subject){
         }
         take([got.lab]); take(got.rects);
         doc.fields.push({ id:'f'+(uid++), type:step.type, rects:got.rects, label:got.lab,
-          chars:(step.n || 1), exact:(step.type===3),
+          chars:(step.n || 1), exact:(step.type===4),
           points:0, aspect:'知技', complete:false, note:'', notePos:'end' });
         no++;
         doc.texts[got.lab.c+','+got.lab.r] = { t: STAMPS.P.fmt(no), size: STAMPS.P.size };
@@ -2708,20 +2741,20 @@ function icon(type){
   switch(type){
     case 1: return g(box(3,3,28,14,' stroke-dasharray="3 2"'));                     // シンプル枠
     case 2: return g(box(12,2,10,16));                                              // 記号用
-    case 3: return g(box(7,5,20,10)+                                                // 語句
-      '<line x1="14" y1="5" x2="14" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
-      '<line x1="20" y1="5" x2="20" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>');
-    case 4: return g(box(2,5,30,10)+                                                // 記述
-      '<line x1="10" y1="5" x2="10" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
-      '<line x1="18" y1="5" x2="18" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
-      '<line x1="25" y1="5" x2="25" y2="15" stroke="#b8860b" stroke-width="1.6" stroke-dasharray="3 2"/>');
-    case 7: return g(box(2,5,30,10)+                                                // 書き抜き
-      '<line x1="8" y1="5" x2="8" y2="15" stroke="#33404d"/>'+
+    case 3: return g('<rect x="2" y="5" width="30" height="10" fill="none" stroke="#33404d" stroke-width="1.8"/>'+
+      '<line x1="8" y1="5" x2="8" y2="15" stroke="#33404d"/>'+                      // 始終
       '<line x1="20" y1="5" x2="20" y2="15" stroke="#33404d"/>'+
       '<line x1="26" y1="5" x2="26" y2="15" stroke="#33404d"/>'+
       '<line x1="14" y1="5" x2="14" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>');
-    case 5: return g(box(5,3,24,14));                                               // 長方形
-    case 6: return g(box(5,2,24,16)+                                                // グラフ
+    case 4: return g(box(7,5,20,10)+                                                // 語句
+      '<line x1="14" y1="5" x2="14" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
+      '<line x1="20" y1="5" x2="20" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>');
+    case 5: return g(box(2,5,30,10)+                                                // 記述
+      '<line x1="10" y1="5" x2="10" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
+      '<line x1="18" y1="5" x2="18" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>'+
+      '<line x1="25" y1="5" x2="25" y2="15" stroke="#b8860b" stroke-width="1.6" stroke-dasharray="3 2"/>');
+    case 6: return g(box(5,3,24,14));                                               // 長方形
+    case 7: return g(box(5,2,24,16)+                                                // グラフ
       '<line x1="17" y1="2" x2="17" y2="18" stroke="#33404d"/>'+
       '<line x1="5" y1="10" x2="29" y2="10" stroke="#33404d"/>'+
       '<line x1="11" y1="2" x2="11" y2="18" stroke="#9aa7b4" stroke-dasharray="1.5 1.5"/>'+
