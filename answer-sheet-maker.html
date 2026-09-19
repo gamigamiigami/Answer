@@ -669,6 +669,30 @@ function placeNote(d, obj){
   return list.slice(start, start + n);
 }
 
+// 答えをどのマスに入れるか決める。
+// 始終の欄は「始めのぶん」「終わりのぶん」に分けて入れる（区切りは空白・／・｜）
+function answerPlan(d, f, text){
+  const t = String(text == null ? '' : text);
+  if (f.type === EXTRACT_TYPE){
+    const parts = t.split(/[ 　\/／|\t]+/).filter(x => x !== '');
+    const pt = extractParts(d, f);
+    if (pt && parts.length >= 2){
+      const used = new Set(placeNote(d, f).map(p => p.c+','+p.r));
+      const cellsOf = rect => rectCells(d, [rect]).filter(p => !used.has(p.c+','+p.r));
+      const A = cellsOf(pt.a), B = cellsOf(pt.b);
+      const head = parts[0], tail = parts.slice(1).join('');
+      const out = [];
+      [...head].forEach((ch,i) => { if (A[i]) out.push({ p:A[i], ch }); });
+      [...tail].forEach((ch,i) => { if (B[i]) out.push({ p:B[i], ch }); });
+      return { out, room:A.length + B.length, need:head.length + tail.length };
+    }
+  }
+  const list = answerCells(d, f);
+  const out = [];
+  for (let i=0;i<t.length && i<list.length;i++) out.push({ p:list[i], ch:t[i] });
+  return { out, room:list.length, need:t.length };
+}
+
 // 模範解答が入るマス（「欄に入れる文字」のマスをよける）
 function answerCells(d, f){
   const used = new Set(placeNote(d, f).map(p => p.c+','+p.r));
@@ -847,12 +871,10 @@ function buildCells(d, withAnswers){
     for (const f of d.fields){
       const a = d.answers[f.id];
       if (!a) continue;
-      const list = answerCells(d, f);
-      for (let i=0;i<a.length && i<list.length;i++){
-        const p = list[i];
-        if (p.mh) { put(p.c, p.r, a[i], 11, false, 'center', false); merge(p.c, p.r, 1, p.mh); }
-        else put(p.c, p.r, a[i], 11, false, 'center', p.full !== false);
-      }
+      answerPlan(d, f, a).out.forEach(({p, ch}) => {
+        if (p.mh){ put(p.c, p.r, ch, 11, false, 'center', false); merge(p.c, p.r, 1, p.mh); }
+        else put(p.c, p.r, ch, 11, false, 'center', p.full !== false);
+      });
     }
   }
   return cells;
@@ -872,6 +894,9 @@ const ui = {
   dirty:false,
   editTarget:null,       // 入力モードの対象
   draw:'line',           // 描画タブの道具 'line' | 'dot' | 'erase'
+  pickKind:'label',      // チェックの対象 'label'=番号のマス / 'answer'=解答欄
+  targets:[],            // チェックした対象（読む順）
+  seq:null,              // 続けて入力しているところ {list,i}
   drawFrom:null,         // 直線を引いている途中の始点
   drawTo:null,
   reserved:new Set()
@@ -947,6 +972,9 @@ function render(){
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   svg.appendChild(el('rect',{x:0,y:0,width:p.w,height:p.h,fill:'#fff'}));
 
+  syncTargets();
+  // 消えた欄の☑は落とす
+  if (ui.targets.length) ui.targets = ui.targets.filter(t => t.k==='l' || fieldById(t.id));
   const head = headerLayout(doc);
   ui.reserved = head.reserved;
   const cells = buildCells(doc, ui.tab==='answer');
@@ -1029,6 +1057,28 @@ function render(){
       'stroke-dasharray':'1 1','class':'guide'}));
   }
 
+  // ☑ チェックした対象（印刷には出ない案内）
+  if (ui.targets.length){
+    const cg = el('g',{'class':'guide'});
+    const on = new Set(ui.targets.map(t => t.k+':'+(t.k==='a'?t.id:t.c+','+t.r)));
+    candidates(ui.pickKind).forEach(t => {
+      const checked = on.has(t.k+':'+(t.k==='a'?t.id:t.c+','+t.r));
+      const x = X(t.c) + 0.35, y = y0 + t.r*RH + 0.35;
+      const sz = Math.min(2.2, W(t.c) - 0.7, RH - 0.7);
+      if (sz < 0.8) return;
+      cg.appendChild(el('rect',{x, y, width:sz, height:sz, rx:0.4,
+        fill: checked ? '#3b86c4' : '#ffffff', 'fill-opacity': checked ? 0.92 : 0.75,
+        stroke: checked ? '#3b86c4' : '#9aa7b4', 'stroke-width':0.18}));
+      if (checked){
+        const t1 = el('path',{d:'M'+(x+sz*0.22)+' '+(y+sz*0.52)+'L'+(x+sz*0.42)+' '+(y+sz*0.74)+
+          'L'+(x+sz*0.8)+' '+(y+sz*0.26), fill:'none', stroke:'#fff', 'stroke-width':sz*0.16,
+          'stroke-linecap':'round','stroke-linejoin':'round'});
+        cg.appendChild(t1);
+      }
+    });
+    svg.appendChild(cg);
+  }
+
   // カーソル
   const cu = el('rect',{x:X(ui.cur.c), y:y0+ui.cur.r*RH, width:W(ui.cur.c), height:RH, 'class':'guide',
     fill:'none', stroke: ui.mode==='input' ? '#12a05a' : '#1a6fd4', 'stroke-width':0.45});
@@ -1040,6 +1090,8 @@ function render(){
 
   drawStatus();
   updateInsertLabels();
+  updatePickLabel();
+  setModeBar();
   $('#title-input').value = doc.paper.title;
 }
 
@@ -1304,6 +1356,7 @@ async function placeField(type){
   }
   if (!(made > 1 && area)) ui.sel = null;      // まとめて置いたときは選んだまま残す
   ui.extra = [];
+  buildTargets();                              // 置いたところに☑を付ける
   render();
   if (made > 1) toast(made+'個置きました（そのまま番号のキーを押せます）');
   else if (wrapped) toast(vertical ? '下に入らないため、次の行（左の列）に置きました'
@@ -1761,6 +1814,24 @@ const STAMPS = {
 async function stamp(key){
   if (!needSheet('番号を振れません')) return;
   const def = STAMPS[key];
+  const vertical0 = doc.paper.writing==='vertical';
+  // 大問を「幅いっぱいの枠」にまとめるときは、今まで通り選んだ範囲で決める
+  const wideBlock = (key==='D' && ui.sel && !ui.extra.length &&
+    (vertical0 ? (ui.sel.h===1 && ui.sel.w>1) : (ui.sel.w===1 && ui.sel.h>1)));
+  // ☑が付いていれば、その順に振る
+  if (!wideBlock && ui.targets.length && ui.pickKind === 'label'){
+    const v = await ask(def.name+'を振ります（☑ '+ui.targets.length+'か所）',
+      [{key:'start',label:'開始番号',type:'number',value:1,min:1}]);
+    if (!v) return;
+    const st = num(v.start,1,1);
+    snapshot();
+    ui.targets.forEach((t,i) => {
+      doc.texts[t.c+','+t.r] = { t:def.fmt(st+i, doc.paper.numberStyle),
+        size:def.size, bold:!!def.bold, box:false };
+    });
+    render();
+    return toast(def.name+'を☑の'+ui.targets.length+'か所に振りました');
+  }
   let cells = selectedCells();
   if (!cells.length) return;
 
@@ -1812,6 +1883,109 @@ async function stamp(key){
 }
 
 /* ---------------------------------------------------------------
+   10.5 チェックした対象（☑）
+   範囲を選ぶと、その中の欄／番号のマスに☑が付く。
+   クリックで付け外しでき、番号を振るときと、続けて入力するときの対象になる。
+   --------------------------------------------------------------- */
+const fieldById = id => doc.fields.find(f => f.id === id);
+
+// チェックを付けられるもの一覧（読む順）。表示するマスの位置も返す
+function candidates(kind){
+  const vertical = doc.paper.writing==='vertical';
+  const out = [];
+  if (kind === 'answer'){
+    doc.fields.forEach(f => {
+      const cs = charCells(doc, f);
+      const p = cs[0] || f.rects[0];
+      out.push({ k:'a', id:f.id, c:p.c, r:p.r,
+                 sc:Math.max(...f.rects.map(x=>x.c+x.w-1)), sr:Math.min(...f.rects.map(x=>x.r)) });
+    });
+  } else {
+    doc.fields.forEach(f => { if (f.label)
+      out.push({ k:'l', c:f.label.c, r:f.label.r, sc:f.label.c+f.label.w-1, sr:f.label.r }); });
+    doc.decorations.forEach(v => { if (isNumberCell(v))
+      out.push({ k:'l', c:v.c, r:v.r, sc:v.c, sr:v.r }); });
+  }
+  return out.sort((a,b) => vertical ? (b.sc-a.sc)||(a.sr-b.sr) : (a.sr-b.sr)||(a.sc-b.sc));
+}
+const sameTarget = (a,b) => a.k===b.k && (a.k==='a' ? a.id===b.id : (a.c===b.c && a.r===b.r));
+
+const targetSig = () => JSON.stringify([ui.sel, ui.extra, ui.pickKind, ui.tab]);
+// 選んだ範囲が変わっていたら☑を作り直す（手で付け外ししたぶんは、選び直すまで残る）
+function syncTargets(){
+  const sig = targetSig();
+  if (sig !== ui.targetsSig) buildTargets();
+}
+// 選んだ範囲から対象を作る
+function buildTargets(){
+  ui.targetsSig = targetSig();
+  if (!ui.sel && !ui.extra.length){ ui.targets = []; return; }
+  const cells = new Set(selectedCells().map(p => p.c+','+p.r));
+  ui.targets = candidates(ui.pickKind).filter(t => {
+    if (t.k === 'l') return cells.has(t.c+','+t.r);
+    const f = fieldById(t.id);
+    return fieldFootprint(doc, f).some(([c,r]) => cells.has(c+','+r));
+  });
+}
+// クリックで1つ付け外し
+function toggleTarget(p){
+  const all = candidates(ui.pickKind);
+  const hit = all.find(t => t.k==='l' ? (t.c===p.c && t.r===p.r)
+    : fieldFootprint(doc, fieldById(t.id)).some(([c,r]) => c===p.c && r===p.r));
+  if (!hit) return false;
+  const i = ui.targets.findIndex(t => sameTarget(t, hit));
+  if (i >= 0) ui.targets.splice(i,1);
+  else { ui.targets.push(hit); ui.targets = all.filter(t => ui.targets.some(x => sameTarget(x,t))); }
+  ui.targetsSig = targetSig();          // 手で付け外ししたぶんは残す
+  render();
+  toast('☑ '+ui.targets.length+'か所');
+  return true;
+}
+// 対象の種類を切り替える
+function togglePickKind(){
+  if (ui.tab === 'answer'){ ui.pickKind = 'answer'; }
+  else ui.pickKind = (ui.pickKind === 'label') ? 'answer' : 'label';
+  buildTargets();
+  render();
+  toast('対象：'+(ui.pickKind==='answer' ? '解答欄' : '番号のマス'));
+}
+
+/* 続けて入力（対象を順に回る） */
+function startSeq(list){
+  if (!list.length) return toast('☑ を付けた対象がありません');
+  ui.seq = { list:list.slice(), i:0 };
+  seqOpen();
+}
+function seqOpen(){
+  const t = ui.seq.list[ui.seq.i];
+  if (t.k === 'a'){
+    const f = fieldById(t.id);
+    if (!f) return seqNext();
+    const p = charCells(doc, f)[0] || f.rects[0];
+    ui.cur = { c:p.c, r:p.r };
+    ui.editTarget = { kind:'answer', field:f };
+    openInputBox(doc.answers[f.id] || '',
+      (f.type===EXTRACT_TYPE ? '始めと終わりを空白で区切る（例：「不便　出そう）' : FIELD_DEFS[f.type].name+'の答え'));
+  } else {
+    ui.cur = { c:t.c, r:t.r };
+    ui.editTarget = { kind:'cell', c:t.c, r:t.r };
+    const cur = doc.texts[t.c+','+t.r];
+    openInputBox(cur ? cur.t : '', '文字（Enter で次の☑へ）');
+  }
+}
+function seqNext(){
+  if (!ui.seq) return;
+  ui.seq.i++;
+  if (ui.seq.i >= ui.seq.list.length){
+    const n = ui.seq.list.length; ui.seq = null;
+    exitInput();
+    return toast(n+'か所ぶん入れました');
+  }
+  render();
+  seqOpen();
+}
+
+/* ---------------------------------------------------------------
    11. 入力モード（ここだけ日本語入力が使える）
    --------------------------------------------------------------- */
 
@@ -1845,7 +2019,8 @@ async function bulkAnswers(list){
     const t = (lines[i] || '').trim();
     if (t){
       doc.answers[f.id] = t; put++;
-      if (t.length > answerCells(doc, f).length) over++;
+      const pl = answerPlan(doc, f, t);
+      if (pl.need > pl.room) over++;
     } else delete doc.answers[f.id];
   });
   render();
@@ -1854,6 +2029,9 @@ async function bulkAnswers(list){
 async function enterInput(){
   const inp = $('#cell-input');
   const many = selectedCells();
+
+  // ☑を付けた対象があれば、そこを順に回って入力する
+  if (ui.targets.length) return startSeq(ui.targets);
 
   // 解答用紙タブで欄やシンプル枠の上にいるなら、文字を位置つきで入れる
   if (ui.tab==='sheet' && many.length===1){
@@ -1891,6 +2069,14 @@ async function enterInput(){
     inp.value = cur ? cur.t : '';
     inp.placeholder = '文字（1マスに1文字ずつ並びます）';
   }
+  openInputBox(inp.value, inp.placeholder);
+}
+
+// カーソルの位置に入力欄を出す
+function openInputBox(value, placeholder){
+  const inp = $('#cell-input');
+  inp.value = value || '';
+  inp.placeholder = placeholder || '';
   ui.mode = 'input';
   const rect = svg.getBoundingClientRect(), p = PAGE[doc.paper.orientation];
   const sx = rect.width/p.w, sy = rect.height/p.h;
@@ -1924,9 +2110,10 @@ function commitInput(){
     snapshot();
     if (t.kind==='answer') {
       if (val) doc.answers[t.field.id] = val; else delete doc.answers[t.field.id];
-      const room = answerCells(doc, t.field).length;
-      if (val.length > room)
-        setTimeout(()=>toast('⚠ この欄に入るのは'+room+'文字までです（'+(val.length-room)+'文字が出ません）'), 30);
+      const plan = answerPlan(doc, t.field, val);
+      const room = plan.room;
+      if (plan.need > room)
+        setTimeout(()=>toast('⚠ この欄に入るのは'+room+'文字までです（'+(plan.need-room)+'文字が出ません）'), 30);
     } else {
       // 1マス1文字で書き方向に並べる
       const vertical = doc.paper.writing==='vertical';
@@ -1943,6 +2130,7 @@ function commitInput(){
         setTimeout(()=>toast('⚠ 用紙の端です（'+(val.length-put)+'文字が入りませんでした）'), 30);
     }
   }
+  if (ui.seq) return seqNext();
   exitInput();
 }
 function exitInput(){
@@ -1957,7 +2145,15 @@ function setModeBar(){
   const b = $('#modebar');
   if (ui.mode==='input'){
     b.className='input';
-    b.textContent='🟩 入力モード ─ 日本語入力が使えます（Enter で確定 ／ Esc で取り消し）';
+    b.textContent = ui.seq
+      ? '🟩 入力モード ─ ☑ '+(ui.seq.i+1)+' / '+ui.seq.list.length+
+        '　Enter で次の☑へ ／ Esc でやめる'
+      : '🟩 入力モード ─ 日本語入力が使えます（Enter で確定 ／ Esc で取り消し）';
+  } else if (ui.targets.length){
+    b.className='place';
+    b.textContent='☑ '+ui.targets.length+'か所を選んでいます（'+
+      (ui.pickKind==='answer' ? '解答欄' : '番号のマス')+
+      '）　クリックで付け外し ／ Enter で順に入力 ／ D Q P M A で番号';
   } else {
     b.className='place';
     b.textContent='🟦 置くモード ─ 罫線は'+(ui.line==='medium'?'太線':'普通線')
@@ -2004,6 +2200,7 @@ document.addEventListener('keydown', ev => {
     if (ev.code==='KeyA'){                                              // ぜんぶ選ぶ
       ev.preventDefault();
       ui.sel = { c:0, r:0, w:doc.grid.cols, h:doc.grid.rows }; ui.extra = []; ui.selAnchor = null;
+      buildTargets();
       render();
       return toast(ui.tab==='answer' ? 'ぜんぶ選びました（Enter でまとめて答えを入れられます）'
                                      : 'ぜんぶ選びました');
@@ -2029,16 +2226,27 @@ document.addEventListener('keydown', ev => {
       ui.sel = { c:Math.min(a.c,nc), r:Math.min(a.r,nr),
                  w:Math.abs(a.c-nc)+1, h:Math.abs(a.r-nr)+1 };
     } else { ui.cur = {c:nc,r:nr}; ui.sel=null; ui.selAnchor=null; }   // 離れた選択は残す
+    buildTargets();
     render(); return;
   }
 
+  if (ev.key === 'Enter' && ev.shiftKey){    // 一覧でまとめて入力
+    ev.preventDefault();
+    if (ui.tab !== 'answer') return toast('模範解答タブでお使いください');
+    const list = ui.targets.length ? ui.targets.map(t => fieldById(t.id)).filter(Boolean)
+                                   : fieldsInArea();
+    if (!list.length) return toast('範囲を選んでから Shift+Enter を押してください');
+    return bulkAnswers(list);
+  }
   if (ev.key === 'Enter' || ev.key === 'F2'){ ev.preventDefault(); return enterInput(); }
-  if (ev.key === 'Escape'){ ev.preventDefault(); ui.sel=null; ui.extra=[]; ui.selAnchor=null; render(); return; }
+  if (ev.key === 'Escape'){ ev.preventDefault();
+    ui.sel=null; ui.extra=[]; ui.selAnchor=null; ui.targets=[]; render(); return; }
   if (ev.key === 'Delete' || ev.key === 'Backspace'){ ev.preventDefault(); return clearSelection(); }
   if (ev.key === ' ' && ev.shiftKey){          // 離れたセルを選択に足す／外す
     ev.preventDefault();
     const i = ui.extra.findIndex(q => q.c===ui.cur.c && q.r===ui.cur.r);
     if (i>=0) ui.extra.splice(i,1); else ui.extra.push({c:ui.cur.c, r:ui.cur.r});
+    buildTargets();
     render();
     toast(ui.extra.length ? '選んだセル：'+ui.extra.length+'か所（番号を振るキーを押してください）' : '選択を外しました');
     return;
@@ -2068,6 +2276,7 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyI'){ ev.preventDefault(); return ev.shiftKey ? insertLine() : insertCells(); }
   if (ev.code === 'KeyK'){ ev.preventDefault(); return ev.shiftKey ? deleteLine() : deleteCells(); }
   if (ev.code === 'KeyW'){ ev.preventDefault(); return setColWidth(); }
+  if (ev.code === 'KeyT'){ ev.preventDefault(); return togglePickKind(); }
   if (ev.code === 'Minus'){ ev.preventDefault(); return setZoom(-1); }
   if (ev.code === 'Equal' || (ev.code === 'Semicolon' && ev.shiftKey)){ ev.preventDefault(); return setZoom(1); }
   if (ev.code === 'Digit0'){ ev.preventDefault(); return setZoom(0); }
@@ -2084,14 +2293,16 @@ svg.addEventListener('mousedown', ev => {
   if (ev.ctrlKey || ev.metaKey){
     const i = ui.extra.findIndex(q=>q.c===p.c&&q.r===p.r);
     if (i>=0) ui.extra.splice(i,1); else ui.extra.push(p);
-    render(); return;
+    buildTargets(); render(); return;
   }
   if (ev.shiftKey){
     const a = {c:ui.cur.c, r:ui.cur.r};
     ui.sel = { c:Math.min(a.c,p.c), r:Math.min(a.r,p.r), w:Math.abs(a.c-p.c)+1, h:Math.abs(a.r-p.r)+1 };
-    ui.selAnchor = a; render(); return;
+    ui.selAnchor = a; buildTargets(); render(); return;
   }
-  ui.cur = p; ui.sel = null; ui.extra=[]; ui.selAnchor = p;
+  // ☑が出ているときは、クリックで付け外しできる
+  if (ui.targets.length && toggleTarget(p)) return;
+  ui.cur = p; ui.sel = null; ui.extra=[]; ui.targets=[]; ui.selAnchor = p;
   dragging = true; render();
 });
 let dragging = false;
@@ -2104,7 +2315,12 @@ svg.addEventListener('mousemove', ev => {
   if (ui.sel.w===1 && ui.sel.h===1) ui.sel = null;
   render();
 });
-document.addEventListener('mouseup', ()=>{ dragging=false; if (ui.tab==='draw') drawEnd(); });
+document.addEventListener('mouseup', ()=>{
+  const was = dragging;
+  dragging=false;
+  if (ui.tab==='draw') { drawEnd(); return; }
+  if (was && ui.sel){ buildTargets(); render(); }   // ドラッグで選んだら☑を付ける
+});
 svg.addEventListener('dblclick', ev => { const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
 
 $('#cell-input').addEventListener('blur', ()=>{ if (ui.mode==='input') commitInput(); });
@@ -3006,6 +3222,8 @@ function buildTools(){
     '<button class="tool" id="t-insl"><span class="nm" id="nm-insl">挿入 ←</span><span class="k">Shift+I</span></button>'+
     '<button class="tool" id="t-rm"><span class="nm" id="nm-rm">削除 ↑</span><span class="k">K</span></button>'+
     '<button class="tool" id="t-rml"><span class="nm" id="nm-rml">削除 →</span><span class="k">Shift+K</span></button>'+
+    '<button class="tool" id="t-pick2" style="grid-column:1/-1"><span class="nm" id="nm-pick">☑ 対象：番号のマス</span><span class="k">T で切り替え</span></button>'+
+    '<button class="tool" id="t-bulk" style="grid-column:1/-1"><span class="nm">一覧でまとめて答えを入れる</span><span class="k">Shift+Enter</span></button>'+
     '<button class="tool" id="t-width"><span class="nm">列の幅</span><span class="k">W</span></button>'+
     '<button class="tool" id="t-cut"><span class="nm">移動（切り取り）</span><span class="k">Ctrl+X</span></button>'+
     '<button class="tool" id="t-paste"><span class="nm">ここへ動かす</span><span class="k">Ctrl+V</span></button>'+
@@ -3018,6 +3236,14 @@ function buildTools(){
   $('#t-insl').onclick  = insertLine;
   $('#t-rm').onclick    = deleteCells;
   $('#t-rml').onclick   = deleteLine;
+  $('#t-pick2').onclick = togglePickKind;
+  $('#t-bulk').onclick = () => {
+    if (ui.tab !== 'answer') return toast('模範解答タブでお使いください');
+    const list = ui.targets.length ? ui.targets.map(t => fieldById(t.id)).filter(Boolean)
+                                   : fieldsInArea();
+    if (!list.length) return toast('範囲を選んでから押してください');
+    bulkAnswers(list);
+  };
   $('#t-width').onclick = setColWidth;
   $('#t-cut').onclick   = cutCells;
   $('#t-paste').onclick = pasteCells;
@@ -3043,6 +3269,12 @@ function showPanels(){
 }
 
 // 挿入ボタンの向きは、縦書き・横書きで入れ替わる
+function updatePickLabel(){
+  const e = document.getElementById('nm-pick');
+  if (e) e.textContent = '☑ 対象：'+(ui.pickKind==='answer' ? '解答欄' : '番号のマス')+
+    (ui.targets.length ? '（'+ui.targets.length+'）' : '');
+}
+
 function updateInsertLabels(){
   const v = doc && doc.paper.writing==='vertical';
   const set = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
@@ -3114,10 +3346,11 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   if (ui.mode==='input') commitInput();
   ui.tab = t.dataset.tab;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x===t));
-  ui.sel=null; ui.extra=[]; ui.drawFrom=ui.drawTo=null;
+  ui.sel=null; ui.extra=[]; ui.targets=[]; ui.drawFrom=ui.drawTo=null;
+  ui.pickKind = (ui.tab==='answer') ? 'answer' : 'label';   // タブに合った対象にする
   showPanels();
   render();
-  toast(ui.tab==='answer' ? '模範解答タブ：欄の上で Enter を押すと答えを入れられます'
+  toast(ui.tab==='answer' ? '模範解答タブ：範囲を選ぶと☑が付きます（Enter で順に入力）'
       : ui.tab==='draw'   ? '描画タブ：用紙の上をドラッグすると線、クリックで点が打てます'
       : '解答用紙タブ');
 });
