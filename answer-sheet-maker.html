@@ -521,7 +521,16 @@ const MARK_ROWS  = 3;    // 記号用のマス＝セル3つぶん
 const CHAR_TYPES = [4,5];// 文字の区切り（点線）を引く欄（語句・記述）
 const CELL_TYPES = [4,5,8];// 文字マスを字数ぶん並べる欄（語句・記述・漢字）
 const EXTRACT_TYPE = 3;  // 始終の欄
-const EXTRACT_MARKS = ['始','終'];   // 始終の欄の見出し
+const EXTRACT_MARKS = ['初め','終わり'];   // 始終の欄の見出し（お手本と同じ表記）
+const EXTRACT_SEP = /[ 　\/／|\t]+/;      // 初めのぶんと終わりのぶんの区切り
+// 答えを「初めのぶん」「終わりのぶん」に分ける
+function splitExtract(text){
+  const t = String(text == null ? '' : text);
+  const m = t.split(EXTRACT_SEP);
+  if (m.length < 2) return [t, ''];
+  return [m[0], m.slice(1).join('')];
+}
+const joinExtract = (a,b) => (a||'') + '　' + (b||'');
 const MARK_LEN = 1;      // 見出しのマス＝セル1つぶん
 
 // 始終の欄の中身（見出し・文字マス・見出し・文字マス）を、枠の大きさから割り出す
@@ -674,13 +683,13 @@ function placeNote(d, obj){
 function answerPlan(d, f, text){
   const t = String(text == null ? '' : text);
   if (f.type === EXTRACT_TYPE){
-    const parts = t.split(/[ 　\/／|\t]+/).filter(x => x !== '');
+    const parts = t.split(EXTRACT_SEP);
     const pt = extractParts(d, f);
     if (pt && parts.length >= 2){
       const used = new Set(placeNote(d, f).map(p => p.c+','+p.r));
       const cellsOf = rect => rectCells(d, [rect]).filter(p => !used.has(p.c+','+p.r));
       const A = cellsOf(pt.a), B = cellsOf(pt.b);
-      const head = parts[0], tail = parts.slice(1).join('');
+      const head = parts[0], tail = parts.slice(1).join('');   // 空でもそのまま
       const out = [];
       [...head].forEach((ch,i) => { if (A[i]) out.push({ p:A[i], ch }); });
       [...tail].forEach((ch,i) => { if (B[i]) out.push({ p:B[i], ch }); });
@@ -822,7 +831,7 @@ function buildCells(d, withAnswers){
         const mk = f.marks && f.marks.length===2 ? f.marks : EXTRACT_MARKS;
         [[pt.m1, mk[0]], [pt.m2, mk[1]]].forEach(([x, t]) => {
           merge(x.c, x.r, x.w, x.h);
-          put(x.c, x.r, t, 9);
+          put(x.c, x.r, t, 7);
         });
       }
     }
@@ -1953,7 +1962,16 @@ function togglePickKind(){
 /* 続けて入力（対象を順に回る） */
 function startSeq(list){
   if (!list.length) return toast('☑ を付けた対象がありません');
-  ui.seq = { list:list.slice(), i:0 };
+  // 始終の欄は「初め」「終わり」の2回に分ける（Enter で次のぶんへ）
+  const out = [];
+  list.forEach(t => {
+    const f = (t.k === 'a') ? fieldById(t.id) : null;
+    if (f && f.type === EXTRACT_TYPE){
+      out.push({ k:'a', id:t.id, part:0 });
+      out.push({ k:'a', id:t.id, part:1 });
+    } else out.push(t);
+  });
+  ui.seq = { list:out, i:0 };
   seqOpen();
 }
 function seqOpen(){
@@ -1961,11 +1979,20 @@ function seqOpen(){
   if (t.k === 'a'){
     const f = fieldById(t.id);
     if (!f) return seqNext();
+    if (t.part !== undefined){                       // 始終の「初め」「終わり」
+      const pt = extractParts(doc, f);
+      const rect = pt ? (t.part ? pt.b : pt.a) : f.rects[0];
+      const cell = rectCells(doc, [rect])[0] || rect;
+      ui.cur = { c:cell.c, r:cell.r };
+      ui.editTarget = { kind:'answerPart', field:f, part:t.part };
+      openInputBox(splitExtract(doc.answers[f.id] || '')[t.part],
+                   (t.part ? '終わりのぶん' : '初めのぶん')+'（Enter で次へ）');
+      return;
+    }
     const p = charCells(doc, f)[0] || f.rects[0];
     ui.cur = { c:p.c, r:p.r };
     ui.editTarget = { kind:'answer', field:f };
-    openInputBox(doc.answers[f.id] || '',
-      (f.type===EXTRACT_TYPE ? '始めと終わりを空白で区切る（例：「不便　出そう）' : FIELD_DEFS[f.type].name+'の答え'));
+    openInputBox(doc.answers[f.id] || '', FIELD_DEFS[f.type].name+'の答え');
   } else {
     ui.cur = { c:t.c, r:t.r };
     ui.editTarget = { kind:'cell', c:t.c, r:t.r };
@@ -2062,7 +2089,8 @@ async function enterInput(){
     if (!f) return toast('答えを入れる欄の上にカーソルを置いて Enter を押してください');
     ui.editTarget = { kind:'answer', field:f };
     inp.value = doc.answers[f.id] || '';
-    inp.placeholder = FIELD_DEFS[f.type].name+'の答え';
+    inp.placeholder = (f.type===EXTRACT_TYPE)
+      ? '初めと終わりを空白で区切る（例：「不便　出そう）' : FIELD_DEFS[f.type].name+'の答え';
   } else {
     ui.editTarget = { kind:'cell', c:ui.cur.c, r:ui.cur.r };
     const cur = doc.texts[ui.cur.c+','+ui.cur.r];
@@ -2108,7 +2136,17 @@ function commitInput(){
   const t = ui.editTarget;
   if (t){
     snapshot();
-    if (t.kind==='answer') {
+    if (t.kind==='answerPart'){                 // 始終の「初め」「終わり」だけを直す
+      const cur = splitExtract(doc.answers[t.field.id] || '');
+      cur[t.part] = val.trim();
+      const joined = joinExtract(cur[0], cur[1]);
+      if (joined.trim()) doc.answers[t.field.id] = joined;
+      else delete doc.answers[t.field.id];
+      const plan = answerPlan(doc, t.field, joined);
+      if (plan.need > plan.room)
+        setTimeout(()=>toast('⚠ この欄に入るのは'+plan.room+'文字までです'), 30);
+    }
+    else if (t.kind==='answer') {
       if (val) doc.answers[t.field.id] = val; else delete doc.answers[t.field.id];
       const plan = answerPlan(doc, t.field, val);
       const room = plan.room;
