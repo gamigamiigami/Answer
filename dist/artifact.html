@@ -569,7 +569,7 @@ function contentOrigin(d){
 const FIELD_DEFS = {
   1:{ name:'シンプル枠', hint:'選んだ範囲に罫線を引く（解答欄ではなく枠だけ）' },
   2:{ name:'記号用',    hint:'記号1文字の解答欄（セル3つぶんの大きさ）' },
-  3:{ name:'始終',      hint:'最初と最後の○字ずつを書き抜く解答欄（初め・終わりの見出しつき・太線）' },
+  3:{ name:'初終',      hint:'最初と最後の○字ずつを書き抜く解答欄（初め・終わりの見出しつき・太線）' },
   4:{ name:'語句',      hint:'2〜5文字の語句を書く解答欄（8割ラインなし）' },
   5:{ name:'記述',      hint:'字数を決めた記述の解答欄（8割ラインを選べます）' },
   6:{ name:'長方形',    hint:'縦×横のマス数で四角い解答欄' },
@@ -608,8 +608,8 @@ const GRAPH_ROWS = 3;    // グラフの1マス＝3行（約1cm四方になる�
 const MARK_ROWS  = 3;    // 記号用のマス＝セル3つぶん
 const CHAR_TYPES = [4,5];// 文字の区切り（点線）を引く欄（語句・記述）
 const CELL_TYPES = [4,5,8];// 文字マスを字数ぶん並べる欄（語句・記述・漢字）
-const EXTRACT_TYPE = 3;  // 始終の欄
-const EXTRACT_MARKS = ['初め','終わり'];   // 始終の欄の見出し（お手本と同じ表記）
+const EXTRACT_TYPE = 3;  // 初終の欄
+const EXTRACT_MARKS = ['初め','終わり'];   // 初終の欄の見出し（お手本と同じ表記）
 const EXTRACT_SEP = /[ 　\/／|\t]+/;      // 初めのぶんと終わりのぶんの区切り
 // 答えを「初めのぶん」「終わりのぶん」に分ける
 function splitExtract(text){
@@ -621,7 +621,7 @@ function splitExtract(text){
 const joinExtract = (a,b) => (a||'') + '　' + (b||'');
 const MARK_LEN = 1;      // 見出しのマス＝セル1つぶん
 
-// 始終の欄の中身（見出し・文字マス・見出し・文字マス）を、枠の大きさから割り出す
+// 初終の欄の中身（見出し・文字マス・見出し・文字マス）を、枠の大きさから割り出す
 //   縦書き： 1行 ＋ ○字×2行 ＋ 1行 ＋ ○字×2行
 //   横書き： 1列 ＋ ○字ぶんの列 ＋ 1列 ＋ ○字ぶんの列
 function extractParts(d, f){
@@ -653,7 +653,7 @@ function buildRects(d, type, at, opt){
     rects.push({ c: at.c, r: at.r, w:1, h: cells });
   }
   else if (type===EXTRACT_TYPE){
-    // 始終：見出し1マス・○字・見出し1マス・○字 をひとつづきに並べる
+    // 初終：見出し1マス・○字・見出し1マス・○字 をひとつづきに並べる
     const n = Math.max(1, Number(opt.n)||5);
     if (vertical) rects.push({ c: at.c, r: at.r, w:1, h: 2*MARK_LEN + 2*n*CHAR_ROWS });
     else          rects.push({ c: at.c, r: at.r, w: extractLen(n), h: CHAR_ROWS });
@@ -768,7 +768,7 @@ function placeNote(d, obj){
 }
 
 // 答えをどのマスに入れるか決める。
-// 始終の欄は「始めのぶん」「終わりのぶん」に分けて入れる（区切りは空白・／・｜）
+// 初終の欄は「始めのぶん」「終わりのぶん」に分けて入れる（区切りは空白・／・｜）
 // 欄ごとの文字の大きさ（pt。Excel と同じ単位。ふつうは11pt）
 const BASE_PT = 11;
 const SIZE_CHOICES = [6,7,8,9,10,11,12,14,16,18,20,24];
@@ -853,7 +853,7 @@ function answerCells(d, f){
 function charCells(d, f){
   // 記号用は、セル3つぶんをまとめた1マスに1文字
   if (MARK_TYPES.indexOf(f.type) >= 0) return f.rects.map(r => ({ c:r.c, r:r.r, full:true, mh:r.h }));
-  // 始終は、見出しのマスを飛ばして文字マスだけに入れる
+  // 初終は、見出しのマスを飛ばして文字マスだけに入れる
   if (f.type===EXTRACT_TYPE){
     const p = extractParts(d, f);
     if (!p) return [];
@@ -971,7 +971,7 @@ function buildCells(d, withAnswers){
       }
     }
     if (f.type===EXTRACT_TYPE){
-      // 始終：見出し／文字マス／見出し／文字マスに区切る。
+      // 初終：見出し／文字マス／見出し／文字マスに区切る。
       // 番号欄の外枠と、解答欄ぜんたいの外枠は必ず太線にする
       if (f.label) box(f.label.c, f.label.r, f.label.w, f.label.h, 'medium');
       f.rects.forEach(r => box(r.c, r.r, r.w, r.h, 'medium'));
@@ -1474,7 +1474,7 @@ async function placeField(type){
     ]); if(!v) return; opt.w=num(v.w,2,8); opt.h=num(v.h,2,8);
   }
   if (type===EXTRACT_TYPE){
-    const v = await ask('始終の解答欄', [
+    const v = await ask('初終の解答欄', [
       {key:'n',label:'最初と最後の字数',type:'number',value:LAST.ext,min:1,
        hint:'「初め」○字・「終わり」○字 の順に並べます。字数は同じです'}, manyRow()
     ]); if(!v) return; opt.n=num(v.n,1,LAST.ext); LAST.ext=opt.n;
@@ -1597,7 +1597,7 @@ async function openBigWizard(){
     {key:'type', label:'小問の種類', type:'select', value:WIZ.type,
      options:WIZ_TYPES.map(t => [t, fieldName(t)])},
     {key:'n',    label:'字数・マス数', type:'number', value:WIZ.n, min:1,
-     hint:'語句・記述・漢字・始終で使います（記号用・カスタムは登録した大きさ）'},
+     hint:'語句・記述・漢字・初終で使います（記号用・カスタムは登録した大きさ）'},
     {key:'count',label:'問題数', type:'number', value:WIZ.count, min:1},
     {key:'per',  label:(vertical ? '1列に何問' : '1行に何問'), type:'number', value:WIZ.per, min:1},
     {key:'num',  label:'小問の番号', type:'select', value:WIZ.num, options:WIZ_NUM},
@@ -2408,7 +2408,7 @@ function togglePickKind(){
 /* 続けて入力（対象を順に回る） */
 function startSeq(list){
   if (!list.length) return toast('☑ を付けた対象がありません');
-  // 始終の欄は「初め」「終わり」の2回に分ける（Enter で次のぶんへ）
+  // 初終の欄は「初め」「終わり」の2回に分ける（Enter で次のぶんへ）
   const out = [];
   list.forEach(t => {
     const f = (t.k === 'a') ? boxById(t.id) : null;
@@ -2425,7 +2425,7 @@ function seqOpen(){
   if (t.k === 'a'){
     const f = boxById(t.id);
     if (!f) return seqNext();
-    if (t.part !== undefined){                       // 始終の「初め」「終わり」
+    if (t.part !== undefined){                       // 初終の「初め」「終わり」
       const pt = extractParts(doc, f);
       const rect = pt ? (t.part ? pt.b : pt.a) : f.rects[0];
       const cell = rectCells(doc, [rect])[0] || rect;
@@ -2601,7 +2601,7 @@ function commitInput(){
   const t = ui.editTarget;
   if (t){
     snapshot();
-    if (t.kind==='answerPart'){                 // 始終の「初め」「終わり」だけを直す
+    if (t.kind==='answerPart'){                 // 初終の「初め」「終わり」だけを直す
       const cur = splitExtract(doc.answers[t.field.id] || '');
       cur[t.part] = val.trim();
       const joined = joinExtract(cur[0], cur[1]);
@@ -3430,7 +3430,7 @@ function loadWork(text){
   const ver = Number(d.version) || 1;
   if (ver < 3){
     const map = ver < 2 ? {3:5, 4:6, 5:7}          // 版1：文字数→記述／長方形→6／グラフ→7
-                        : {3:4, 4:5, 5:6, 6:7, 7:3}; // 版2：語句→4・記述→5・長方形→6・グラフ→7・書き抜き→始終3
+                        : {3:4, 4:5, 5:6, 6:7, 7:3}; // 版2：語句→4・記述→5・長方形→6・グラフ→7・書き抜き→初終3
     d.fields.forEach(f => { if (map[f.type]) f.type = map[f.type]; });
     d.version = 3;
   }
@@ -4047,7 +4047,7 @@ function icon(type){
     case 1: return g(box(3,3,28,14,' stroke-dasharray="3 2"'));                     // シンプル枠
     case 2: return g(box(12,2,10,16));                                              // 記号用
     case 3: return g('<rect x="2" y="5" width="30" height="10" fill="none" stroke="#33404d" stroke-width="1.8"/>'+
-      '<line x1="8" y1="5" x2="8" y2="15" stroke="#33404d"/>'+                      // 始終
+      '<line x1="8" y1="5" x2="8" y2="15" stroke="#33404d"/>'+                      // 初終
       '<line x1="20" y1="5" x2="20" y2="15" stroke="#33404d"/>'+
       '<line x1="26" y1="5" x2="26" y2="15" stroke="#33404d"/>'+
       '<line x1="14" y1="5" x2="14" y2="15" stroke="#33404d" stroke-dasharray="2 2"/>');
