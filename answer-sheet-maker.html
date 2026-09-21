@@ -1532,6 +1532,135 @@ async function placeField(type){
                                    : '右に入らないため、次の行に置きました');
 }
 
+/* ---------------------------------------------------------------
+   9.5 大問をまるごと作る
+   欄を並べる・小問の番号を振る・大問の見出しを付ける を一度に行う。
+   --------------------------------------------------------------- */
+const WIZ_TYPES = [2,4,5,8,EXTRACT_TYPE,9,10];   // まとめて並べることが多い欄
+const WIZ_NUM = [['none','なし'],['M','①②③'],['P','(1)(2)'],['Q','問一 問二'],['A','ア イ ウ']];
+const WIZ = { type:4, n:4, count:5, per:5, num:'M' };   // 前に使った内容を覚えておく
+
+async function openBigWizard(){
+  if (!needSheet('大問を作れません')) return;
+  const vertical = doc.paper.writing==='vertical';
+  const v = await ask('大問をまるごと作る', [
+    {key:'dai',  label:'大問の番号', type:'number', value:nextStart('D'), min:1},
+    {key:'type', label:'小問の種類', type:'select', value:WIZ.type,
+     options:WIZ_TYPES.map(t => [t, fieldName(t)])},
+    {key:'n',    label:'字数・マス数', type:'number', value:WIZ.n, min:1,
+     hint:'語句・記述・漢字・始終で使います（記号用・カスタムは登録した大きさ）'},
+    {key:'count',label:'問題数', type:'number', value:WIZ.count, min:1},
+    {key:'per',  label:(vertical ? '1列に何問' : '1行に何問'), type:'number', value:WIZ.per, min:1},
+    {key:'num',  label:'小問の番号', type:'select', value:WIZ.num, options:WIZ_NUM},
+    {key:'start',label:'番号の始まり', type:'number', value:1, min:1}
+  ]);
+  if (!v) return;
+  const type  = Number(v.type) || 4;
+  const n     = num(v.n, 1, WIZ.n);
+  const count = num(v.count, 1, WIZ.count);
+  const per   = num(v.per, 1, WIZ.per);
+  const numKind = v.num;
+  const start = num(v.start, 1, 1);
+  Object.assign(WIZ, { type, n, count, per, num:numKind });
+
+  const opt = { n, exact:(type===4), tate:3, yoko:4 };
+  const used = occupied(doc);
+  const clash = r => {
+    if (r.c<0 || r.r<0 || r.c+r.w>doc.grid.cols || r.r+r.h>doc.grid.rows) return true;
+    for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++)
+      if (used.has((r.c+i)+','+(r.r+j))) return true;
+    return false;
+  };
+  const take = r => { for (let i=0;i<r.w;i++) for (let j=0;j<r.h;j++) used.add((r.c+i)+','+(r.r+j)); };
+
+  // 置きはじめる場所（カーソルが空いていればそこ、ふさがっていれば内容の先頭）
+  const top = contentOrigin(doc);
+  let head = { c:ui.cur.c, r:ui.cur.r };
+  if (clash({ c:head.c, r:head.r, w:1, h:1 })) head = { c:top.c, r:top.r };
+
+  const made = [];
+  let cur = { c:head.c, r:head.r };
+  let lineMinC = cur.c, lineMaxR = cur.r;
+  for (let i=0;i<count;i++){
+    if (i > 0 && i % per === 0){                 // 次の列（行）へ
+      cur = vertical ? { c:lineMinC - 1, r:head.r } : { c:head.c, r:lineMaxR };
+      lineMinC = cur.c; lineMaxR = cur.r;
+    }
+    let got = null;
+    for (let tryNo=0; tryNo<2 && !got; tryNo++){
+      const b = buildRects(doc, type, boxStart(doc, cur), opt);
+      if (!b.error){
+        const lab = labelRect(doc, cur, b.rects);
+        if (!clash(lab) && !b.rects.some(clash)) got = { lab, rects:b.rects };
+      }
+      if (!got){                                  // 入らなければ次の列（行）で1回だけ試す
+        cur = vertical ? { c:lineMinC - 1, r:head.r } : { c:head.c, r:lineMaxR };
+        lineMinC = cur.c; lineMaxR = cur.r;
+      }
+    }
+    if (!got) break;
+    take(got.lab); got.rects.forEach(take);
+    made.push(got);
+    const last = got.rects[got.rects.length - 1];
+    const minC = Math.min(got.lab.c, ...got.rects.map(r => r.c));
+    const maxR = Math.max(got.lab.r + got.lab.h, ...got.rects.map(r => r.r + r.h));
+    lineMinC = Math.min(lineMinC, minC);
+    lineMaxR = Math.max(lineMaxR, maxR);
+    cur = vertical ? { c:got.lab.c, r:last.r + last.h }
+                   : { c:last.c + last.w, r:got.lab.r };
+  }
+  if (!made.length) return toast('⚠ ここには置けません（用紙の空いているところにカーソルを置いてください）');
+
+  snapshot();
+  const ids = [];
+  made.forEach(g => {
+    const f = { id:'f'+(uid++), type, rects:g.rects, label:g.lab,
+      chars:(type===2 ? 1 : n), exact:(type===4),
+      points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end' };
+    doc.fields.push(f); ids.push(f.id);
+  });
+  // 小問の番号
+  if (numKind !== 'none' && STAMPS[numKind]){
+    const def = STAMPS[numKind];
+    made.forEach((g,i) => {
+      doc.texts[g.lab.c+','+g.lab.r] = { t:def.fmt(start+i, doc.paper.numberStyle),
+        size:def.size, bold:!!def.bold, box:false };
+    });
+  }
+  // 大問の見出し（欄のすぐ上／左）
+  const rs = made.flatMap(g => [g.lab, ...g.rects]);
+  const c0 = Math.min(...rs.map(r=>r.c)), c1 = Math.max(...rs.map(r=>r.c+r.w));
+  const r0 = Math.min(...rs.map(r=>r.r)), r1 = Math.max(...rs.map(r=>r.r+r.h));
+  const hd = vertical ? { c:c0, r:r0-1, w:c1-c0, h:1 } : { c:c0-1, r:r0, w:1, h:r1-r0 };
+  let headOK = !clash(hd);
+  if (headOK){
+    doc.texts[hd.c+','+hd.r] = { t:STAMPS.D.fmt(num(v.dai,1,1), doc.paper.numberStyle),
+      size:STAMPS.D.size, bold:true, box:true,
+      span: vertical ? hd.w : Math.ceil(hd.h/CHAR_ROWS) };
+  }
+  // 漢字の欄は列を広げる
+  if (type === 8){
+    const wide = new Set();
+    doc.fields.forEach(f => { if (f.type===8) f.rects.forEach(r => {
+      for (let i=0;i<r.w;i++) wide.add(r.c+i); }); });
+    wide.forEach(c => { doc.colw[c] = KANJI_COL; });
+    if (!refitColumns()){
+      const h = history[ui.tab]; if (h.undo.length) restore(h.undo.pop());
+      render();
+      return toast('⚠ 幅を広げると1枚に収まりません（左の列を空けてください）');
+    }
+  }
+  // 置いたところに☑を付けておく（続けて配点や答えを入れられるように）
+  ui.sel = vertical ? { c:c0, r:Math.max(0,r0-1), w:c1-c0, h:r1-r0+1 }
+                    : { c:Math.max(0,c0-1), r:r0, w:c1-c0+1, h:r1-r0 };
+  ui.extra = []; ui.pickKind = 'answer';
+  buildTargets();
+  ui.cur = { c:Math.min(c0, doc.grid.cols-1), r:r0 };
+  render();
+  toast(made.length+'問ぶん作りました'+(made.length<count ? '（用紙に入る数まで）' : '')+
+        (headOK ? '' : '　※大問の見出しは場所がなくて付けられませんでした'));
+}
+
 /* シンプル枠：選んだ範囲の外側に罫線を引く（今の線の太さで） */
 function simpleFrame(){
   if (!needSheet('枠を引けません')) return;
@@ -2599,6 +2728,7 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyK'){ ev.preventDefault(); return ev.shiftKey ? deleteLine() : deleteCells(); }
   if (ev.code === 'KeyW'){ ev.preventDefault(); return setColWidth(); }
   if (ev.code === 'KeyG'){ ev.preventDefault(); return openTextSize(); }
+  if (ev.code === 'KeyN'){ ev.preventDefault(); return openBigWizard(); }
   if (ev.code === 'KeyS'){ ev.preventDefault(); return bulkPoints(); }
   if (ev.code === 'KeyT'){ ev.preventDefault(); return togglePickKind(); }
   if (ev.code === 'KeyZ'){ ev.preventDefault(); return toggleZen(); }
@@ -3283,6 +3413,11 @@ function ask(title, rows){
       else if (f.type==='number') html += '<input type="number" data-k="'+f.key+'" value="'+f.value+'" min="'+(f.min||0)+'" '+(i===0?'autofocus':'')+'>';
       else if (f.type==='text') html += '<input type="text" data-k="'+f.key+'" value="'+xmlEsc(f.value||'')+'">';
       else if (f.type==='check') html += '<input type="checkbox" data-k="'+f.key+'" '+(f.value?'checked':'')+' style="flex:none;width:18px;height:18px">';
+      else if (f.type==='select') html += '<select data-k="'+f.key+'" style="flex:1;min-width:120px;'+
+        'border:1px solid var(--line);border-radius:9px;padding:6px 8px;font:inherit;'+
+        'background:var(--field);color:inherit">'+
+        f.options.map(o => '<option value="'+o[0]+'"'+(String(o[0])===String(f.value)?' selected':'')+
+          '>'+xmlEsc(o[1])+'</option>').join('')+'</select>';
       else if (f.type==='area') html += '<textarea data-k="'+f.key+'" rows="'+(f.rows||10)+'" '+
         'style="flex:1;min-width:200px;font:inherit;line-height:1.7;border:1px solid var(--line);'+
         'border-radius:9px;padding:8px 10px;background:var(--field);color:inherit;resize:vertical">'+
@@ -3309,7 +3444,7 @@ function ask(title, rows){
       });
     });
     const close = (ok) => {
-      if (ok) wrap.querySelectorAll('input[data-k],textarea[data-k]').forEach(inp => {
+      if (ok) wrap.querySelectorAll('input[data-k],textarea[data-k],select[data-k]').forEach(inp => {
         vals[inp.dataset.k] = (inp.type==='checkbox') ? inp.checked : inp.value;
       });
       wrap.remove();
@@ -3755,11 +3890,14 @@ function buildTools(){
   fw.innerHTML = fieldOrder().map((k,i) =>
     '<button class="tool" data-field="'+k+'" title="'+FIELD_DEFS[k].hint+'">'+icon(k)+
     '<span class="nm">'+fieldName(k)+'</span><span class="k">'+(i===9?'0':(i+1))+'</span></button>').join('')+
+    '<button class="tool" id="t-wiz" style="grid-column:1/-1" title="欄・小問の番号・大問の見出しをまとめて作ります">'+
+    '<span class="nm">大問をまるごと作る</span><span class="k">N</span></button>'+
     '<button class="tool" id="t-setup" style="grid-column:1/-1" title="ボタンの並びとカスタム欄のセル数を決めます">'+
     '<span class="nm">ボタンの並び・カスタム欄</span></button>';
   fw.querySelectorAll('[data-field]').forEach(b =>
     b.addEventListener('click', ()=>placeField(+b.dataset.field)));
   $('#t-setup').onclick = openButtonSetup;
+  $('#t-wiz').onclick = openBigWizard;
 
   const sw = $('#stamp-tools');
   sw.innerHTML = Object.keys(STAMPS).map(k =>
