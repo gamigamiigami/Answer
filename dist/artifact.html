@@ -95,6 +95,10 @@ button{font:inherit;color:inherit}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
 .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+.grid6 .tool{padding:3px 1px 2px}
+.grid6 .tool .nm{font-size:9.5px}
+.grid6 .tool .k{font-size:8px;padding:0 3px}
 .tool{border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;color:inherit;
   padding:3px 2px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.15}
 .tool:hover{border-color:var(--place);background:var(--place-bg)}
@@ -229,8 +233,8 @@ body.zen #zen-out{display:block}
   </div>
   <div id="main">
     <div id="side">
-      <h2>線の太さ</h2>
-      <div class="grid2" id="basic-tools"></div>
+      <h2>線の種類</h2>
+      <div class="grid6" id="basic-tools"></div>
       <div id="sheet-panels">
         <h2>欄を置く</h2>
         <div class="grid3" id="field-tools"></div>
@@ -306,7 +310,19 @@ function cellText(d, x){
 const ptmm = pt => pt * 25.4 / 72 * SCALE;
 
 // 罫線の強さ（同じ辺に複数の指定が来たら強い方を残す）
-const BORDER_RANK = { hair:1, dotted:2, dashed:3, thin:4, mediumDashed:5, medium:6 };
+const BORDER_RANK = { hair:1, dotted:2, dashed:3, thin:4, mediumDashed:5, medium:6, double:7 };
+// 線の種類（Shift+数字で切り替え）
+const LINE_STYLES = [
+  ['thin','普通線'], ['medium','太線'], ['dotted','点線'],
+  ['dashed','破線'], ['hair','細線'], ['double','二重線']
+];
+// 塗りの色（印刷しても読みやすい薄い色）
+const FILLS = [
+  ['','なし'], ['EFEFEF','うすい灰'], ['FFF6DA','うすい黄'], ['E7F0FB','うすい青'],
+  ['E8F6EE','うすい緑'], ['FCEDEA','うすい桃'], ['F1EAF8','うすい紫']
+];
+const fillOf = o => { const f = String((o && o.fill) || '').replace('#','').toUpperCase();
+  return /^[0-9A-F]{6}$/.test(f) ? f : ''; };
 // 画面描画用の線の見た目（mm）
 const BORDER_VIEW = {
   hair:        {w:0.12, dash:'0.5 0.5'},
@@ -314,7 +330,8 @@ const BORDER_VIEW = {
   dashed:      {w:0.22, dash:'1 0.7'},
   thin:        {w:0.26, dash:null},
   mediumDashed:{w:0.5,  dash:'1.8 1.1'},
-  medium:      {w:0.5,  dash:null}
+  medium:      {w:0.5,  dash:null},
+  double:      {w:0.22, dash:null, double:true}
 };
 
 /* ---------------------------------------------------------------
@@ -882,6 +899,15 @@ function buildCells(d, withAnswers){
     const x = get(c,r); x.t = t; x.size = size||11; x.bold = !!bold; x.align = align||'center';
     x.mid = !!mid && (r+1 < d.grid.rows);
   };
+  // 塗りつぶし
+  const paint = (c,r,w,h,rgb) => {
+    if (!rgb) return;
+    for (let i=0;i<w;i++) for (let j=0;j<h;j++){
+      const cc = c+i, rr = r+j;
+      if (cc<0||rr<0||cc>=d.grid.cols||rr>=d.grid.rows) continue;
+      get(cc,rr).fill = rgb;
+    }
+  };
   // 連結するマス（左上のセルに印をつけておく。Excelでは mergeCell になる）
   const merge = (c,r,w,h) => {
     if (w<=1 && h<=1) return;
@@ -900,7 +926,9 @@ function buildCells(d, withAnswers){
   // (2) 欄
   const vertical = d.paper.writing==='vertical';
   for (const f of d.fields){
-    const outer = f.complete ? 'medium' : 'thin';
+    const fc = fillOf(f);
+    if (fc) f.rects.forEach(r => paint(r.c, r.r, r.w, r.h, fc));
+    const outer = f.line || (f.complete ? 'medium' : 'thin');
     f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
     if (MARK_TYPES.indexOf(f.type) >= 0) f.rects.forEach(r => merge(r.c, r.r, r.w, r.h));  // 1マスに連結
     // 太線モードで作った欄は、番号欄の外枠も太線にする
@@ -969,6 +997,8 @@ function buildCells(d, withAnswers){
 
   // (3) 太枠（選択範囲に引いた枠）
   d.decorations.forEach(v => {
+    const vc = fillOf(v);
+    if (vc) paint(v.c, v.r, v.w, v.h, vc);
     box(v.c, v.r, v.w, v.h, v.style || 'medium');
     if (v.note) placeNote(d, v).forEach((p,i) => put(p.c, p.r, v.note[i], 11*textScaleOf(v)));
   });
@@ -1118,6 +1148,12 @@ function render(){
   });
   svg.appendChild(resg);
 
+  // 塗りつぶし（印刷にも出る）
+  const fillg = el('g',{});
+  cells.forEach(x => { if (x.fill)
+    fillg.appendChild(el('rect',{x:X(x.c), y:y0+x.r*RH, width:W(x.c), height:RH, fill:'#'+x.fill})); });
+  svg.appendChild(fillg);
+
   // 選択範囲
   if (ui.sel){
     svg.appendChild(el('rect',{x:X(ui.sel.c), y:y0+ui.sel.r*RH, 'class':'guide',
@@ -1141,6 +1177,15 @@ function render(){
       if (side==='bottom') Object.assign(a,{x1:CX,y1:Y+RH,x2:CX+CXW,y2:Y+RH});
       if (side==='left')   Object.assign(a,{x1:CX,y1:Y,x2:CX,y2:Y+RH});
       if (side==='right')  Object.assign(a,{x1:CX+CXW,y1:Y,x2:CX+CXW,y2:Y+RH});
+      if (v.double){                                   // 二重線は2本引く
+        const dx = (side==='left'||side==='right') ? 0.2 : 0;
+        const dy = (side==='top'||side==='bottom') ? 0.2 : 0;
+        lines.appendChild(el('line',Object.assign({},a,
+          {x1:a.x1-dx, y1:a.y1-dy, x2:a.x2-dx, y2:a.y2-dy})));
+        lines.appendChild(el('line',Object.assign({},a,
+          {x1:a.x1+dx, y1:a.y1+dy, x2:a.x2+dx, y2:a.y2+dy})));
+        return;
+      }
       lines.appendChild(el('line',a));
     };
     seg('top'); seg('bottom'); seg('left'); seg('right');
@@ -1254,6 +1299,9 @@ function drawStatus(){
   chip('欄：'+doc.fields.length+'個');
   const selN = selectedCells().length;
   if (selN > 1) chip('選択中：'+selN+'セル');
+  const noPt = doc.fields.concat(doc.decorations.filter(v => !isNumberCell(v)))
+    .filter(o => !(Number(o.points) > 0)).length;
+  if (noPt) chip('配点なしの欄：'+noPt+'個（C で点検）', 'warn');
   if (t['合計'] === 0) chip('配点：まだ入れていません（欄を選んで Space）');
   else if (t['合計'] === 100) chip('配点：合計100（知技'+t['知技']+'／思判表'+t['思判表']+'）');
   else chip('配点：合計'+t['合計']+'（100になっていません）','warn');
@@ -1453,7 +1501,7 @@ async function placeField(type){
     if (!got) return null;
     doc.fields.push({
       id:'f'+(uid++), type, rects:got.rects, label:got.lab,
-      chars:(opt.n ? opt.n : 1), exact:!!opt.exact,
+      chars:(opt.n ? opt.n : 1), exact:!!opt.exact, line:ui.line,
       points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end'
     });
     const last = got.rects[got.rects.length-1];
@@ -1608,7 +1656,7 @@ async function openBigWizard(){
   const ids = [];
   made.forEach(g => {
     const f = { id:'f'+(uid++), type, rects:g.rects, label:g.lab,
-      chars:(type===2 ? 1 : n), exact:(type===4),
+      chars:(type===2 ? 1 : n), exact:(type===4), line:ui.line,
       points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end' };
     doc.fields.push(f); ids.push(f.id);
   });
@@ -1688,7 +1736,7 @@ function setLine(kind){
   ui.line = kind;
   document.querySelectorAll('[data-line]').forEach(b=>b.classList.toggle('on', b.dataset.line===kind));
   setModeBar();
-  toast(kind==='medium' ? '太線モードにしました' : '普通線モードにしました');
+  toast('これから引く線を「'+((LINE_STYLES.find(L => L[0]===kind) || ['','線'])[1])+'」にしました');
 }
 
 /* 挿入：Excel と同じく、その位置にマスを差し込む。
@@ -2598,7 +2646,7 @@ function modeInfo(){
   if (ui.targets.length){
     return { cls:'place', t:'☑ '+ui.targets.length+'か所（クリックで付け外し・右クリックで追加・Enter で入力）' };
   }
-  return { cls:'place', t:'置くモード：'+(ui.line==='medium'?'太線':'普通線')+'（文字は Enter）' };
+  return { cls:'place', t:'置くモード：'+((LINE_STYLES.find(L=>L[0]===ui.line)||['','線'])[1])+'（文字は Enter）' };
 }
 function setModeBar(){ if (doc) drawStatus(); }
 // その位置にある欄（番号欄の上でも見つかる）
@@ -2708,9 +2756,8 @@ document.addEventListener('keydown', ev => {
     const n = +ev.code.slice(-1);
     if (ev.shiftKey){
       ev.preventDefault();
-      if (n===1) return setLine('thin');
-      if (n===2) return setLine('medium');
       if (n===0) return setZoom(0);                // 画面に合わせる
+      if (n>=1 && n<=LINE_STYLES.length) return setLine(LINE_STYLES[n-1][0]);
       return;
     }
     const t = fieldFromCode(ev.code);
@@ -2722,6 +2769,8 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyW'){ ev.preventDefault(); return setColWidth(); }
   if (ev.code === 'KeyG'){ ev.preventDefault(); return openTextSize(); }
   if (ev.code === 'KeyN'){ ev.preventDefault(); return openBigWizard(); }
+  if (ev.code === 'KeyF'){ ev.preventDefault(); return openPaint(); }
+  if (ev.code === 'KeyC'){ ev.preventDefault(); return openCheck(); }
   if (ev.code === 'KeyS'){ ev.preventDefault(); return bulkPoints(); }
   if (ev.code === 'KeyT'){ ev.preventDefault(); return togglePickKind(); }
   if (ev.code === 'KeyZ'){ ev.preventDefault(); return toggleZen(); }
@@ -3064,10 +3113,18 @@ function buildXlsx(){
     if (!borderKey.has(k)){ borderKey.set(k, borders.length); borders.push(b); }
     return borderKey.get(k);
   };
-  const addXf = (fi,bi,align) => {
-    const k = fi+'/'+bi+'/'+align;
-    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align}); }
+  const addXf = (fi,bi,align,pi) => {
+    const k = fi+'/'+bi+'/'+align+'/'+(pi||0);
+    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0}); }
     return xfKey.get(k);
+  };
+  const fillList = ['', ''];                    // 0:なし 1:gray125（Excelのきまり）
+  const addFill = rgb => {
+    if (!rgb) return 0;
+    const i = fillList.indexOf(rgb);
+    if (i >= 0) return i;
+    fillList.push(rgb);
+    return fillList.length - 1;
   };
   addFont(11,false); addBorder({});    // 既定
   addXf(0,0,'center');
@@ -3113,7 +3170,8 @@ function buildXlsx(){
       let rowXml = '';
       for (let c=0;c<cols;c++){
         const x = sh.cells.get(c+','+r);
-        if (!x || (!x.t && !x.mg && !x.b.top && !x.b.bottom && !x.b.left && !x.b.right)) continue;
+        if (!x || (!x.t && !x.mg && !x.fill &&
+                   !x.b.top && !x.b.bottom && !x.b.left && !x.b.right)) continue;
         let bd = x.b;
         // 結合するマス（1文字マスの2行／番号欄のまたぎ）
         const mg = x.mg || (x.mid ? {w:1,h:CHAR_ROWS} : null);
@@ -3122,7 +3180,8 @@ function buildXlsx(){
           // 結合すると左上のセルの書式だけが使われるので、周りの罫線をまとめる
           bd = unionBorders(sh.cells, c, r, mg.w, mg.h);
         }
-        const si = addXf(addFont(x.size||11, x.bold), addBorder(bd), x.align||'center');
+        const si = addXf(addFont(x.size||11, x.bold), addBorder(bd), x.align||'center',
+                         addFill(x.fill));
         const ref = colName(c)+(r+1);
         rowXml += x.t
           ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+
@@ -3156,14 +3215,19 @@ function buildXlsx(){
     const s = (side,key) => b[key] ? '<'+side+' style="'+b[key]+'"><color rgb="FF000000"/></'+side+'>' : '<'+side+'/>';
     return '<border>'+s('left','left')+s('right','right')+s('top','top')+s('bottom','bottom')+'<diagonal/></border>';
   }).join('')+'</borders>';
+  const fillsXml = '<fills count="'+fillList.length+'">'+fillList.map((rgb,i) =>
+    i===0 ? '<fill><patternFill patternType="none"/></fill>'
+    : i===1 ? '<fill><patternFill patternType="gray125"/></fill>'
+    : '<fill><patternFill patternType="solid"><fgColor rgb="FF'+rgb+'"/><bgColor indexed="64"/></patternFill></fill>'
+  ).join('')+'</fills>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
-    '<xf numFmtId="0" fontId="'+x.fi+'" fillId="0" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1">'+
+    '<xf numFmtId="0" fontId="'+x.fi+'" fillId="'+x.pi+'" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyFill="1" applyAlignment="1">'+
     '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="center"/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
     fontsXml+
-    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'+
+    fillsXml+
     bordersXml+
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
     xfsXml+
@@ -3524,6 +3588,114 @@ function openTextSize(){
   const inp = wrap.querySelector('input[data-k="pt"]'); inp.focus(); inp.select();
 }
 
+/* 色をつける・線の種類を変える（選んだ欄・枠にまとめて） */
+function openPaint(){
+  if (!needSheet('色をつけられません')) return;
+  const list = targetBoxes();
+  if (!list.length) return toast('欄を選ぶか、欄の上にカーソルを置いてください');
+  const nowFill = fillOf(list[0]);
+  const nowLine = realBox(list[0]).line ||
+    (realBox(list[0]).style) || (list[0].complete ? 'medium' : 'thin');
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = '<div class="card" style="max-width:460px"><h3>色と線（'+list.length+'か所）</h3>'+
+    '<h4 style="margin:4px 0 8px;font-size:13px">色をつける</h4>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+    FILLS.map(f => '<button class="tb'+(f[0]===nowFill?' primary':'')+'" data-fill="'+f[0]+'" '+
+      'style="min-width:84px;'+(f[0]?'background:#'+f[0]+';color:#333;':'')+'">'+f[1]+'</button>').join('')+
+    '</div>'+
+    '<h4 style="margin:4px 0 8px;font-size:13px">線の種類（外枠）</h4>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+    LINE_STYLES.map(L => '<button class="tb'+(L[0]===nowLine?' primary':'')+'" data-line2="'+L[0]+'" '+
+      'style="min-width:84px">'+L[1]+'</button>').join('')+'</div>'+
+    '<div class="modal-actions"><button class="tb" data-act="cancel">とじる</button></div></div>';
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); document.body.focus(); };
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b){ if (e.target===wrap) close(); return; }
+    if (b.dataset.fill !== undefined){
+      snapshot();
+      list.forEach(o => { realBox(o).fill = b.dataset.fill; });
+      close(); render();
+      return toast(b.dataset.fill ? list.length+'か所に色をつけました' : '色を消しました');
+    }
+    if (b.dataset.line2){
+      snapshot();
+      const st = b.dataset.line2;
+      list.forEach(o => { const t = realBox(o);
+        if (t.rects || t.type !== undefined){ t.line = st; t.complete = (st==='medium'); }
+        else { t.style = st; }
+        if (o.deco){ o.deco.style = st; o.deco.line = st; }
+      });
+      close(); render();
+      return toast(list.length+'か所の線を変えました');
+    }
+    close();
+  });
+  wrap.addEventListener('keydown', e => { e.stopPropagation();
+    if (e.key==='Escape' || e.key==='Enter'){ e.preventDefault(); close(); } });
+  const card = wrap.querySelector('.card'); card.tabIndex = -1; card.focus();
+}
+
+/* 点検（印刷する前のたしかめ） */
+async function openCheck(){
+  if (!doc) return;
+  const boxes = doc.fields.concat(doc.decorations.filter(v => !isNumberCell(v)).map(decoBox));
+  const noPoint = boxes.filter(o => !(Number(o.points) > 0));
+  const noAnswer = boxes.filter(o => !String(doc.answers[o.id] || '').trim());
+  const over = boxes.filter(o => { const a = doc.answers[o.id]; if (!a) return false;
+    const pl = answerPlan(doc, o, a); return pl.need > pl.room; });
+  const out = outsideCount(doc);
+  const tot = scoreTotals(doc);
+  const row = (ng, t, k) => '<div class="row" style="margin-bottom:8px">'+
+    '<span style="flex:1">'+(ng ? '⚠ ' : '✅ ')+t+'</span>'+
+    (ng && k ? '<button class="tb" data-pick="'+k+'">その欄に☑</button>' : '')+'</div>';
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = '<div class="card" style="max-width:520px"><h3>印刷する前の点検</h3>'+
+    row(out, out ? out+'か所が用紙からはみ出しています' : '用紙からはみ出していません')+
+    row(noPoint.length, noPoint.length ? '配点が入っていない欄が '+noPoint.length+'個あります'
+        : '配点はすべて入っています', 'point')+
+    row(tot['合計'] !== 100, '配点の合計は '+tot['合計']+'点です（知技'+tot['知技']+'／思判表'+tot['思判表']+'）')+
+    row(noAnswer.length, noAnswer.length ? '模範解答が入っていない欄が '+noAnswer.length+'個あります'
+        : '模範解答はすべて入っています', 'answer')+
+    row(over.length, over.length ? '欄に入りきらない模範解答が '+over.length+'個あります'
+        : '模範解答はすべて欄に収まっています', 'over')+
+    '<p class="desc" style="margin:14px 0 0">「その欄に☑」を押すと、その欄だけに☑が付きます。'+
+    'そのまま S（配点）や Enter（模範解答）に進めます。</p>'+
+    '<div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); document.body.focus(); };
+  const pick = list => {
+    if (!list.length) return close();
+    ui.pickKind = 'answer';
+    ui.sel = null; ui.extra = [];
+    ui.targets = list.map(o => {
+      const cs = charCells(doc, o); const p = cs[0] || o.rects[0];
+      return { k:'a', id:o.id, c:p.c, r:p.r,
+               sc:Math.max(...o.rects.map(x=>x.c+x.w-1)), sr:Math.min(...o.rects.map(x=>x.r)) };
+    });
+    sortTargets();
+    ui.targetsSig = targetSig();
+    const f = ui.targets[0];
+    ui.cur = { c:f.c, r:f.r };
+    close(); render();
+    toast(ui.targets.length+'か所に☑を付けました');
+  };
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b){ if (e.target===wrap) close(); return; }
+    if (b.dataset.pick === 'point')  return pick(noPoint);
+    if (b.dataset.pick === 'answer') return pick(noAnswer);
+    if (b.dataset.pick === 'over')   return pick(over);
+    close();
+  });
+  wrap.addEventListener('keydown', e => { e.stopPropagation();
+    if (e.key==='Escape' || e.key==='Enter'){ e.preventDefault(); close(); } });
+  const card = wrap.querySelector('.card'); card.tabIndex = -1; card.focus();
+}
+
 /* 配点をまとめて入れる（1行に1欄。一覧でまとめて入力と同じ形） */
 async function bulkPoints(){
   if (!needSheet('配点を入れられません')) return;
@@ -3570,7 +3742,8 @@ function openHelp(){
     h2('① 欄を置く（数字キー・左のボタン）')+
     table(ord.map((t,i) => row(keyOf(i), fieldName(t)+
       '<span style="color:var(--sub)">　'+FIELD_DEFS[t].hint+'</span>')).join('')+
-      row('Shift+1 / 2', '罫線を 普通線 ／ 太線 にする')+
+      row('N', '<b>大問をまるごと作る</b>（欄・小問の番号・大問の見出しを一度に）')+
+      row('Shift+1〜6', '線の種類（'+LINE_STYLES.map(L=>L[1]).join('・')+'）')+
       row('範囲を選んでから', '入るだけまとめて置きます（ドラッグ、または Shift+↑↓←→）'))+
     h2('② 番号を振る')+
     table(Object.keys(STAMPS).map(k => row(k, STAMPS[k].name)).join('')+
@@ -3578,13 +3751,17 @@ function openHelp(){
     h2('③ 文字・模範解答を入れる')+
     table(row('Enter', '☑を付けた順に、用紙の上で続けて入力（Enter で次へ・Esc でやめる）')+
       row('Shift+Enter', '一覧でまとめて入力（模範解答タブ・1行に1問）')+
+      row('S', '<b>配点をまとめて入れる</b>（1行に1欄ぶん。1行だけなら全部同じ点）')+
+      row('G', '文字の大きさ（pt）を変える')+
+      row('F', '色をつける・外枠の線の種類を変える')+
       row('Space', '欄の設定（配点・観点・文字の大きさ・欄に入れる文字）'))+
     h2('④ 直す・動かす')+
     table(row('I / Shift+I', '挿入')+row('K / Shift+K', '削除（詰める）')+
       row('Ctrl+X → Ctrl+V', '欄をまるごと移動')+row('Delete', '選んだところを消す')+
       row('Ctrl+Z / Ctrl+Y', '戻す ／ やり直す')+row('W', '列の幅を変える'))+
     h2('表示・保存')+
-    table(row('Z', '用紙だけを大きく表示')+row('＋ / − / Shift+0', '拡大 ／ 縮小 ／ 画面に合わせる')+
+    table(row('C', '<b>点検</b>（配点もれ・答えもれ・はみ出しをたしかめる）')+
+      row('Z', '用紙だけを大きく表示')+row('＋ / − / Shift+0', '拡大 ／ 縮小 ／ 画面に合わせる')+
       row('Ctrl+A', 'ぜんぶ選ぶ')+
       row('Excel出力', 'これが正本です。PDFは確認用')+
       row('作業ファイルを保存', 'あとで続きから直せます（.json）'))+
@@ -3842,6 +4019,19 @@ function applyTemplate(subject){
 /* ---------------------------------------------------------------
    21. サイドバーのボタン（キーを印字し、小さな見本図を付ける）
    --------------------------------------------------------------- */
+// 線の種類の見本
+function lineIcon(style){
+  const v = BORDER_VIEW[style] || BORDER_VIEW.thin;
+  const w = Math.max(1, v.w*3.2);
+  const dash = v.dash ? ' stroke-dasharray="'+v.dash.split(' ').map(x=>+x*3).join(' ')+'"' : '';
+  const one = v.double ? '' :
+    '<line x1="2" y1="6" x2="24" y2="6" stroke="#33404d" stroke-width="'+w+'"'+dash+'/>';
+  const two = v.double ?
+    '<line x1="2" y1="4" x2="24" y2="4" stroke="#33404d" stroke-width="1"/>'+
+    '<line x1="2" y1="8" x2="24" y2="8" stroke="#33404d" stroke-width="1"/>' : '';
+  return '<svg width="22" height="8" viewBox="0 0 26 12">'+one+two+'</svg>';
+}
+
 function icon(type){
   const g = (inner) => '<svg width="26" height="13" viewBox="0 0 34 20">'+inner+'</svg>';
   const box = (x,y,w,h,extra) => '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#33404d" stroke-width="1"'+(extra||'')+'/>';
@@ -3908,9 +4098,10 @@ function buildTools(){
 
   // 線の太さ
   const bw = $('#basic-tools');
-  bw.innerHTML =
-    '<button class="tool line on" data-line="thin"><span class="nm">普通線</span><span class="k">Shift+1</span></button>'+
-    '<button class="tool line" data-line="medium"><span class="nm">太線</span><span class="k">Shift+2</span></button>';
+  bw.innerHTML = LINE_STYLES.map((L,i) =>
+    '<button class="tool line'+(L[0]===ui.line?' on':'')+'" data-line="'+L[0]+'" title="'+L[1]+
+    '（Shift+'+(i+1)+'）">'+lineIcon(L[0])+'<span class="nm">'+L[1]+'</span>'+
+    '<span class="k">⇧'+(i+1)+'</span></button>').join('');
   bw.querySelectorAll('[data-line]').forEach(b => b.onclick = () => setLine(b.dataset.line));
 
   // その他
@@ -3937,6 +4128,8 @@ function buildTools(){
     tool('t-width','列の幅','W','選んだ列の幅を変える')+
     tool('t-size','文字の大きさ','G','選んだ欄の文字を○ptにする')+
     tool('t-pts','配点をまとめて','S','1行に1欄ぶん、点数をまとめて入れる')+
+    tool('t-paint','色と線','F','選んだ欄に色をつける・外枠の線を変える')+
+    tool('t-check','点検','C','配点もれ・答えもれ・はみ出しをたしかめる')+
     tool('t-pick','セル選択','Shift+Space','離れたマスを1つずつ選ぶ')+
     tool('t-pick2','☑ 対象：番号のマス','T','☑ を付ける相手を切り替える', true)+
     tool('t-bulk','一覧でまとめて答えを入れる','Shift+Enter','1行1問で貼り付ける', true);
@@ -3955,6 +4148,8 @@ function buildTools(){
   $('#t-width').onclick = setColWidth;
   $('#t-size').onclick = openTextSize;
   $('#t-pts').onclick = bulkPoints;
+  $('#t-paint').onclick = openPaint;
+  $('#t-check').onclick = openCheck;
   $('#t-cut').onclick   = cutCells;
   $('#t-paste').onclick = pasteCells;
   $('#t-del').onclick   = clearSelection;

@@ -776,3 +776,16 @@ localStorage に壊れた値を入れても起動する、小窓表示中のキ�
 - 漢字（8）なら列幅を `KANJI_COL` にして `refitColumns()`。
 - 作ったあとは、その大問の範囲に☑を付けた状態にする（続けて配点・模範解答に進めるように）。
 - `ask()` に `type:'select'`（プルダウン）を追加。
+
+
+## §34 色・線の種類・点検（v2.2）
+
+- `LINE_STYLES`（thin/medium/dotted/dashed/hair/double）… **Shift+1〜6**。
+  `BORDER_RANK` に `double:7` を足し、画面では2本線で描く。Excel は `style="double"`。
+- `FILLS`／`fillOf(o)`／欄・枠の `fill`（RRGGBB）… `buildCells` の `paint()` でセルに塗りを付け、
+  画面は罫線の下に塗りを描く。Excel は `<fills>` に solid を足し、`cellXfs` に `fillId` と
+  `applyFill` を入れる。
+- `openPaint()`（**F**）… ☑／範囲／カーソルの相手にまとめて色・外枠の線を適用。
+  欄は `line`、枠は `style` に入れる（`complete` も合わせる）。
+- `openCheck()`（**C**）… はみ出し・配点もれ・合計点・答えもれ・入りきらない答えを一覧にし、
+  「その欄に☑」でその欄だけ ☑ を付ける。下の帯にも配点もれの数を出す。
