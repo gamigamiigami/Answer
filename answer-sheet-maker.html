@@ -1178,16 +1178,18 @@ function render(){
     const SZ = 3.4;                                  // ☑の大きさ（mm）
     shown.forEach(t => {
       const checked = on.has(t.k+':'+(t.k==='a'?t.id:t.c+','+t.r));
-      // マスの左上の角にかけて、少し外へはみ出して置く（中身を隠さないため）
-      const x = X(t.c) - SZ*0.55, y = y0 + t.r*RH - SZ*0.55;
-      cg.appendChild(el('rect',{x:x-0.25, y:y-0.25, width:SZ+0.5, height:SZ+0.5, rx:0.9,
-        fill:'#fff', 'fill-opacity':0.85}));        // まわりを白く抜いて見やすく
-      cg.appendChild(el('rect',{x, y, width:SZ, height:SZ, rx:0.7,
-        fill: checked ? '#3b86c4' : '#ffffff',
+      // マスの中に、上から重ねて置く（用紙の中身は動かさない）
+      const cw = W(t.c);
+      const sz = Math.min(SZ, cw - 0.4, RH - 0.3);
+      if (sz < 0.8) return;
+      const x = X(t.c) + Math.min(0.3, (cw - sz)/2);
+      const y = y0 + t.r*RH + (RH - sz)/2;
+      cg.appendChild(el('rect',{x, y, width:sz, height:sz, rx:0.7,
+        fill: checked ? '#3b86c4' : '#ffffff', 'fill-opacity': checked ? 0.95 : 0.9,
         stroke: checked ? '#2c6ea8' : '#8d9aa7', 'stroke-width':0.3}));
       if (checked){
-        cg.appendChild(el('path',{d:'M'+(x+SZ*0.22)+' '+(y+SZ*0.52)+'L'+(x+SZ*0.42)+' '+(y+SZ*0.76)+
-          'L'+(x+SZ*0.8)+' '+(y+SZ*0.24), fill:'none', stroke:'#fff', 'stroke-width':SZ*0.17,
+        cg.appendChild(el('path',{d:'M'+(x+sz*0.22)+' '+(y+sz*0.52)+'L'+(x+sz*0.42)+' '+(y+sz*0.76)+
+          'L'+(x+sz*0.8)+' '+(y+sz*0.24), fill:'none', stroke:'#fff', 'stroke-width':sz*0.17,
           'stroke-linecap':'round','stroke-linejoin':'round'}));
       }
     });
