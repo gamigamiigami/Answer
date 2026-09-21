@@ -744,8 +744,18 @@ function placeNote(d, obj){
 
 // 答えをどのマスに入れるか決める。
 // 始終の欄は「始めのぶん」「終わりのぶん」に分けて入れる（区切りは空白・／・｜）
-// 欄ごとの文字の大きさ（％）
-const textScaleOf = o => Math.max(40, Math.min(200, Number(o && o.textScale) || 100)) / 100;
+// 欄ごとの文字の大きさ（pt。Excel と同じ単位。ふつうは11pt）
+const BASE_PT = 11;
+const SIZE_CHOICES = [6,7,8,9,10,11,12,14,16,18,20,24];
+function textPtOf(o){
+  if (!o) return BASE_PT;
+  const pt = Number(o.textPt);
+  if (pt >= 4 && pt <= 40) return pt;
+  const sc = Number(o.textScale);                       // 古いファイル（％）
+  if (sc >= 40 && sc <= 200) return BASE_PT * sc / 100;
+  return BASE_PT;
+}
+const textScaleOf = o => textPtOf(o) / BASE_PT;
 
 function answerPlan(d, f, text){
   const t = String(text == null ? '' : text);
@@ -2581,6 +2591,8 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyI'){ ev.preventDefault(); return ev.shiftKey ? insertLine() : insertCells(); }
   if (ev.code === 'KeyK'){ ev.preventDefault(); return ev.shiftKey ? deleteLine() : deleteCells(); }
   if (ev.code === 'KeyW'){ ev.preventDefault(); return setColWidth(); }
+  if (ev.code === 'KeyG'){ ev.preventDefault(); return openTextSize(); }
+  if (ev.code === 'KeyS'){ ev.preventDefault(); return bulkPoints(); }
   if (ev.code === 'KeyT'){ ev.preventDefault(); return togglePickKind(); }
   if (ev.code === 'KeyZ'){ ev.preventDefault(); return toggleZen(); }
   if (ev.key === 'F1' || (ev.key === '?' )){ ev.preventDefault(); return openHelp(); }
@@ -2672,14 +2684,14 @@ async function openFieldPopup(){
       {key:'aspect',label:'観点',type:'seg',value:'知技',
        options:[['知技','知・技'],['思判表','思・判・表']]},
       {key:'complete',label:'太線にする',type:'check',value:false},
-      {key:'textScale',label:'文字の大きさ',type:'number',value:100,min:40,hint:'％。100がふつうです'}
+      {key:'textPt',label:'文字の大きさ',type:'number',value:BASE_PT,min:4,hint:'pt。11がふつうです'}
     ]);
     if (!v) return;
     snapshot();
     const pt = num(v.points,0,0);
-    const ts = num(v.textScale, 40, 100);
+    const ts = num(v.textPt, 4, BASE_PT);
     targets.forEach(o => {
-      o.points = pt; o.aspect = v.aspect; o.textScale = ts;
+      o.points = pt; o.aspect = v.aspect; o.textPt = ts; delete o.textScale;
       if (o.rects) o.complete = !!v.complete;
       else o.style = v.complete ? 'medium' : 'thin';
     });
@@ -2699,8 +2711,8 @@ async function openFieldPopup(){
     {key:'complete',label:'完答（太枠）',type:'check',value:f.complete}
   ];
   if (f.type===5) rows.push({key:'exact',label:'8割ライン',type:'check',value:!f.exact});
-  rows.push({key:'textScale',label:'文字の大きさ',type:'number',value:Math.round(textScaleOf(f)*100),min:40,
-             hint:'％。100がふつうです（入りきらないときは自動で小さくなります）'});
+  rows.push({key:'textPt',label:'文字の大きさ',type:'number',value:textPtOf(f),min:4,
+             hint:'pt（Excelと同じ）。11がふつうです。入りきらないときは自動で小さくなります'});
   rows.push({key:'note',label:'欄に入れる文字',type:'text',value:f.note||'',hint:'例：から。　x＝　cm²'});
   rows.push({key:'notePos',label:'その位置',type:'seg',value:f.notePos||'end',
              options:[['start','先頭'],['center','中央'],['end','お尻']]});
@@ -2710,7 +2722,7 @@ async function openFieldPopup(){
   f.points = num(v.points,0,0);
   f.aspect = v.aspect;
   f.complete = !!v.complete;
-  f.textScale = num(v.textScale, 40, 100);
+  f.textPt = num(v.textPt, 4, BASE_PT); delete f.textScale;
   if (f.type===5) f.exact = !v.exact;
   const total = charCells(doc, f).length;
   const note = v.note || '';
@@ -2726,8 +2738,8 @@ async function openFramePopup(v0){
     {key:'points',label:'配点',type:'number',value:v0.points||0,min:0},
     {key:'aspect',label:'観点',type:'seg',value:v0.aspect||'知技',
      options:[['知技','知・技'],['思判表','思・判・表']]},
-    {key:'textScale',label:'文字の大きさ',type:'number',value:Math.round(textScaleOf(v0)*100),min:40,
-     hint:'％。100がふつうです'},
+    {key:'textPt',label:'文字の大きさ',type:'number',value:textPtOf(v0),min:4,
+     hint:'pt（Excelと同じ）。11がふつうです'},
     {key:'note',label:'枠に入れる文字',type:'text',value:v0.note||'',hint:'例：証明　求め方'},
     {key:'notePos',label:'その位置',type:'seg',value:v0.notePos||'end',
      options:[['start','先頭'],['center','中央'],['end','お尻']]}
@@ -2735,7 +2747,7 @@ async function openFramePopup(v0){
   if (!v) return;
   snapshot();
   v0.points = num(v.points,0,0); v0.aspect = v.aspect;
-  v0.textScale = num(v.textScale, 40, 100);
+  v0.textPt = num(v.textPt, 4, BASE_PT); delete v0.textScale;
   v0.note = v.note || ''; v0.notePos = v.notePos || 'end';
   render();
   toast('シンプル枠に'+v0.points+'点を入れました');
@@ -3324,6 +3336,88 @@ function applyUiSize(){
   if (doc){ fitPreview(PAGE[doc.paper.orientation]); render(); }
 }
 
+/* まとめて直すときの相手（☑ → 選んだ範囲 → カーソルの下 の順にさがす） */
+function targetBoxes(){
+  const fromChecks = ui.targets.filter(t => t.k==='a').map(t => boxById(t.id)).filter(Boolean);
+  if (fromChecks.length) return fromChecks;
+  const inArea = (ui.sel || ui.extra.length) ? fieldsInArea() : [];
+  if (inArea.length) return inArea;
+  const f = fieldAt(ui.cur.c, ui.cur.r);
+  if (f) return [f];
+  const v = decorationAt(ui.cur.c, ui.cur.r);
+  return v ? [decoBox(v)] : [];
+}
+// 枠は包んだ写しなので、本体に書き戻す
+const realBox = o => (o && o.deco) ? o.deco : o;
+
+/* 文字の大きさをすぐ変える（Excel の文字サイズのように） */
+function openTextSize(){
+  if (!needSheet('文字の大きさを変えられません')) return;
+  const list = targetBoxes();
+  if (!list.length) return toast('欄を選ぶか、欄の上にカーソルを置いてください');
+  const now = textPtOf(list[0]);
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = '<div class="card" style="max-width:420px"><h3>文字の大きさ（'+list.length+'か所）</h3>'+
+    '<p class="desc">Excel と同じ pt です。11 がふつうの大きさ。</p>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">'+
+    SIZE_CHOICES.map(n => '<button class="tb'+(n===now?' primary':'')+'" data-pt="'+n+'" '+
+      'style="min-width:46px">'+n+'</button>').join('')+'</div>'+
+    '<div class="row"><label>自由に決める</label>'+
+    '<input type="number" data-k="pt" value="'+now+'" min="4" max="40" step="0.5"> pt</div>'+
+    '<div class="modal-actions"><button class="tb" data-act="cancel">やめる</button>'+
+    '<button class="tb primary" data-act="ok">決定</button></div></div>';
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); document.body.focus(); };
+  const apply = pt => {
+    const v = Math.max(4, Math.min(40, Number(pt) || BASE_PT));
+    snapshot();
+    list.forEach(o => { const t = realBox(o); t.textPt = v; delete t.textScale; });
+    close(); render();
+    toast(list.length+'か所の文字を '+v+'pt にしました');
+  };
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b){ if (e.target===wrap) close(); return; }
+    if (b.dataset.pt) return apply(b.dataset.pt);
+    if (b.dataset.act==='ok') return apply(wrap.querySelector('input[data-k="pt"]').value);
+    close();
+  });
+  wrap.addEventListener('keydown', e => { e.stopPropagation();
+    if (e.key==='Escape'){ e.preventDefault(); close(); }
+    if (e.key==='Enter'){ e.preventDefault(); apply(wrap.querySelector('input[data-k="pt"]').value); } });
+  const inp = wrap.querySelector('input[data-k="pt"]'); inp.focus(); inp.select();
+}
+
+/* 配点をまとめて入れる（1行に1欄。一覧でまとめて入力と同じ形） */
+async function bulkPoints(){
+  if (!needSheet('配点を入れられません')) return;
+  const list = targetBoxes();
+  if (!list.length) return toast('☑ を付けるか、範囲を選んでから押してください');
+  const v = await ask(list.length+'か所の配点をまとめて入れる', [
+    {key:'t', type:'area', rows:Math.min(16, Math.max(6, list.length)),
+     value:list.map(o => String(Number(o.points) || 0)).join('\n'),
+     hint:'1行に1欄ぶん、読む順（'+(doc.paper.writing==='vertical' ? '右の列から上→下' : '上の行から左→右')+
+          '）に点数を入れてください。\n同じ点にするなら1行目だけ入れればOK（下は同じ点になります）。決定は Ctrl+Enter。'},
+    {key:'aspect',label:'観点',type:'seg',value:'keep',
+     options:[['keep','変えない'],['知技','知・技'],['思判表','思・判・表']]}
+  ]);
+  if (!v) return;
+  const lines = String(v.t || '').replace(/\r/g,'').split('\n');
+  const only1 = lines.filter(x => x.trim() !== '').length === 1;
+  snapshot();
+  list.forEach((o,i) => {
+    const raw = only1 ? lines.find(x => x.trim() !== '') : lines[i];
+    const n = Math.max(0, Math.round(Number(String(raw == null ? '' : raw).trim()) || 0));
+    const t = realBox(o);
+    t.points = n;
+    if (v.aspect !== 'keep') t.aspect = v.aspect;
+  });
+  render();
+  const tot = scoreTotals(doc);
+  toast(list.length+'か所に配点を入れました（合計'+tot['合計']+'点）');
+}
+
 /* 使い方（この画面だけで分かるように） */
 function openHelp(){
   const ord = fieldOrder();
@@ -3703,6 +3797,8 @@ function buildTools(){
     tool('t-edit','文字','Enter','文字・答えを入れる')+
     tool('t-prop','欄の設定','Space','配点・観点・文字の大きさなど')+
     tool('t-width','列の幅','W','選んだ列の幅を変える')+
+    tool('t-size','文字の大きさ','G','選んだ欄の文字を○ptにする')+
+    tool('t-pts','配点をまとめて','S','1行に1欄ぶん、点数をまとめて入れる')+
     tool('t-pick','セル選択','Shift+Space','離れたマスを1つずつ選ぶ')+
     tool('t-pick2','☑ 対象：番号のマス','T','☑ を付ける相手を切り替える', true)+
     tool('t-bulk','一覧でまとめて答えを入れる','Shift+Enter','1行1問で貼り付ける', true);
@@ -3719,6 +3815,8 @@ function buildTools(){
     bulkAnswers(list);
   };
   $('#t-width').onclick = setColWidth;
+  $('#t-size').onclick = openTextSize;
+  $('#t-pts').onclick = bulkPoints;
   $('#t-cut').onclick   = cutCells;
   $('#t-paste').onclick = pasteCells;
   $('#t-del').onclick   = clearSelection;
