@@ -156,6 +156,16 @@ button{font:inherit;color:inherit}
 .modal .desc{font-size:12.5px;color:var(--sub);line-height:1.8;margin:0 0 14px}
 .modal .desc b{color:var(--ink)}
 
+/* 画面の文字を大きめにする（設定） */
+body.ui-lg{font-size:15px}
+body.ui-lg #side{width:280px;padding:9px}
+body.ui-lg #side h2{font-size:11.5px}
+body.ui-lg .tool .nm{font-size:11.5px}
+body.ui-lg .tool .k{font-size:10px}
+body.ui-lg .tb{font-size:14px;padding:5px 10px}
+body.ui-lg #status{font-size:13px}
+body.ui-lg .tab{font-size:13.5px;padding:7px 3px}
+
 /* 用紙だけを大きく見るモード（Z） */
 body.zen #topbar, body.zen #side, body.zen #status{display:none}
 body.zen #preview{padding:4px}
@@ -220,6 +230,7 @@ body.zen #zen-out{display:block}
     <button class="tb" id="btn-pdf">PDF（確認用）</button>
     <button class="tb" id="btn-save">作業ファイルを保存</button>
     <span class="zoom"><button class="tb" id="btn-zo" title="縮小（−キー）">−</button><button class="tb" id="btn-zfit" title="画面に合わせる（Shift+0）"><span id="zoom-label">画面に合わせる</span></button><button class="tb" id="btn-zi" title="拡大（＋キー）">＋</button></span>
+    <button class="tb" id="btn-help" title="使い方（F1）">？</button>
     <button class="tb" id="btn-zen" title="用紙だけを大きく表示（Z）">⤢ 大きく</button>
     <button class="tb" id="btn-settings" title="設定">⚙</button>
   </div>
@@ -540,7 +551,7 @@ function contentOrigin(d){
 const FIELD_DEFS = {
   1:{ name:'シンプル枠', hint:'選んだ範囲に罫線を引く（解答欄ではなく枠だけ）' },
   2:{ name:'記号用',    hint:'記号1文字の解答欄（セル3つぶんの大きさ）' },
-  3:{ name:'始終',      hint:'最初と最後の○字ずつを書き抜く解答欄（始・終の見出しつき・太線）' },
+  3:{ name:'始終',      hint:'最初と最後の○字ずつを書き抜く解答欄（初め・終わりの見出しつき・太線）' },
   4:{ name:'語句',      hint:'2〜5文字の語句を書く解答欄（8割ラインなし）' },
   5:{ name:'記述',      hint:'字数を決めた記述の解答欄（8割ラインを選べます）' },
   6:{ name:'長方形',    hint:'縦×横のマス数で四角い解答欄' },
@@ -1196,6 +1207,20 @@ function render(){
     svg.appendChild(cg);
   }
 
+  // 何も置いていないときの案内（印刷には出ない）
+  if (!doc.fields.length && !doc.decorations.length && !Object.keys(doc.texts).length
+      && !doc.drawings.length){
+    const cx = x0 + gw/2, cy = y0 + gh/2;
+    const hint = el('g',{'class':'guide','text-anchor':'middle',
+      'font-family':'"Yu Gothic","Yu Gothic UI","Meiryo",sans-serif', fill:'#9aa7b4'});
+    const line = (t, dy, size) => { const e = el('text',{x:cx, y:cy+dy, 'font-size':size});
+      e.textContent = t; hint.appendChild(e); };
+    line('数字キー（または左のボタン）で解答欄を置きます', -4, 5);
+    line('範囲をドラッグで選んでから押すと、まとめて置けます', 3, 4.2);
+    line('困ったら右上の ？ を押してください', 10, 4.2);
+    svg.appendChild(hint);
+  }
+
   // カーソル
   const cu = el('rect',{x:X(ui.cur.c), y:y0+ui.cur.r*RH, width:W(ui.cur.c), height:RH, 'class':'guide',
     fill:'none', stroke: ui.mode==='input' ? '#12a05a' : '#1a6fd4', 'stroke-width':0.45});
@@ -1347,30 +1372,41 @@ async function placeField(type){
   if (type === 1) return simpleFrame();          // シンプル枠は枠だけ引く
   const vertical = doc.paper.writing==='vertical';
   const opt = {};
+  // 小窓のいちばん下に付ける「いくつ置くか」
+  const manyRow = () => ({ key:'many', label:'いくつ置くか', type:'number',
+    value: ui.sel ? 0 : 1, min:0,
+    hint: ui.sel ? '0 なら、選んだ範囲に入るだけ並べます' : '続けていくつ置くか' });
+  let many = ui.sel ? 0 : 1;
 
   if (type===8){
     const v = await ask('漢字の解答欄', [
       {key:'n',label:'マス数',type:'number',value:LAST.kanji,min:1,
-       hint:'区切りの点線は引きません。置いた列は自動で1.3倍の幅になります'}
+       hint:'区切りの点線は引きません。置いた列は自動で1.3倍の幅になります'}, manyRow()
     ]); if(!v) return; opt.n=num(v.n,1,LAST.kanji); LAST.kanji=opt.n; opt.exact=true;
+    many = num(v.many, 0, many);
   }
   if (type===4){
     const v = await ask('語句の解答欄', [
-      {key:'n',label:'字数',type:'number',value:LAST.word,min:1,hint:'2〜5文字くらいの語句むけ。8割ラインは引きません'}
+      {key:'n',label:'字数',type:'number',value:LAST.word,min:1,hint:'2〜5文字くらいの語句むけ。8割ラインは引きません'},
+      manyRow()
     ]); if(!v) return; opt.n=num(v.n,1,LAST.word); LAST.word=opt.n; opt.exact=true;
+    many = num(v.many, 0, many);
   }
   if (type===5){
     const v = await ask('記述の解答欄', [
       {key:'n',label:'字数',type:'number',value:LAST.desc,min:1},
-      {key:'mode',label:'条件',type:'seg',value:LAST.descMode,options:[['within','以内（8割ライン）'],['exact','ちょうど']]}
+      {key:'mode',label:'条件',type:'seg',value:LAST.descMode,options:[['within','以内（8割ライン）'],['exact','ちょうど']]},
+      manyRow()
     ]); if(!v) return; opt.n=num(v.n,1,LAST.desc); LAST.desc=opt.n;
     opt.exact=(v.mode==='exact'); LAST.descMode=v.mode;
+    many = num(v.many, 0, many);
   }
   if (type===6){
     const v = await ask('長方形の解答欄', [
       {key:'tate',label:'縦（マス）',type:'number',value:3,min:1},
-      {key:'yoko',label:'横（マス）',type:'number',value:4,min:1}
+      {key:'yoko',label:'横（マス）',type:'number',value:4,min:1}, manyRow()
     ]); if(!v) return; opt.tate=num(v.tate,1,3); opt.yoko=num(v.yoko,1,4);
+    many = num(v.many, 0, many);
   }
   if (type===7){
     const v = await ask('xyグラフ', [
@@ -1381,8 +1417,9 @@ async function placeField(type){
   if (type===EXTRACT_TYPE){
     const v = await ask('始終の解答欄', [
       {key:'n',label:'最初と最後の字数',type:'number',value:LAST.ext,min:1,
-       hint:'「始」○字・「終」○字 の順に並べます。字数は同じです'}
+       hint:'「初め」○字・「終わり」○字 の順に並べます。字数は同じです'}, manyRow()
     ]); if(!v) return; opt.n=num(v.n,1,LAST.ext); LAST.ext=opt.n;
+    many = num(v.many, 0, many);
   }
 
   // カーソル位置は「番号欄」。解答欄はその次から始まる（お手本と同じ並び）
@@ -1441,7 +1478,7 @@ async function placeField(type){
                          r.c + r.w <= area.c + area.w && r.r + r.h <= area.r + area.h);
   };
   if (area){ ui.cur = { c: doc.paper.writing==='vertical' ? area.c + area.w - 1 : area.c, r: area.r }; }
-  const want = area ? 200 : 1;
+  const want = many > 0 ? many : (area ? 200 : 1);
   snapshot();
   let made = 0, wrapped = false;
   for (let k=0; k<want; k++){
@@ -1933,17 +1970,68 @@ const STAMPS = {
   A:{ name:'ア',      fmt:(n)=> kana(n), size:14 }
 };
 
+// すでに振ってある番号の続きを返す
+function nextStart(key){
+  const kIdx = t => KANJI.indexOf(t) + 1;
+  let max = 0;
+  for (const k in doc.texts){
+    const t = String((doc.texts[k] || {}).t || '');
+    if (!t) continue;
+    let n = 0;
+    if (key==='D') n = /^\d+$/.test(t) ? +t : kIdx(t);
+    else if (key==='Q'){ const m = /^問(.+)$/.exec(t); if (m) n = /^\d+$/.test(m[1]) ? +m[1] : kIdx(m[1]); }
+    else if (key==='P'){ const m = /^[(（](\d+)[)）]$/.exec(t); if (m) n = +m[1]; }
+    else if (key==='M') n = MARU.indexOf(t) + 1;
+    else if (key==='A') n = KANA.indexOf(t) + 1;
+    if (n > max) max = n;
+  }
+  return max + 1;
+}
+
 async function stamp(key){
   if (!needSheet('番号を振れません')) return;
   const def = STAMPS[key];
   const vertical0 = doc.paper.writing==='vertical';
+  // 大問は、☑を付けた欄が使っている幅いっぱいの見出しとして、そのすぐ上（左）に置く
+  if (key === 'D' && ui.targets.length > 1){
+    const rs = [];
+    ui.targets.forEach(t => {
+      if (t.k === 'a'){ const o = boxById(t.id);
+        if (o){ o.rects.forEach(r => rs.push(r)); if (o.label) rs.push(o.label); } }
+      else rs.push({ c:t.c, r:t.r, w:1, h:1 });
+    });
+    if (rs.length){
+      const c0 = Math.min(...rs.map(r=>r.c)), c1 = Math.max(...rs.map(r=>r.c+r.w));
+      const r0 = Math.min(...rs.map(r=>r.r)), r1 = Math.max(...rs.map(r=>r.r+r.h));
+      const head = vertical0 ? { c:c0, r:r0-1, w:c1-c0, h:1 }
+                             : { c:c0-1, r:r0, w:1, h:r1-r0 };
+      if (head.c < 0 || head.r < 0) return toast('⚠ 大問の見出しを置く場所がありません（上を1行あけてください）');
+      const used = occupied(doc);
+      let busy = false;
+      for (let i=0;i<head.w;i++) for (let j=0;j<head.h;j++)
+        if (used.has((head.c+i)+','+(head.r+j))) busy = true;
+      if (busy) return toast('⚠ 大問の見出しを置く場所がふさがっています');
+      const v = await ask('大問の見出しを付けます', [
+        {key:'start',label:'大問の番号',type:'number',value:nextStart('D'),min:1,
+         hint:'☑を付けた欄の幅いっぱいの枠にまとめます'}]);
+      if (!v) return;
+      snapshot();
+      for (let i=0;i<head.w;i++) for (let j=0;j<head.h;j++)
+        delete doc.texts[(head.c+i)+','+(head.r+j)];
+      doc.texts[head.c+','+head.r] = { t:def.fmt(num(v.start,1,1), doc.paper.numberStyle),
+        size:def.size, bold:true, box:true, span: vertical0 ? head.w : Math.ceil(head.h/CHAR_ROWS) };
+      render();
+      return toast('大問の見出しを付けました');
+    }
+  }
   // 大問を「幅いっぱいの枠」にまとめるときは、今まで通り選んだ範囲で決める
   const wideBlock = (key==='D' && ui.sel && !ui.extra.length &&
     (vertical0 ? (ui.sel.h===1 && ui.sel.w>1) : (ui.sel.w===1 && ui.sel.h>1)));
   // ☑が付いていれば、その順に振る
   if (!wideBlock && ui.targets.length){
     const v = await ask(def.name+'を振ります（☑ '+ui.targets.length+'か所）',
-      [{key:'start',label:'開始番号',type:'number',value:1,min:1}]);
+      [{key:'start',label:'開始番号',type:'number',value:nextStart(key),min:1,
+        hint:'前の続きの番号を入れてあります'}]);
     if (!v) return;
     const st = num(v.start,1,1);
     snapshot();
@@ -1977,7 +2065,8 @@ async function stamp(key){
   }
 
   const v = await ask(def.name+'を振ります（'+cells.length+'か所）',
-    [{key:'start',label:'開始番号',type:'number',value:1,min:1}]);
+    [{key:'start',label:'開始番号',type:'number',value:nextStart(key),min:1,
+      hint:'前の続きの番号を入れてあります'}]);
   if (!v) return;
   const start = num(v.start,1,1);
   // 読む順に並べ替える（縦書きは右の列から、各列は上から）
@@ -2501,6 +2590,7 @@ document.addEventListener('keydown', ev => {
   if (ev.code === 'KeyW'){ ev.preventDefault(); return setColWidth(); }
   if (ev.code === 'KeyT'){ ev.preventDefault(); return togglePickKind(); }
   if (ev.code === 'KeyZ'){ ev.preventDefault(); return toggleZen(); }
+  if (ev.key === 'F1' || (ev.key === '?' )){ ev.preventDefault(); return openHelp(); }
   if (ev.code === 'Minus'){ ev.preventDefault(); return setZoom(-1); }
   if (ev.code === 'Equal' || (ev.code === 'Semicolon' && ev.shiftKey)){ ev.preventDefault(); return setZoom(1); }
 
@@ -3235,6 +3325,57 @@ function ask(title, rows){
   });
 }
 
+// 画面の文字の大きさを反映する
+function applyUiSize(){
+  document.body.classList.toggle('ui-lg', !!options.uiLarge);
+  if (doc){ fitPreview(PAGE[doc.paper.orientation]); render(); }
+}
+
+/* 使い方（この画面だけで分かるように） */
+function openHelp(){
+  const ord = fieldOrder();
+  const keyOf = i => (i===9 ? '0' : String(i+1));
+  const row = (k, t) => '<tr><td style="white-space:nowrap;padding:2px 10px 2px 0;font-weight:700">'+
+    k+'</td><td style="padding:2px 0">'+t+'</td></tr>';
+  const table = rows => '<table style="border-collapse:collapse;font-size:13px;line-height:1.7">'+rows+'</table>';
+  const h2 = t => '<h4 style="margin:16px 0 6px;font-size:13.5px">'+t+'</h4>';
+  const wrap = document.createElement('div');
+  wrap.className = 'modal';
+  wrap.innerHTML = '<div class="card" style="max-width:640px">'+
+    '<h3>てすとも君の使い方</h3>'+
+    '<p class="desc"><b>①欄を置く → ②番号を振る → ③模範解答を入れる → ④Excel出力</b><br>'+
+    'マウスでも、キーボードだけでも作れます。困ったらこの画面（？ か F1）を開いてください。</p>'+
+    h2('① 欄を置く（数字キー・左のボタン）')+
+    table(ord.map((t,i) => row(keyOf(i), fieldName(t)+
+      '<span style="color:var(--sub)">　'+FIELD_DEFS[t].hint+'</span>')).join('')+
+      row('Shift+1 / 2', '罫線を 普通線 ／ 太線 にする')+
+      row('範囲を選んでから', '入るだけまとめて置きます（ドラッグ、または Shift+↑↓←→）'))+
+    h2('② 番号を振る')+
+    table(Object.keys(STAMPS).map(k => row(k, STAMPS[k].name)).join('')+
+      row('☑', '範囲を選ぶと☑が付きます。クリックで付け外し、右クリックでその場所を追加、T で対象を切り替え'))+
+    h2('③ 文字・模範解答を入れる')+
+    table(row('Enter', '☑を付けた順に、用紙の上で続けて入力（Enter で次へ・Esc でやめる）')+
+      row('Shift+Enter', '一覧でまとめて入力（模範解答タブ・1行に1問）')+
+      row('Space', '欄の設定（配点・観点・文字の大きさ・欄に入れる文字）'))+
+    h2('④ 直す・動かす')+
+    table(row('I / Shift+I', '挿入')+row('K / Shift+K', '削除（詰める）')+
+      row('Ctrl+X → Ctrl+V', '欄をまるごと移動')+row('Delete', '選んだところを消す')+
+      row('Ctrl+Z / Ctrl+Y', '戻す ／ やり直す')+row('W', '列の幅を変える'))+
+    h2('表示・保存')+
+    table(row('Z', '用紙だけを大きく表示')+row('＋ / − / Shift+0', '拡大 ／ 縮小 ／ 画面に合わせる')+
+      row('Ctrl+A', 'ぜんぶ選ぶ')+
+      row('Excel出力', 'これが正本です。PDFは確認用')+
+      row('作業ファイルを保存', 'あとで続きから直せます（.json）'))+
+    '<div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); document.body.focus(); };
+  wrap.addEventListener('click', e => { if (e.target.closest('button') || e.target===wrap) close(); });
+  wrap.addEventListener('keydown', e => { e.stopPropagation();
+    if (e.key==='Escape' || e.key==='Enter'){ e.preventDefault(); close(); } });
+  const card = wrap.querySelector('.card');
+  card.tabIndex = -1; card.focus(); card.scrollTop = 0;   // 上から読めるように
+}
+
 /* 用紙だけを大きく見る（道具と帯を隠す） */
 function toggleZen(){
   const on = document.body.classList.toggle('zen');
@@ -3326,6 +3467,8 @@ async function openSettings(){
     {key:'nameOrder',label:'氏名欄',type:'seg',value:p.nameOrder,options:[['full','○年○組○番'],['short','○組○番']]},
     {key:'margin',label:'余白',type:'seg',value:String(p.marginX),options:[['8','狭い 8mm'],['10','10mm'],['12','12mm']]},
     {key:'showScoreBox',label:'観点別得点枠',type:'check',value:p.showScoreBox},
+    {key:'uiLarge',label:'画面の文字',type:'seg',value:options.uiLarge?'lg':'md',
+      options:[['md','ふつう'],['lg','大きめ']],hint:'左のボタンや帯の文字の大きさです（用紙には影響しません）'},
     {key:'backupAnswers',label:'一時保存に模範解答も含める',type:'check',value:options.backupAnswers,
       hint:'共用PCでは外したままを推奨します'},
     {key:'clearOnExit',label:'閉じるときに一時保存を消す',type:'check',value:options.clearOnExit}
@@ -3356,6 +3499,8 @@ async function openSettings(){
   refitColumns();                       // 列幅を変えていても1枚に収める
   ui.cur = { c: Math.min(ui.cur.c, doc.grid.cols-1), r: Math.min(ui.cur.r, doc.grid.rows-1) };
   options.backupAnswers = !!v.backupAnswers; options.clearOnExit = !!v.clearOnExit;
+  options.uiLarge = (v.uiLarge === 'lg');
+  applyUiSize();
   saveOptions();
   render();
 }
@@ -3624,6 +3769,7 @@ function updateInsertLabels(){
    22. 起動
    --------------------------------------------------------------- */
 function startApp(){
+  applyUiSize();
   $('#start').style.display = 'none';
   $('#app').classList.add('on');
   ui.mode='place'; ui.tab='sheet'; ui.sel=null; ui.extra=[];
@@ -3673,6 +3819,7 @@ $('#btn-pdf').onclick  = printSheet;
 $('#btn-save').onclick = saveWork;
 $('#btn-settings').onclick = openSettings;
 $('#btn-zen').onclick = toggleZen;
+$('#btn-help').onclick = openHelp;
 $('#zen-out').onclick = toggleZen;
 $('#btn-zo').onclick   = ()=>setZoom(-1);
 $('#btn-zi').onclick   = ()=>setZoom(1);
