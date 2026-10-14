@@ -30,7 +30,41 @@ def inspect(directory, name):
         values = [normalize('NFKC', str(cell.value)) for row in sheet for cell in row if cell.value is not None]
         assert expected_total in values, (name, sheet.title, expected_total)
     vertical = work['paper']['writing'] == 'vertical'
+    headings = []
+    for key, text in work['texts'].items():
+        if not text.get('centerAcross'):
+            continue
+        c, r = map(int, key.split(','))
+        span = text['span']
+        middle = (span - 1) // 2
+        col, row = (c + middle + 1, r + 1) if vertical else (c + 1, r + middle * 2 + 1)
+        headings.append((c, r, span))
+        for sheet in book:
+            cell = sheet.cell(row, col)
+            assert cell.value == text['t'], (name, sheet.title, 'heading center', key)
+            assert cell.alignment.horizontal == cell.alignment.vertical == 'center'
+            if not vertical or span % 2 == 0:
+                width = 2 if vertical else 1
+                height = 1 if vertical else (4 if span % 2 == 0 else 2)
+                assert any(m.min_col == col and m.min_row == row and m.max_col == col + width - 1
+                           and m.max_row == row + height - 1 for m in sheet.merged_cells.ranges)
+    for previous, current in zip(headings, headings[1:]):
+        pc, pr, ps = previous
+        cc, cr, cs = current
+        assert cc + cs == pc - 1 if vertical else cr == pr + ps * 2 + 2
+        for sheet in book:
+            gap = (sheet.cell(r + 1, pc) for r in range(work['grid']['rows'])) if vertical else (
+                sheet.cell(r + 1, c + 1) for r in range(pr + ps * 2, cr) for c in range(work['grid']['cols']))
+            for cell in gap:
+                assert cell.value is None
+                assert all(getattr(cell.border, side).style is None for side in ('top', 'bottom', 'left', 'right'))
     for field in work['fields']:
+        label = field.get('label')
+        if label:
+            expected_label = work['texts'][f"{label['c']},{label['r']}"]['t']
+            for sheet in book:
+                actual_label = sheet.cell(label['r'] + 1, label['c'] + 1).value
+                assert normalize('NFKC', str(actual_label)) == normalize('NFKC', expected_label)
         expected = work['answers'].get(field['id'], '')
         kind = field['auto']['kind']
         answer_cells = []
@@ -81,10 +115,10 @@ def inspect(directory, name):
             c, r = cells[field['chars'] * 8 // 10]
             border = blank.cell(r + 1, c + 1).border
             assert (border.top if vertical else border.left).style == 'mediumDashed'
-    print(f'PASS: {name} Excel: complete answers, scoring, fonts, borders, 80% line, A4 settings and non-overlapping merges')
+    print(f'PASS: {name} Excel: answers, scoring, fonts, borders, 80% line, A4, heading centers, section gaps and question labels')
 
 
 if __name__ == '__main__':
     directory = Path(sys.argv[1])
-    for name in ('vertical', 'horizontal', 'kokugo'):
+    for name in ('vertical', 'horizontal', 'kokugo', 'sections'):
         inspect(directory, name)

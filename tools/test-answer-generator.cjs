@@ -57,6 +57,31 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(positions.h[1].label.c,positions.h[0].r.c+positions.h[0].r.w);
     assert.equal(positions.h[1].label.r,positions.h[0].label.r);
     pass('Questions in the same section remain consecutive in both writing directions');
+    for(const subject of ['国語','数学']){
+      for(const span of [2,3]){
+        const layout=await page.evaluate(({subject,span})=>{
+          const vertical=subject==='国語';
+          const d=buildAutoDocument(parseAutoAnswers('1\n1,,2,思,解答欄のみ,'+(vertical?span+'×2':'2×'+span)+'\n2\n1,ア,2,知'),subject);
+          const headings=Object.entries(d.texts).filter(([,v])=>v.centerAcross).map(([k,v])=>({c:+k.split(',')[0],r:+k.split(',')[1],...v}));
+          return {headings,cells:[...buildCells(d,false).values()],fields:d.fields,unit:CHAR_ROWS,rows:d.grid.rows,cols:d.grid.cols};
+        },{subject,span});
+        const [a,b]=layout.headings; assert.equal(a.span,span);
+        const c=subject==='国語'?a.c+Math.floor((span-1)/2):a.c;
+        const r=subject==='国語'?a.r:a.r+Math.floor((span-1)/2)*layout.unit;
+        const cell=layout.cells.find(x=>x.c===c && x.r===r);
+        assert.equal(cell.t,'一'); assert.equal(cell.align,'center');
+        if(subject==='国語'){
+          assert.equal(b.c+b.span,a.c-1);
+          for(const x of layout.cells.filter(x=>x.c===a.c-1)) assert.ok(!x.t && Object.keys(x.b).length===0);
+          if(span===2) assert.deepEqual(cell.mg,{w:2,h:1});
+        } else {
+          assert.equal(b.r,a.r+(span+1)*layout.unit);
+          for(const x of layout.cells.filter(x=>x.r>=a.r+span*layout.unit && x.r<b.r)) assert.ok(!x.t && Object.keys(x.b).length===0);
+          assert.deepEqual(cell.mg,{w:1,h:layout.unit*(span===2?2:1)});
+        }
+      }
+    }
+    pass('Section boundaries leave one blank column or handwriting row; headings center across odd and even spans');
     for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','グラフ 40×40']){
       const result=await page.evaluate(source=>{try{buildAutoDocument(parseAutoAnswers(source),'国語');return null;}catch(e){return e.message;}},source);
       assert.ok(result,source);
@@ -181,11 +206,53 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await kokugo.keyboard.press('Control+z');
     assert.deepEqual(await kokugo.evaluate(()=>JSON.parse(JSON.stringify(doc))),edited);
     pass('Generated fields use existing scoring, answer entry and drawing tools; replacement undo restores all edits');
+    const hierarchy=await context.newPage(); await hierarchy.goto(url); await hierarchy.click('#btn-from-answers');
+    await hierarchy.fill('#auto-source','1\n1,(1),ア,2,知,解答欄のみ,3×2\n1,(2),イ,2,知\n2\n1,ウ,2,知,解答欄のみ,2×2');
+    await hierarchy.click('#auto-parse');
+    assert.equal(await hierarchy.locator('[data-row="0"] [data-k="label"]').inputValue(),'問一');
+    assert.equal(await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').inputValue(),'(1)');
+    await hierarchy.locator('[data-row="1"] [data-k="label"]').selectOption('問二');
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/2，\(2\)，イ/);
+    await hierarchy.locator('[data-row="1"] [data-k="label"]').selectOption('問一');
+    await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').selectOption('(A)');
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(A\)，ア/);
+    await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').selectOption('!custom');
+    await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').fill('a');
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(a\)，ア/);
+    await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').fill('');
+    await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').pressSequentially('(21)');
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(21\)，ア/);
+    await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').selectOption('');
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，ア/);
+    await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').selectOption('(1)');
+    await hierarchy.click('#auto-parse');
+    assert.equal(await hierarchy.locator('[data-row="1"] [data-k="subLabel"]').inputValue(),'(2)');
+    await hierarchy.click('#auto-add');
+    assert.equal(await hierarchy.locator('[data-row="3"] [data-k="label"]').inputValue(),'問二');
+    await hierarchy.locator('[data-row="3"] [data-k="answer"]').fill('エ');
+    await hierarchy.screenshot({path:path.join(output,'subquestion-editor.png'),fullPage:true});
+    await hierarchy.click('#auto-apply'); await hierarchy.locator('#app.on').waitFor();
+    assert.deepEqual(await hierarchy.evaluate(()=>doc.fields.map(f=>f.auto.label)),['問一(1)','問一(2)','問二','問一']);
+    await hierarchy.click('[data-tab="answer"]');
+    await hierarchy.screenshot({path:path.join(output,'section-spacing.png'),fullPage:true});
+    for(const [selector,name] of [['#btn-xlsx','sections.xlsx'],['#btn-save','sections.json']]){
+      const promise=hierarchy.waitForEvent('download'); await hierarchy.click(selector);
+      const result=await promise; assert.equal(await result.failure(),null); await result.saveAs(path.join(output,name));
+    }
+    const loaded=await context.newPage(); await loaded.goto(url);
+    await loaded.locator('#file-open').setInputFiles(path.join(output,'sections.json')); await loaded.locator('#app.on').waitFor();
+    await loaded.click('#btn-answer-editor');
+    assert.equal(await loaded.locator('[data-row="0"] [data-k="label"]').inputValue(),'問一');
+    assert.equal(await loaded.locator('[data-row="0"] [data-k="subLabel"]').inputValue(),'(1)');
+    assert.equal(await loaded.locator('[data-row="1"] [data-k="subLabel"]').inputValue(),'(2)');
+    await loaded.setViewportSize({width:390,height:844});
+    assert.ok(await loaded.evaluate(()=>document.querySelector('.auto-modal .card').scrollWidth<=document.querySelector('.auto-modal .card').clientWidth));
+    pass('Sibling subquestions have independent numbering controls, preserve parent numbers, and survive generation and save/reload');
     const excel=spawnSync('python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
     if(excel.stdout) process.stdout.write(excel.stdout);
     if(excel.stderr) process.stderr.write(excel.stderr);
     assert.equal(excel.status,0,'Excel inspection failed');
-    pass('All three browser-exported workbooks pass independent openpyxl inspection');
+    pass('All four browser-exported workbooks pass independent openpyxl inspection');
     const wrapping=await page.evaluate(()=>{
       const d=buildAutoDocument(parseAutoAnswers('大問一\n'+Array.from({length:20},(_,i)=>'('+(i+1)+') ア').join('\n')),'国語');
       return {fields:d.fields,texts:d.texts,grid:d.grid};
