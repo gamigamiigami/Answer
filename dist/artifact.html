@@ -1133,6 +1133,8 @@ function buildCells(d, withAnswers){
     const tc = vert ? c + Math.floor((span-1)/2) : c;
     const tr = vert ? r : r + Math.floor((span-1)/2)*CHAR_ROWS;
     put(tc, tr, v.t, v.size||11, v.bold, v.align);
+    const questionHeading=d.decorations.find(q=>q.questionHeading && q.c===c && q.r===r);
+    if (questionHeading) merge(c,r,questionHeading.w,questionHeading.h);
     // 自動生成の見出しは、偶数列なら中央の2セルを結合して境目にそろえる。
     if (v.centerAcross) merge(tc, tr, vert && span%2===0 ? 2 : 1, vert ? 1 : CHAR_ROWS*(span%2===0 ? 2 : 1));
     if (v.box){                      // 大問番号・問番号のセルにも枠を引く
@@ -2642,7 +2644,7 @@ async function enterInput(){
     const f = fieldAt(ui.cur.c, ui.cur.r);
     const onBox = f && f.rects.some(x => ui.cur.c>=x.c && ui.cur.c<x.c+x.w && ui.cur.r>=x.r && ui.cur.r<x.r+x.h);
     const target = onBox ? f : decorationAt(ui.cur.c, ui.cur.r);
-    if (target) return editNote(target, onBox ? '解答欄' : 'シンプル枠');
+    if (target && !target.questionHeading) return editNote(target, onBox ? '解答欄' : 'シンプル枠');
   }
   // 範囲を選んでいるときは、同じ文字を選んだマスすべてに入れる（模範解答タブは除く）
   if (many.length > 1 && ui.tab === 'sheet'){
@@ -2747,6 +2749,12 @@ function commitInput(){
       const room = plan.room;
       if (plan.need > room)
         setTimeout(()=>toast('⚠ この欄に入るのは'+room+'文字までです（'+(plan.need-room)+'文字が出ません）'), 30);
+    } else if (doc.decorations.some(v=>v.questionHeading && v.c===t.c && v.r===t.r) ||
+               doc.fields.some(f=>f.auto && f.auto.questionId && f.label && f.label.c===t.c && f.label.r===t.r)){
+      // 自動生成した親問・小問番号は、ひとつの番号セルの中で編集する。
+      const key=t.c+','+t.r, old=doc.texts[key] || {};
+      if (val) doc.texts[key]={...old,t:val,size:autoLabelPointSize(val,1)};
+      else delete doc.texts[key];
     } else {
       // 1マス1文字で書き方向に並べる
       const vertical = doc.paper.writing==='vertical';
@@ -4535,6 +4543,7 @@ function parseAutoAnswers(source, defaults={}){
       row.warnings.push('観点を推定');
     }
     if (row.n === null) row.n = row.kind === 'extract' ? Math.max(1, ...splitExtract(row.answer).map(autoLength)) : Math.max(1, autoLength(row.answer));
+    if (row.kind === 'blank'){ row.w = row.w || 1; row.h = row.h || 10; }
     if (!groups.includes(group)) groups.push(group);
     rows.push(row);
   }
@@ -4568,7 +4577,7 @@ function buildAutoDocument(rows, subject, currentPaper){
   const vertical = d.paper.writing === 'vertical';
   const used = new Set(headerLayout(d).reserved);
   const origin = contentOrigin(d);
-  let head = {...origin}, active = null, cur, minC, maxR, groupTop;
+  let head = {...origin}, active = null, cur, minC, maxR, groupTop, questionMain='', questionFrame=null;
   const clash = r => {
     if (r.c < 0 || r.r < 0 || r.c+r.w > d.grid.cols || r.r+r.h > d.grid.rows) return true;
     for (let c=r.c;c<r.c+r.w;c++) for (let y=r.r;y<r.r+r.h;y++) if (used.has(c+','+y)) return true;
@@ -4600,22 +4609,28 @@ function buildAutoDocument(rows, subject, currentPaper){
       d.texts[hd.c+','+hd.r] = {t:row.group,size:Math.min(14,24/Math.max(1,autoLength(row.group))),bold:true,box:true};
       cur = vertical ? {c:head.c,r:head.r+1} : {c:head.c+1,r:head.r};
       groupTop = {...cur}; minC = hd.c; maxR = hd.r+hd.h; active = row.group;
+      questionMain=''; questionFrame=null;
     }
+    const numbering=splitAutoQuestionLabel(row.label), hierarchical=!!(numbering.main && numbering.suffix);
     const type = ({mark:2,word:6,essay:6,chars:5,blank:6,graph:7,kanji:8,extract:3,customA:9,customB:10})[row.kind];
     const n = autoLength(row.answer), fixed = ['chars','kanji','extract'].includes(row.kind);
     // 字数自由は筆記用の余白を確保。大きさは一覧から変更できる。
-    const defaultW = row.kind === 'blank' ? 4 : row.kind === 'word' ? (vertical ? 1 : Math.max(2,n)) : (vertical ? Math.max(1,Math.ceil(n/18)) : Math.min(12,d.grid.cols-3));
-    const defaultH = row.kind === 'blank' ? 3 : row.kind === 'word' ? (vertical ? Math.max(2,n) : 1) : (vertical ? Math.min(18,Math.max(4,n)) : Math.max(2,Math.ceil(n/12)));
+    const defaultW = row.kind === 'blank' ? 1 : row.kind === 'word' ? (vertical ? 1 : Math.max(2,n)) : (vertical ? Math.max(1,Math.ceil(n/18)) : Math.min(12,d.grid.cols-3));
+    const defaultH = row.kind === 'blank' ? 10 : row.kind === 'word' ? (vertical ? Math.max(2,n) : 1) : (vertical ? Math.min(18,Math.max(4,n)) : Math.max(2,Math.ceil(n/12)));
     const opt = {n:row.n, tate:row.h || defaultH, yoko:row.w || defaultW, w:row.w || 6, h:row.h || 6};
     let got = null;
     for (let attempt=0;attempt<d.grid.cols+d.grid.rows;attempt++){
-      const at = row.label ? boxStart(d,cur) : cur;
+      const parentNeeded=hierarchical && (questionMain!==numbering.main || !questionFrame ||
+        (vertical ? questionFrame.c!==cur.c : questionFrame.r!==cur.r));
+      const parent=parentNeeded ? {c:cur.c,r:cur.r,w:1,h:vertical ? 1 : CHAR_ROWS} : null;
+      const labelAt=parent ? boxStart(d,cur) : cur;
+      const at = row.label ? boxStart(d,labelAt) : labelAt;
       const b = buildRects(d,type,at,opt);
       if (vertical && !b.error && cur.r>groupTop.r && Math.max(...b.rects.map(r=>r.c+r.w))-Math.min(...b.rects.map(r=>r.c))>1){
         cur={c:minC-1,r:groupTop.r}; minC=Math.min(minC,cur.c); continue;
       }
-      const lab = row.label && !b.error ? labelRect(d,cur,b.rects) : null;
-      if (!b.error && !b.rects.some(clash) && (!lab || !clash(lab))){ got = {rects:b.rects,lab}; break; }
+      const lab = row.label && !b.error ? (hierarchical ? {c:labelAt.c,r:labelAt.r,w:1,h:vertical ? 1 : CHAR_ROWS} : labelRect(d,labelAt,b.rects)) : null;
+      if (!b.error && !b.rects.some(clash) && (!lab || !clash(lab)) && (!parent || !clash(parent))){ got = {rects:b.rects,lab,parent}; break; }
       // 同じ大問内は次の列／行の先頭に折り返し、空き列・空き行は入れない。
       cur = vertical ? {c:minC-1,r:groupTop.r} : {c:groupTop.c,r:maxR};
       minC = Math.min(minC,cur.c); maxR = Math.max(maxR,cur.r+CHAR_ROWS);
@@ -4623,13 +4638,22 @@ function buildAutoDocument(rows, subject, currentPaper){
     }
     if (!got) throw new Error((i+1)+'問目（大問'+row.group+' '+row.label+'）がA4に入りません。字数・幅・高さを見直すか、問題を別の用紙に分けてください。現在の用紙は変更しません。');
     const id = 'f'+(i+1);
-    const {answer, warnings, ...spec} = row;
+    const {answer, warnings, questionId, ...spec} = row;
     const f = {id,type,rects:got.rects,chars:fixed ? row.n : n,exact:!row.eight,
       fixedChars:fixed,points:row.points,aspect:row.aspect,complete:row.complete,
       note:'',notePos:'end',...(row.appearance || {}),auto:{...spec,warnings:[...(warnings || [])]}};
+    if (got.parent){
+      questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,style:'thin',note:'',notePos:'end'};
+      d.decorations.push(questionFrame); take(questionFrame);
+      d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,1)};
+      questionMain=numbering.main;
+    }
+    if (hierarchical) f.auto.questionId=questionFrame.id;
+    else { questionMain=''; questionFrame=null; }
     if (got.lab){
       f.label = got.lab; take(got.lab);
-      d.texts[got.lab.c+','+got.lab.r] = {t:row.label,size:autoLabelPointSize(row.label,got.lab.w)};
+      const label=hierarchical ? numbering.suffix : row.label;
+      d.texts[got.lab.c+','+got.lab.r] = {t:label,size:autoLabelPointSize(label,got.lab.w)};
     }
     got.rects.forEach(take); d.fields.push(f);
     if (row.answer){
@@ -4637,7 +4661,7 @@ function buildAutoDocument(rows, subject, currentPaper){
       if (plan.need > plan.room) throw new Error((i+1)+'問目の模範解答が欄に入りきりません。字数・幅・高さを大きくしてください。');
       d.answers[id] = row.answer;
     }
-    const rs = got.lab ? [got.lab,...got.rects] : got.rects;
+    const rs = [...got.rects,...(got.lab ? [got.lab] : []),...(got.parent ? [got.parent] : [])];
     minC = Math.min(minC,...rs.map(r=>r.c));
     maxR = Math.max(maxR,...rs.map(r=>r.r+r.h));
     cur = vertical ? {c:cur.c,r:Math.max(...got.rects.map(r=>r.r+r.h))}
@@ -4654,6 +4678,7 @@ function buildAutoDocument(rows, subject, currentPaper){
       if (d.fields.some(f=>f.rects.concat(f.label || []).some(r=>r.c === 0)) || Object.keys(d.texts).some(k=>k.startsWith('0,')))
         throw new Error('漢字欄の列幅を広げるとA4に入りません。字数・幅・高さを見直すか、問題を別の用紙に分けてください。');
       d.fields.forEach(f=>f.rects.concat(f.label || []).forEach(r=>r.c--));
+      d.decorations.forEach(v=>v.c--);
       d.texts = Object.fromEntries(Object.entries(d.texts).map(([key,value])=>{
         const [c,r] = key.split(',').map(Number); return [(c-1)+','+r,value];
       }));
@@ -4669,6 +4694,8 @@ function currentAutoRows(){
   });
   return doc.fields.map(f=>{
     const answer=doc.answers[f.id] || '', rect=f.rects[0], vertical=doc.paper.writing==='vertical';
+    const parent=doc.decorations.find(v=>v.questionHeading && v.id===(f.auto || {}).questionId);
+    const parentLabel=parent ? (doc.texts[parent.c+','+parent.r] || {}).t || '' : '';
     const head=heads.filter(h=>vertical ? h.c>=rect.c && h.r<=rect.r : h.r<=rect.r && h.c<=rect.c)
       .sort((a,b)=>vertical ? a.c-b.c : b.r-a.r)[0];
     const kind=({2:'mark',3:'extract',4:'chars',5:'chars',6:answer ? autoLength(answer)<=8?'word':'essay' : 'blank',7:'graph',8:'kanji',9:'customA',10:'customB'})[f.type] || 'blank';
@@ -4676,7 +4703,8 @@ function currentAutoRows(){
       w:f.type===6 ? rect.w : f.type===7 ? rect.w : 0,h:f.type===6 ? Math.ceil(rect.h/CHAR_ROWS) : f.type===7 ? rect.h/GRAPH_ROWS : 0,kindAuto:false};
     return {...fallback,...(f.auto || {}),answer,points:f.points || 0,aspect:f.aspect || '知技',
       complete:!!f.complete,eight:f.type===5 && !f.exact,n:f.fixedChars === false ? (f.auto || {}).n || Math.max(1,autoLength(answer)) : f.chars || fallback.n,
-      label:f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : '',
+      label:parentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
+      ...(((f.auto || {}).kind || kind)==='blank' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
       warnings:((f.auto || {}).warnings || []).filter(w=>!(w.startsWith('配点') && f.points!==(f.auto || {}).points) && !(w.startsWith('観点') && f.aspect!==(f.auto || {}).aspect)),
       appearance:Object.fromEntries(['textPt','textScale','fill','line','note','notePos'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]]))};
   });
@@ -4724,6 +4752,7 @@ function openAnswerGenerator(){
   const infer=r=>{
     if (r.kindAuto){ const n=autoLength(r.answer); r.kind=n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay'; r.n=Math.max(1,n); }
     if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
+    if (r.kind==='blank'){ r.w=r.w || 1; r.h=r.h || 10; }
   };
   const syncControls=card=>{
     const r=rows[+card.dataset.row];
@@ -4732,6 +4761,7 @@ function openAnswerGenerator(){
     for (const key of ['n','w','h','eight']){
       const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['word','essay','blank','graph'].includes(r.kind);
       const node=card.querySelector('[data-k="'+key+'"]'); node.disabled=!enabled; node.closest('label').hidden=!enabled;
+      if (key==='eight') node.checked=!!r.eight; else node.value=r[key];
     }
     card.querySelector('.auto-hint').textContent=r.warnings.join('／'); card.querySelector('.auto-hint').hidden=!r.warnings.length;
   };

@@ -30,6 +30,8 @@ def inspect(directory, name):
         values = [normalize('NFKC', str(cell.value)) for row in sheet for cell in row if cell.value is not None]
         assert expected_total in values, (name, sheet.title, expected_total)
     vertical = work['paper']['writing'] == 'vertical'
+    if name == 'blanks':
+        assert [(f['rects'][0]['w'], f['rects'][0]['h']) for f in work['fields']] == [(1, 20), (2, 8)]
     headings = []
     for key, text in work['texts'].items():
         if not text.get('centerAcross'):
@@ -59,6 +61,21 @@ def inspect(directory, name):
                 assert cell.value is None
                 assert all(getattr(cell.border, side).style is None for side in ('top', 'bottom', 'left', 'right'))
     for field in work['fields']:
+        question_id = field['auto'].get('questionId')
+        if question_id:
+            parent = next(v for v in work['decorations'] if v['id'] == question_id)
+            assert parent['questionHeading'] and parent['w'] == 1
+            assert parent['h'] == (1 if vertical else 2)
+            parent_text = work['texts'][f"{parent['c']},{parent['r']}"]['t']
+            label = field['label']
+            assert label['w'] == 1 and label['h'] == (1 if vertical else 2)
+            suffix = work['texts'][f"{label['c']},{label['r']}"]['t']
+            assert suffix.startswith(('(', '（')) and suffix.endswith((')', '）'))
+            for sheet in book:
+                cell = sheet.cell(parent['r'] + 1, parent['c'] + 1)
+                assert normalize('NFKC', str(cell.value)) == normalize('NFKC', parent_text)
+                assert cell.border.top.style == cell.border.left.style == 'thin'
+                assert cell.alignment.horizontal == cell.alignment.vertical == 'center'
         label = field.get('label')
         if label:
             expected_label = work['texts'][f"{label['c']},{label['r']}"]['t']
@@ -115,10 +132,10 @@ def inspect(directory, name):
             c, r = cells[field['chars'] * 8 // 10]
             border = blank.cell(r + 1, c + 1).border
             assert (border.top if vertical else border.left).style == 'mediumDashed'
-    print(f'PASS: {name} Excel: answers, scoring, fonts, borders, 80% line, A4, heading centers, section gaps and question labels')
+    print(f'PASS: {name} Excel: answers, scoring, fonts, borders, 80% line, A4, heading centers, section gaps and separate parent/subquestion cells')
 
 
 if __name__ == '__main__':
     directory = Path(sys.argv[1])
-    for name in ('vertical', 'horizontal', 'kokugo', 'sections'):
+    for name in ('vertical', 'horizontal', 'kokugo', 'sections', 'blanks'):
         inspect(directory, name)

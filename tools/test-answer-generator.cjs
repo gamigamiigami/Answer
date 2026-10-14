@@ -82,6 +82,47 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
       }
     }
     pass('Section boundaries leave one blank column or handwriting row; headings center across odd and even spans');
+    for(const subject of ['国語','数学']){
+      const nested=await page.evaluate(subject=>{
+        const d=buildAutoDocument(parseAutoAnswers('1\n1,(1),ア,2,知\n1,(2),イ,3,思\n2,(A),ウ,4,知\n2,(B),エ,5,知\n2\n1,(1),オ,2,知'),subject);
+        return {fields:d.fields,parents:d.decorations,texts:d.texts,unit:CHAR_ROWS};
+      },subject);
+      const [a,b,c,e,last]=nested.fields;
+      assert.equal(nested.parents.length,3);
+      assert.equal(a.auto.questionId,b.auto.questionId); assert.equal(c.auto.questionId,e.auto.questionId);
+      assert.notEqual(a.auto.questionId,last.auto.questionId);
+      const parent=nested.parents.find(p=>p.id===a.auto.questionId);
+      assert.equal(nested.texts[parent.c+','+parent.r].t,'問一');
+      assert.equal(nested.texts[a.label.c+','+a.label.r].t,'(1)');
+      assert.equal(nested.texts[b.label.c+','+b.label.r].t,'(2)');
+      for(const f of nested.fields){
+        assert.equal(f.label.w,1); assert.equal(f.label.h,subject==='国語'?1:nested.unit);
+        assert.ok(!Object.values(nested.texts).some(t=>t.t===f.auto.label));
+      }
+      if(subject==='国語'){
+        assert.equal(a.label.r,parent.r+1); assert.equal(a.rects[0].r,a.label.r+1);
+        assert.equal(b.label.r,a.rects[0].r+a.rects[0].h);
+      } else {
+        assert.equal(a.label.c,parent.c+1); assert.equal(a.rects[0].c,a.label.c+1);
+        assert.equal(b.label.c,a.rects[0].c+a.rects[0].w);
+      }
+    }
+    const nestedWrap=await page.evaluate(()=>{
+      const d=buildAutoDocument(parseAutoAnswers('1\n'+Array.from({length:20},(_,i)=>'1,('+(i+1)+'),ア,2,知').join('\n')),'国語');
+      return {fields:d.fields,parents:d.decorations};
+    });
+    assert.ok(nestedWrap.parents.length>1);
+    for(const p of nestedWrap.parents){
+      const children=nestedWrap.fields.filter(f=>f.auto.questionId===p.id);
+      assert.ok(children.length); assert.equal(children[0].label.r,p.r+1);
+      assert.ok(children.every(f=>f.label.c===p.c && f.label.r>p.r));
+    }
+    pass('Parent question headings occupy separate cells, are shared by sibling subquestions, and repeat only after a wrap');
+    const defaultBlank=await parse('1\n1,,2,思,解答欄のみ\n2,,2,思,解答欄のみ,2×3');
+    assert.deepEqual(defaultBlank.map(r=>[r.w,r.h]),[[1,10],[2,3]]);
+    const defaultRect=await page.evaluate(rows=>buildAutoDocument(rows,'国語').fields[0].rects[0],defaultBlank);
+    assert.equal(defaultRect.w,1); assert.equal(defaultRect.h,20);
+    pass('Answer-only fields default to width 1 and height 10 while explicit dimensions take precedence');
     for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','グラフ 40×40']){
       const result=await page.evaluate(source=>{try{buildAutoDocument(parseAutoAnswers(source),'国語');return null;}catch(e){return e.message;}},source);
       assert.ok(result,source);
@@ -248,11 +289,48 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await loaded.setViewportSize({width:390,height:844});
     assert.ok(await loaded.evaluate(()=>document.querySelector('.auto-modal .card').scrollWidth<=document.querySelector('.auto-modal .card').clientWidth));
     pass('Sibling subquestions have independent numbering controls, preserve parent numbers, and survive generation and save/reload');
+    await loaded.click('#auto-cancel'); await loaded.setViewportSize({width:1366,height:900});
+    const parentCell=await loaded.evaluate(()=>{const p=doc.decorations.find(v=>v.questionHeading);return {c:p.c,r:p.r};});
+    await loaded.evaluate(p=>{ ui.targets=[]; ui.sel=null; ui.extra=[]; ui.cur=p; render(); },parentCell);
+    await loaded.keyboard.press('Enter'); await loaded.locator('#cell-input').fill('問三'); await loaded.keyboard.press('Enter');
+    assert.equal(await loaded.evaluate(p=>doc.texts[p.c+','+p.r].t,parentCell),'問三');
+    await loaded.click('#btn-answer-editor');
+    assert.equal(await loaded.locator('[data-row="0"] [data-k="label"]').inputValue(),'問三');
+    assert.equal(await loaded.locator('[data-row="1"] [data-k="label"]').inputValue(),'問三');
+    assert.equal(await loaded.locator('[data-row="1"] [data-k="subLabel"]').inputValue(),'(2)');
+    await loaded.check('#auto-replace'); await loaded.click('#auto-apply');
+    assert.deepEqual(await loaded.evaluate(()=>doc.fields.slice(0,2).map(f=>f.auto.label)),['問三(1)','問三(2)']);
+    pass('Editing the shared parent cell updates both siblings when reopening and regenerating');
+    const blanks=await context.newPage(); await blanks.goto(url); await blanks.click('#btn-from-answers');
+    await blanks.fill('#auto-source','1\n1,,2,思,解答欄のみ\n2,ア,2,知'); await blanks.click('#auto-parse');
+    const blankCard=blanks.locator('[data-row="0"]');
+    assert.equal(await blankCard.locator('[data-k="w"]').inputValue(),'1');
+    assert.equal(await blankCard.locator('[data-k="h"]').inputValue(),'10');
+    await blanks.locator('[data-row="1"] [data-k="kind"]').selectOption('blank');
+    assert.equal(await blanks.locator('[data-row="1"] [data-k="w"]').inputValue(),'1');
+    assert.equal(await blanks.locator('[data-row="1"] [data-k="h"]').inputValue(),'10');
+    await blanks.locator('[data-row="1"] [data-k="h"]').fill('4');
+    await blanks.locator('[data-row="1"] [data-k="w"]').fill('2');
+    await blanks.click('#auto-apply'); await blanks.locator('#app.on').waitFor();
+    assert.deepEqual(await blanks.evaluate(()=>doc.fields.map(f=>[f.rects[0].w,f.rects[0].h])),[[1,20],[2,8]]);
+    for(const [selector,name] of [['#btn-xlsx','blanks.xlsx'],['#btn-save','blanks.json']]){
+      const promise=blanks.waitForEvent('download'); await blanks.click(selector);
+      const result=await promise; assert.equal(await result.failure(),null); await result.saveAs(path.join(output,name));
+    }
+    await blanks.click('#btn-answer-editor');
+    assert.equal(await blankCard.locator('[data-k="h"]').inputValue(),'10');
+    assert.equal(await blanks.locator('[data-row="1"] [data-k="w"]').inputValue(),'2');
+    assert.equal(await blanks.locator('[data-row="1"] [data-k="h"]').inputValue(),'4');
+    await blanks.click('#auto-cancel');
+    await blanks.evaluate(()=>{const r=doc.fields[0].rects[0];ui.targets=[];ui.extra=[];ui.sel={c:r.c,r:r.r+6,w:1,h:2};insertCells();ui.sel=null;render();});
+    await blanks.click('#btn-answer-editor');
+    assert.equal(await blankCard.locator('[data-k="h"]').inputValue(),'11');
+    pass('Answer-only size defaults are visible on parsing and type selection, remain editable, and survive regeneration');
     const excel=spawnSync('python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
     if(excel.stdout) process.stdout.write(excel.stdout);
     if(excel.stderr) process.stderr.write(excel.stderr);
     assert.equal(excel.status,0,'Excel inspection failed');
-    pass('All four browser-exported workbooks pass independent openpyxl inspection');
+    pass('All five browser-exported workbooks pass independent openpyxl inspection');
     const wrapping=await page.evaluate(()=>{
       const d=buildAutoDocument(parseAutoAnswers('大問一\n'+Array.from({length:20},(_,i)=>'('+(i+1)+') ア').join('\n')),'国語');
       return {fields:d.fields,texts:d.texts,grid:d.grid};
