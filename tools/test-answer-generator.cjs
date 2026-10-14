@@ -207,10 +207,33 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const kokugo=await context.newPage(); await kokugo.goto(url);
     await kokugo.click('#btn-from-answers'); await kokugo.click('#auto-example');
     assert.equal(await kokugo.locator('[data-row]').count(),9);
+    assert.equal(await kokugo.locator('[data-row="8"] [data-k="kind"]').inputValue(),'blank');
+    assert.equal(await kokugo.locator('[data-row="8"] [data-k="w"]').inputValue(),'1');
+    assert.equal(await kokugo.locator('[data-row="8"] [data-k="h"]').inputValue(),'10');
+    assert.equal(await kokugo.locator('[data-row="3"] [data-k="label"]').inputValue(),'問一');
+    assert.equal(await kokugo.locator('[data-row="4"] [data-k="label"]').inputValue(),'問一');
+    assert.equal(await kokugo.locator('[data-row="3"] [data-k="subLabel"]').inputValue(),'（１）');
+    assert.equal(await kokugo.locator('[data-row="4"] [data-k="subLabel"]').inputValue(),'（２）');
+    await kokugo.locator('[data-row="8"]').scrollIntoViewIfNeeded();
+    await kokugo.screenshot({path:path.join(output,'sample-defaults.png'),fullPage:true});
     await kokugo.click('#auto-apply'); await kokugo.locator('#app.on').waitFor();
     assert.equal(await kokugo.evaluate(()=>doc.paper.subject),'国語');
     assert.equal(await kokugo.evaluate(()=>doc.fields.length),9);
     assert.ok(await kokugo.evaluate(()=>doc.fields.filter(f=>f.type===8).every(f=>f.rects.every(r=>doc.colw[r.c]===1.3))));
+    const exampleLayout=await kokugo.evaluate(()=>{
+      const [a,b]=doc.fields.slice(3,5), parent=doc.decorations.find(v=>v.id===a.auto.questionId);
+      return {sameParent:a.auto.questionId===b.auto.questionId,parent:doc.texts[parent.c+','+parent.r].t,
+        first:doc.texts[a.label.c+','+a.label.r].t,second:doc.texts[b.label.c+','+b.label.r].t,
+        parentRow:parent.r,firstLabelRow:a.label.r,firstAnswer:a.rects[0],secondLabel:b.label,
+        blank:doc.fields[8].rects[0]};
+    });
+    assert.equal(exampleLayout.sameParent,true); assert.equal(exampleLayout.parent,'問一');
+    assert.equal(exampleLayout.first,'（１）'); assert.equal(exampleLayout.second,'（２）');
+    assert.equal(exampleLayout.firstLabelRow,exampleLayout.parentRow+1);
+    assert.equal(exampleLayout.firstAnswer.r,exampleLayout.firstLabelRow+1);
+    assert.equal(exampleLayout.secondLabel.r,exampleLayout.firstAnswer.r+exampleLayout.firstAnswer.h);
+    assert.equal(exampleLayout.blank.w,1); assert.equal(exampleLayout.blank.h,20);
+    pass('The built-in example shows width 1 / height 10 and generates sibling (1) / (2) cells under one parent');
     await kokugo.click('[data-tab="answer"]');
     await kokugo.screenshot({path:path.join(output,'kokugo.png'),fullPage:true});
     for(const [selector,name] of [['#btn-xlsx','kokugo.xlsx'],['#btn-save','kokugo.json']]){
@@ -248,7 +271,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.deepEqual(await kokugo.evaluate(()=>JSON.parse(JSON.stringify(doc))),edited);
     pass('Generated fields use existing scoring, answer entry and drawing tools; replacement undo restores all edits');
     const hierarchy=await context.newPage(); await hierarchy.goto(url); await hierarchy.click('#btn-from-answers');
-    await hierarchy.fill('#auto-source','1\n1,(1),ア,2,知,解答欄のみ,3×2\n1,(2),イ,2,知\n2\n1,ウ,2,知,解答欄のみ,2×2');
+    await hierarchy.fill('#auto-source','1\n問一(1),ア,2,知,解答欄のみ,3×2\n(2),イ,2,知\n2\n1,ウ,2,知,解答欄のみ,2×2');
     await hierarchy.click('#auto-parse');
     assert.equal(await hierarchy.locator('[data-row="0"] [data-k="label"]').inputValue(),'問一');
     assert.equal(await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').inputValue(),'(1)');
@@ -357,6 +380,22 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const restoredRecords=await page.evaluate(rows=>parseAutoAnswers(autoRowsSource(rows)),quoted);
     assert.deepEqual(restoredRecords.map(r=>[r.label,r.answer,r.points,r.aspect]),quoted.map(r=>[r.label,r.answer,r.points,r.aspect]));
     pass('Requested comma format, standalone section numbers, alphabetic subquestions and quoted answers round-trip');
+    for(const input of [
+      '1\n1,（１）,ア,2,知\n（２）,イ,3,思',
+      '1\n1（１）,ア,2,知\n（２）,イ,3,思',
+      '1\n問一（１）,ア,2,知\n（２）,イ,3,思',
+      '1\n問一,（１）,ア,2,知\n（２）,イ,3,思',
+      '1\n問一\n（１）,ア,2,知\n（２）,イ,3,思'
+    ]){
+      assert.deepEqual((await parse(input)).map(r=>[r.label,r.answer,r.points,r.aspect]),[
+        ['問一（１）','ア',2,'知技'],['問一（２）','イ',3,'思判表']]);
+    }
+    const changedParent=await parse('1\n1,(1),ア,2,知\n問二 ウ 2点 知\n(A),イ,3,思\n2\n(1),エ,4,知');
+    assert.equal(changedParent[2].label,'問二(A)'); assert.equal(changedParent[2].answer,'イ');
+    assert.equal(changedParent[3].label,'(1)'); assert.equal(changedParent[3].answer,'エ');
+    const followingBare=await parse('1\n1,ア,2,知\nイ');
+    assert.equal(followingBare[1].label,'(2)'); assert.equal(followingBare[1].answer,'イ');
+    pass('Subquestion numbers are inferred from separate or attached parentheses and inherit the current parent without leaking across sections');
     const wide=await page.evaluate(()=>buildAutoDocument(parseAutoAnswers('1\n1,ア,2,知\n2,理由。,4,思,80字\n3,,4,思,解答欄のみ,2×3'),'国語').fields);
     assert.equal(wide[1].label.r,wide[0].label.r);
     assert.ok(Math.max(...wide[1].rects.map(r=>r.c+r.w))<=wide[0].label.c);

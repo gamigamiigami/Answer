@@ -4355,7 +4355,7 @@ function startApp(){
 /* 模範解答から作る。解析→編集→配置は、確定まで現在の用紙に触れない。 */
 const AUTO_KINDS = [['mark','記号（1文字）'],['word','語句（自動幅）'],['essay','記述（字数自由）'],
   ['chars','字数指定'],['blank','解答欄のみ'],['graph','グラフ'],['kanji','漢字'],['extract','初終'],['customA','カスタムA'],['customB','カスタムB']];
-const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n１，（A)，相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ おわり，４，思，初終3字\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ，3×2';
+const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ おわり，４，思，初終3字\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
 const autoDigits = s => String(s).replace(/[０-９]/g, c => String(c.charCodeAt(0)-0xff10));
 const autoLength = s => Array.from(String(s || '')).length;
 const AUTO_NUMBER_STYLES = [['Q','問一・問二'],['P','(1)・(2)'],['M','①・②'],['A','ア・イ'],['digit','1・2'],['none','番号なし']];
@@ -4429,18 +4429,24 @@ function splitAutoRecord(text){
   }
   add(text.length); return parts;
 }
-function readAutoRecord(text,row){
+function readAutoRecord(text,row,parentQuestion=''){
   const parts=splitAutoRecord(text);
   const first=/^([0-9０-９]+)\s*([（(][^()（）]+[)）])?$/.exec(parts[0].value);
-  if (parts.length<2 || !first && !parts[0].quoted) return null;
+  const named=/^(問\s*[0-9０-９一二三四五六七八九十百]+)\s*([（(][^()（）]+[)）])?$/.exec(parts[0].value);
+  const child=!parts[0].quoted && /^[（(][^()（）]+[)）]$/.test(parts[0].value);
+  if (parts.length<2 || !first && !named && !child && !parts[0].quoted) return null;
   let start=1;
-  if (first){
-    const n=Number(autoDigits(first[1]));
-    if (!Number.isSafeInteger(n) || n<1) throw new Error('問番号は1以上の整数にしてください。');
-    let suffix=first[2] || '';
+  if (first || named){
+    let main;
+    if (first){
+      const n=Number(autoDigits(first[1]));
+      if (!Number.isSafeInteger(n) || n<1) throw new Error('問番号は1以上の整数にしてください。');
+      main='問'+kanji(n);
+    } else main=named[1].replace(/\s/g,'');
+    let suffix=(first || named)[2] || '';
     if (!suffix && !parts[start].quoted && /^[（(][^()（）]+[)）]$/.test(parts[start].value)){ suffix=parts[start++].value; }
-    row.label='問'+kanji(n)+suffix.replace(/\s/g,'');
-  } else row.label=parts[0].value;
+    row.label=main+suffix.replace(/\s/g,'');
+  } else row.label=child ? parentQuestion+parts[0].value.replace(/\s/g,'') : parts[0].value;
   let end=parts.length, scoreRead=false;
   while (end>start+1){
     const part=parts[end-1], value=autoDigits(part.value);
@@ -4491,7 +4497,7 @@ function autoSourceExtras(row){
 function parseAutoAnswers(source, defaults={}){
   if (source.length > 50000) throw new Error('入力は5万文字以内にしてください。');
   const rows = [];
-  let group = defaults.group || '一', question = '', number = 0, sectionBreak = false;
+  let group = defaults.group || '一', question = '', recordQuestion='', number = 0, sectionBreak = false;
   const groups = [];
   for (const {text:raw,line:sourceLine} of splitAutoInputLines(source.replace(/\r/g,''))){
     let text = raw.trim();
@@ -4500,25 +4506,25 @@ function parseAutoAnswers(source, defaults={}){
     if (/^[0-9０-９]+$/.test(text)){
       const n=Number(autoDigits(text));
       if (!Number.isSafeInteger(n) || n<1) throw new Error(sourceLine+'行目：大問番号は1以上の整数にしてください。');
-      group=defaults.groupStyle === 'digit' ? String(n) : kanji(n); groups.push(group); question=''; number=0; sectionBreak=false; continue;
+      group=defaults.groupStyle === 'digit' ? String(n) : kanji(n); groups.push(group); question=''; recordQuestion=''; number=0; sectionBreak=false; continue;
     }
     const customHeading=/^大問\s*(.+)$/.exec(text);
     const heading = /^(?:大問\s*([0-9０-９一二三四五六七八九十百]+)|第\s*([0-9０-９一二三四五六七八九十百]+)\s*問|【([0-9０-９一二三四五六七八九十百]+)】)\s*[:：.．、]?\s*$/.exec(text);
-    if (heading || customHeading){ group = heading ? heading[1] || heading[2] || heading[3] : customHeading[1]; groups.push(group); question = ''; number = 0; sectionBreak = false; continue; }
-    if (sectionBreak){ group = nextAutoGroup(groups,defaults.groupStyle); groups.push(group); question = ''; number = 0; sectionBreak = false; }
-    if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); continue; }
+    if (heading || customHeading){ group = heading ? heading[1] || heading[2] || heading[3] : customHeading[1]; groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; continue; }
+    if (sectionBreak){ group = nextAutoGroup(groups,defaults.groupStyle); groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; }
+    if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
     const row = { group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
       w:0, h:0, eight:!!defaults.eight, complete:!!defaults.complete,
       points:defaults.points ?? null, aspect:defaults.aspect || '', warnings:[], sourceLine };
     if (row.kind === 'auto') row.kind = '';
-    const record=readAutoRecord(text,row);
+    const record=readAutoRecord(text,row,recordQuestion || question);
     const label = /^(問\s*[0-9０-９一二三四五六七八九十百]+(?:\s*[（(][0-9０-９一二三四五六七八九十]+[)）])?|[（(][0-9０-９一二三四五六七八九十]+[)）]|[①-⑳]|[0-9０-９]+[.．、])\s*[:：]?\s*/.exec(text);
     number++;
     if (record !== null) row.answer=record;
     else {
     if (label){
       row.label = label[1].replace(/\s/g,'');
-      if (question && /^[（(①-⑳]/.test(row.label)) row.label = question + row.label;
+      if ((recordQuestion || question) && /^[（(①-⑳]/.test(row.label)) row.label = (recordQuestion || question) + row.label;
       text = text.slice(label[0].length);
     } else row.label = question || autoNumberLabel(defaults.numStyle || 'P',(defaults.start || 1)+number-1);
     // 括弧の中をすべて指定として読めたときだけ除去する。数式や引用は答えとして残す。
@@ -4544,6 +4550,7 @@ function parseAutoAnswers(source, defaults={}){
     }
     if (row.n === null) row.n = row.kind === 'extract' ? Math.max(1, ...splitExtract(row.answer).map(autoLength)) : Math.max(1, autoLength(row.answer));
     if (row.kind === 'blank'){ row.w = row.w || 1; row.h = row.h || 10; }
+    if (record!==null || /^問/.test(row.label)) recordQuestion=splitAutoQuestionLabel(row.label).main;
     if (!groups.includes(group)) groups.push(group);
     rows.push(row);
   }
@@ -4643,7 +4650,7 @@ function buildAutoDocument(rows, subject, currentPaper){
       fixedChars:fixed,points:row.points,aspect:row.aspect,complete:row.complete,
       note:'',notePos:'end',...(row.appearance || {}),auto:{...spec,warnings:[...(warnings || [])]}};
     if (got.parent){
-      questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,style:'thin',note:'',notePos:'end'};
+      questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
       d.decorations.push(questionFrame); take(questionFrame);
       d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,1)};
       questionMain=numbering.main;
@@ -4722,7 +4729,7 @@ function openAnswerGenerator(){
   const wrap=document.createElement('div'); wrap.className='modal auto-modal';
   wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','auto-title');
   wrap.innerHTML='<div class="card"><h3 id="auto-title">模範解答から作る・編集</h3>'+
-    '<p class="desc">大問番号だけの行の後に「問番号，模範解答，点数，知／思」を入力してください。同じ問の小問は「1，（1），ア，2，知」「1，（2），イ，2，知」のように問番号をそろえて別の行に書きます。種類は判別した結果を一覧に表示します。</p>'+
+    '<p class="desc">大問番号だけの行の後に「問番号，模範解答，点数，知／思」を入力してください。小問番号も自動で読み取ります。「1，（1），ア，2，知」に続けて「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。</p>'+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select><button class="tb" id="auto-example">入力例を入れる</button></div>'+
     '<label for="auto-source">模範解答の入力</label><textarea id="auto-source" rows="5" placeholder="１&#10;１，ア、２，知&#10;２，こんにちは、２、思&#10;２&#10;１，（１）、ウ、２、知"></textarea>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+

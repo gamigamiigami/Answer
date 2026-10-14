@@ -32,6 +32,12 @@ def inspect(directory, name):
     vertical = work['paper']['writing'] == 'vertical'
     if name == 'blanks':
         assert [(f['rects'][0]['w'], f['rects'][0]['h']) for f in work['fields']] == [(1, 20), (2, 8)]
+    if name == 'kokugo':
+        a, b = work['fields'][3:5]
+        assert a['auto']['questionId'] == b['auto']['questionId']
+        assert [work['texts'][f"{f['label']['c']},{f['label']['r']}"]['t'] for f in (a, b)] == ['（１）', '（２）']
+        rect = work['fields'][8]['rects'][0]
+        assert (rect['w'], rect['h']) == (1, 20)
     headings = []
     for key, text in work['texts'].items():
         if not text.get('centerAcross'):
