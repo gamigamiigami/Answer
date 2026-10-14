@@ -640,9 +640,14 @@ const CELL_TYPES = [4,5,8];// 文字マスを字数ぶん並べる欄（語句�
 const EXTRACT_TYPE = 3;  // 初終の欄
 const EXTRACT_MARKS = ['初め','終わり'];   // 初終の欄の見出し（お手本と同じ表記）
 const EXTRACT_SEP = /[ 　\/／|\t]+/;      // 初めのぶんと終わりのぶんの区切り
+function extractWaveParts(text){
+  const parts=String(text == null ? '' : text).split(/[～〜~]/);
+  return parts.length===2 && parts.every(p=>p.trim()) ? parts.map(p=>p.trim()) : null;
+}
 // 答えを「初めのぶん」「終わりのぶん」に分ける
 function splitExtract(text){
   const t = String(text == null ? '' : text);
+  const wave=extractWaveParts(t); if (wave) return wave;
   const m = t.split(EXTRACT_SEP);
   if (m.length < 2) return [t, ''];
   return [m[0], m.slice(1).join('')];
@@ -797,7 +802,7 @@ function placeNote(d, obj){
 }
 
 // 答えをどのマスに入れるか決める。
-// 初終の欄は「始めのぶん」「終わりのぶん」に分けて入れる（区切りは空白・／・｜）
+// 初終の欄は「初めのぶん」「終わりのぶん」に分けて入れる（区切りは～・空白・／・｜）
 // 欄ごとの文字の大きさ（pt。Excel と同じ単位。ふつうは11pt）
 const BASE_PT = 11;
 const SIZE_CHOICES = [6,7,8,9,10,11,12,14,16,18,20,24];
@@ -895,7 +900,7 @@ function answerPlan(d, f, text){
   if (flowing) return flowing;
   const sc = textScaleOf(f);
   if (f.type === EXTRACT_TYPE){
-    const parts = t.split(EXTRACT_SEP);
+    const parts = extractWaveParts(t) || t.split(EXTRACT_SEP);
     const pt = extractParts(d, f);
     if (pt && parts.length >= 2){
       const used = new Set(placeNote(d, f).map(p => p.c+','+p.r));
@@ -4355,7 +4360,7 @@ function startApp(){
 /* 模範解答から作る。解析→編集→配置は、確定まで現在の用紙に触れない。 */
 const AUTO_KINDS = [['mark','記号（1文字）'],['word','語句（自動幅）'],['essay','記述（字数自由）'],
   ['chars','字数指定'],['blank','解答欄のみ'],['graph','グラフ'],['kanji','漢字'],['extract','初終'],['customA','カスタムA'],['customB','カスタムB']];
-const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ おわり，４，思，初終3字\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
+const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ～おわり，４，思\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
 const autoDigits = s => String(s).replace(/[０-９]/g, c => String(c.charCodeAt(0)-0xff10));
 const autoLength = s => Array.from(String(s || '')).length;
 const AUTO_NUMBER_STYLES = [['Q','問一・問二'],['P','(1)・(2)'],['M','①・②'],['A','ア・イ'],['digit','1・2'],['none','番号なし']];
@@ -4539,7 +4544,7 @@ function parseAutoAnswers(source, defaults={}){
     }
     if (!row.kind){
       const n = autoLength(row.answer);
-      row.kind = n === 1 ? 'mark' : n <= 8 && !/[。！？!?\n]/.test(row.answer) ? 'word' : 'essay';
+      row.kind = extractWaveParts(row.answer) ? 'extract' : n === 1 ? 'mark' : n <= 8 && !/[。！？!?\n]/.test(row.answer) ? 'word' : 'essay';
       row.warnings.push('欄の種類を推定');
       row.kindAuto = true;
     }
@@ -4567,6 +4572,7 @@ function autoRowError(row){
   if (!row.answer.trim() && !['blank','graph'].includes(row.kind)) return '模範解答を入れるか「解答欄のみ」を選んでください。';
   if (autoLength(row.answer) > 4000) return '1問の答えは4000文字以内にしてください。';
   if (['chars','kanji','extract'].includes(row.kind) && (!Number.isInteger(row.n) || row.n < 1 || row.n > 1000)) return '字数は1〜1000の整数にしてください。';
+  if (row.kind==='extract' && /[～〜~]/.test(row.answer) && !extractWaveParts(row.answer)) return '初終は「初め～終わり」の形で、～の前後に答えを入れてください（～は1つ）。';
   if (!Number.isInteger(row.w) || !Number.isInteger(row.h) || row.w < 0 || row.h < 0 || row.w > 40 || row.h > 40) return '幅・高さは0〜40の整数にしてください（0は自動）。';
   return '';
 }
@@ -4729,7 +4735,7 @@ function openAnswerGenerator(){
   const wrap=document.createElement('div'); wrap.className='modal auto-modal';
   wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','auto-title');
   wrap.innerHTML='<div class="card"><h3 id="auto-title">模範解答から作る・編集</h3>'+
-    '<p class="desc">大問番号だけの行の後に「問番号，模範解答，点数，知／思」を入力してください。小問番号も自動で読み取ります。「1，（1），ア，2，知」に続けて「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。</p>'+
+    '<p class="desc">大問番号だけの行の後に「問番号，模範解答，点数，知／思」を入力してください。小問番号も自動で読み取ります。「1，（1），ア，2，知」に続けて「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。「あああ～いいい」は初終と判別します。</p>'+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select><button class="tb" id="auto-example">入力例を入れる</button></div>'+
     '<label for="auto-source">模範解答の入力</label><textarea id="auto-source" rows="5" placeholder="１&#10;１，ア、２，知&#10;２，こんにちは、２、思&#10;２&#10;１，（１）、ウ、２、知"></textarea>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
@@ -4757,7 +4763,11 @@ function openAnswerGenerator(){
   const close=()=>{ wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
   const input=(key,value,type,label)=>'<input aria-label="'+label+'" data-k="'+key+'" type="'+(type || 'text')+'" value="'+xmlEsc(String(value))+'"'+(type==='number'?' min="0"':'')+'>';
   const infer=r=>{
-    if (r.kindAuto){ const n=autoLength(r.answer); r.kind=n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay'; r.n=Math.max(1,n); }
+    if (r.kindAuto){
+      const n=autoLength(r.answer), wave=extractWaveParts(r.answer);
+      r.kind=wave?'extract':n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay';
+      r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
+    }
     if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
     if (r.kind==='blank'){ r.w=r.w || 1; r.h=r.h || 10; }
   };
@@ -4859,6 +4869,7 @@ function openAnswerGenerator(){
       if (key==='subLabel') card.querySelector('[data-sub-label-custom]').hidden=true;
     } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
+    if (key==='n' && r.kindAuto && r.kind==='extract'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='aspect'){ r.aspectAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
     if (key==='points') r.warnings=r.warnings.filter(w=>!w.startsWith('配点'));
     if (key==='group') groups.add(r.group);

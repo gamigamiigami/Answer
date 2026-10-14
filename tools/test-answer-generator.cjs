@@ -41,6 +41,25 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal((await parse('「2点」'))[0].answer,'「2点」');
     assert.equal((await parse('初終 3字 「初め 終わり'))[0].kind,'extract');
     pass('Answer text is preserved; explicit extract type survives a following character count');
+    for(const marker of ['～','〜','~']){
+      const source='1\n1,あああ'+marker+'いいい,2,思';
+      const row=(await parse(source))[0];
+      assert.equal(row.kind,'extract'); assert.equal(row.n,3); assert.equal(row.kindAuto,true);
+      assert.equal(row.answer,'あああ'+marker+'いいい');
+      for(const subject of ['国語','数学']){
+        const result=await page.evaluate(({source,subject})=>{
+          const d=buildAutoDocument(parseAutoAnswers(source),subject), f=d.fields[0];
+          return {type:f.type,split:splitExtract(d.answers.f1),text:answerPlan(d,f,d.answers.f1).out.map(x=>x.ch).join(''),parts:extractParts(d,f)};
+        },{source,subject});
+        assert.equal(result.type,3); assert.deepEqual(result.split,['あああ','いいい']);
+        assert.equal(result.text,'あああいいい'); assert.equal(result.parts.n,3);
+      }
+    }
+    const unequal=(await parse('1\n1, あ ～ いいい ,2,思'))[0];
+    assert.equal(unequal.kind,'extract'); assert.equal(unequal.n,3);
+    assert.equal((await parse('1\n1,5～10,2,知,語句'))[0].kind,'word');
+    assert.notEqual((await parse('1\n1,あ～い～う,2,知'))[0].kind,'extract');
+    pass('A wave marker infers extract fields and separates beginning/end in both writing directions, while explicit types take precedence');
     const explicit=await page.evaluate(()=>parseAutoAnswers('大問一\nア 5点 思考判断表現\n\nイ',
       {group:'三',groupStyle:'kanji',numStyle:'Q',start:1,points:2,aspect:'知技',blankGroups:true}));
     assert.equal(explicit[0].points,5); assert.equal(explicit[0].aspect,'思判表');
@@ -123,7 +142,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const defaultRect=await page.evaluate(rows=>buildAutoDocument(rows,'国語').fields[0].rects[0],defaultBlank);
     assert.equal(defaultRect.w,1); assert.equal(defaultRect.h,20);
     pass('Answer-only fields default to width 1 and height 10 while explicit dimensions take precedence');
-    for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','グラフ 40×40']){
+    for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','初終3字 あああ～いいいい','初終3字 あああ～','グラフ 40×40']){
       const result=await page.evaluate(source=>{try{buildAutoDocument(parseAutoAnswers(source),'国語');return null;}catch(e){return e.message;}},source);
       assert.ok(result,source);
     }
@@ -184,7 +203,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(await page.evaluate(()=>JSON.stringify({doc,uid,history})),before);
     pass('A page-capacity failure is atomic and never drops questions');
     await page.click('#auto-cancel'); await page.click('#t-auto');
-    await page.fill('#auto-source','大問一\n問一 太陽 3点 知識技能\n(1) This is a short English answer. 記述 3×2 5点 思考判断表現\n(2) アイウエ 4字 4点 知識技能\n大問二\n問一 初終2字 はじ おわ 4点 思考判断表現\n(1) 解答欄のみ 4×2 3点 思考判断表現');
+    await page.fill('#auto-source','大問一\n問一 太陽 3点 知識技能\n(1) This is a short English answer. 記述 3×2 5点 思考判断表現\n(2) アイウエ 4字 4点 知識技能\n大問二\n問一 初終2字 はじ～おわ 4点 思考判断表現\n(1) 解答欄のみ 4×2 3点 思考判断表現');
     await page.click('#auto-parse'); await page.selectOption('#auto-subject','数学');
     await page.check('#auto-replace'); await page.click('#auto-apply'); await page.locator('.auto-modal').waitFor({state:'detached'});
     await download('#btn-xlsx','horizontal.xlsx'); await download('#btn-save','horizontal.json');
@@ -214,6 +233,8 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(await kokugo.locator('[data-row="4"] [data-k="label"]').inputValue(),'問一');
     assert.equal(await kokugo.locator('[data-row="3"] [data-k="subLabel"]').inputValue(),'（１）');
     assert.equal(await kokugo.locator('[data-row="4"] [data-k="subLabel"]').inputValue(),'（２）');
+    assert.equal(await kokugo.locator('[data-row="6"] [data-k="kind"]').inputValue(),'extract');
+    assert.equal(await kokugo.locator('[data-row="6"] [data-k="n"]').inputValue(),'3');
     await kokugo.locator('[data-row="8"]').scrollIntoViewIfNeeded();
     await kokugo.screenshot({path:path.join(output,'sample-defaults.png'),fullPage:true});
     await kokugo.click('#auto-apply'); await kokugo.locator('#app.on').waitFor();
@@ -349,6 +370,28 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await blanks.click('#btn-answer-editor');
     assert.equal(await blankCard.locator('[data-k="h"]').inputValue(),'11');
     pass('Answer-only size defaults are visible on parsing and type selection, remain editable, and survive regeneration');
+    const waveEditor=await context.newPage(); await waveEditor.goto(url); await waveEditor.click('#btn-from-answers');
+    await waveEditor.fill('#auto-source','1\n1,ア,2,思'); await waveEditor.click('#auto-parse');
+    const waveCard=waveEditor.locator('[data-row="0"]');
+    await waveCard.locator('[data-k="answer"]').fill('あああ～いいい');
+    assert.equal(await waveCard.locator('[data-k="kind"]').inputValue(),'extract');
+    assert.equal(await waveCard.locator('[data-k="n"]').inputValue(),'3');
+    await waveCard.locator('[data-k="n"]').fill('4');
+    await waveEditor.click('#auto-apply'); await waveEditor.locator('#app.on').waitFor();
+    assert.deepEqual(await waveEditor.evaluate(()=>splitExtract(doc.answers.f1)),['あああ','いいい']);
+    assert.equal(await waveEditor.evaluate(()=>doc.fields[0].type),3);
+    assert.equal(await waveEditor.evaluate(()=>doc.fields[0].chars),4);
+    await waveEditor.click('#btn-answer-editor');
+    assert.equal(await waveCard.locator('[data-k="answer"]').inputValue(),'あああ～いいい');
+    assert.equal(await waveCard.locator('[data-k="kind"]').inputValue(),'extract');
+    assert.equal(await waveCard.locator('[data-k="n"]').inputValue(),'4');
+    await waveCard.locator('[data-k="kind"]').selectOption('word');
+    await waveCard.locator('[data-k="answer"]').fill('うう～ええ');
+    assert.equal(await waveCard.locator('[data-k="kind"]').inputValue(),'word');
+    await waveEditor.check('#auto-replace'); await waveEditor.click('#auto-apply');
+    assert.equal(await waveEditor.evaluate(()=>doc.fields[0].type),6);
+    assert.equal(await waveEditor.evaluate(()=>doc.answers.f1),'うう～ええ');
+    pass('Wave markers infer the extract dropdown and character count during editing and survive generation/reopening; manual type overrides remain respected');
     const excel=spawnSync('python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
     if(excel.stdout) process.stdout.write(excel.stdout);
     if(excel.stderr) process.stderr.write(excel.stderr);

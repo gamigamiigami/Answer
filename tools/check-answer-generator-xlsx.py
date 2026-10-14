@@ -1,5 +1,6 @@
 """Inspect browser-exported XLSX files against their saved work documents."""
 import json
+import re
 import sys
 from pathlib import Path
 from unicodedata import normalize
@@ -116,7 +117,8 @@ def inspect(directory, name):
                 assert blank.cell(r, c).value is None, (name, field['id'], 'answer leaked into blank sheet')
         actual = ''.join(str(cell.value) for cell in answer_cells)
         if kind == 'extract':
-            expected = expected.replace(' ', '').replace('　', '').replace('／', '').replace('/', '')
+            wave = re.split('[～〜~]', expected)
+            expected = ''.join(part.strip() for part in wave) if len(wave) == 2 else expected.replace(' ', '').replace('　', '').replace('／', '').replace('/', '')
         assert actual == expected, (name, field['id'], actual, expected)
         for cell in answer_cells:
             if field['fixedChars']:
