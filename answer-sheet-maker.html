@@ -1301,8 +1301,9 @@ function buildCells(d, withAnswers){
       if (!a) continue;
       answerPlan(d, f, a).out.forEach(({p, ch, size}) => {
         if (p.mh){
-          put(p.c, p.r, ch, size || 11, false, 'center', false);
+          put(p.c, p.r, ch, size || 11, false, vertical ? 'center' : 'left', false);
           merge(p.c, p.r, p.mw || 1, p.mh); get(p.c,p.r).stack = !!p.stack;
+          get(p.c,p.r).valign = vertical ? 'top' : 'center';
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
       });
@@ -1483,6 +1484,7 @@ function render(){
     const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
     const a = { y: y0 + x.r*RH + mh*RH/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
+    if (x.valign==='top') a.y = y0 + x.r*RH + 0.55 + fs/2;
     if (x.align==='left'){ a.x = X(x.c) + 0.4; a['text-anchor']='start'; }
     else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
     else { a.x = X(x.c) + W(x.c, mw)/2; a['text-anchor']='middle'; }
@@ -1491,7 +1493,7 @@ function render(){
     if (x.stack){
       const letters = Array.from(x.t), step = fs*1.12;
       letters.forEach((ch,i) => {
-        const span = el('tspan',{x:a.x,y:a.y+(i-(letters.length-1)/2)*step});
+        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top' ? i : i-(letters.length-1)/2)*step});
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
     } else t.textContent = cellText(doc, x);
@@ -3411,9 +3413,9 @@ function buildXlsx(){
     if (!borderKey.has(k)){ borderKey.set(k, borders.length); borders.push(b); }
     return borderKey.get(k);
   };
-  const addXf = (fi,bi,align,pi,stack=false) => {
-    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack;
-    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack}); }
+  const addXf = (fi,bi,align,pi,stack=false,valign='center') => {
+    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack+'/'+valign;
+    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack,valign}); }
     return xfKey.get(k);
   };
   const fillList = ['', ''];                    // 0:なし 1:gray125（Excelのきまり）
@@ -3479,7 +3481,7 @@ function buildXlsx(){
           bd = unionBorders(sh.cells, c, r, mg.w, mg.h);
         }
         const si = addXf(addFont(x.size||11, x.bold), addBorder(bd), x.align||'center',
-                         addFill(x.fill),!!x.stack);
+                         addFill(x.fill),!!x.stack,x.valign);
         const ref = colName(c)+(r+1);
         rowXml += x.t
           ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+
@@ -3520,7 +3522,7 @@ function buildXlsx(){
   ).join('')+'</fills>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
     '<xf numFmtId="0" fontId="'+x.fi+'" fillId="'+x.pi+'" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyFill="1" applyAlignment="1">'+
-    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="center"'+(x.stack?' textRotation="255"':'')+'/></xf>'
+    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(x.valign==='top'?'top':'center')+'"'+(x.stack?' textRotation="255"':'')+'/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
@@ -4546,8 +4548,8 @@ function autoMeta(token, row){
   const t = autoDigits(token).replace(/[：]/g,':');
   let m;
   if ((m = /^(?:配点:?)?(-?\d+)点$/.exec(t))) row.points = +m[1];
-  else if (/^(?:知|知技|知識技能|知識・技能)$/.test(t)) row.aspect = '知技';
-  else if (/^(?:思|思判表|思考判断表現|思考・判断・表現)$/.test(t)) row.aspect = '思判表';
+  else if (/^(?:ち|知|知技|知識技能|知識・技能)$/.test(t)) row.aspect = '知技';
+  else if (/^(?:し|思|思判表|思考判断表現|思考・判断・表現)$/.test(t)) row.aspect = '思判表';
   else if (/^(?:完答|完答あり)$/.test(t)) row.complete = true;
   else if (/^(?:部分点|完答なし)$/.test(t)) row.complete = false;
   else if ((m = /^(\d+)(?:字|文字)(以内|程度|ちょうど|指定)?$/.exec(t))){
@@ -4708,7 +4710,14 @@ function parseAutoAnswers(source, defaults={}){
       Object.assign(row, trial); return ' ';
     });
     // 指定は空白・タブ・縦棒で区切る。答えの中の文字列を部分一致で消さない。
-    row.answer = text.split(/([\s|｜]+)/).filter(t => !autoMeta(t, row)).join('').trim();
+    let hasAnswer=false;
+    row.answer = text.split(/([\s|｜]+)/).filter(t => {
+      if (!t.trim() || /^[|｜]+$/.test(t)) return true;
+      // 冒頭の「ち」「し」は答えとして残し、後ろの観点だけを読む。
+      if (!hasAnswer && /^[ちし]$/.test(t)){ hasAnswer=true; return true; }
+      if (autoMeta(t,row)) return false;
+      hasAnswer=true; return true;
+    }).join('').trim();
     }
     if (!row.kind){
       const n = autoLength(row.answer);
@@ -4750,11 +4759,13 @@ function autoLabelPointSize(label,width){
   const length=ctx ? ctx.measureText(label).width : autoLength(label)*11;
   return Math.floor(Math.min(11,(CW*width-1.2)/ptmm(1)*11/Math.max(1,length))*2)/2;
 }
-function buildAutoDocument(rows, subject, currentPaper){
+function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
   const beforeUid = uid;
   const d = newDoc(subject);
   uid = beforeUid;
   if (currentPaper && currentPaper.subject === subject){ d.paper = {...currentPaper}; d.grid = computeGrid(d.paper); normalizeColw(d); }
+  if (currentPaper) d.paper.title=currentPaper.title;
+  else if (initialTitle) d.paper.title=initialTitle;
   const vertical = d.paper.writing === 'vertical';
   const used = new Set(headerLayout(d).reserved);
   const origin = contentOrigin(d);
@@ -4891,7 +4902,8 @@ function currentAutoRows(){
   });
 }
 
-function openAnswerGenerator(){
+function openAnswerGenerator(initialTitle=''){
+  if (typeof initialTitle!=='string') initialTitle='';
   if (ui.mode==='input'){ ui.seq=null; commitInput(); }
   let rows=currentAutoRows() || [], parsedText='';
   const hadDoc=!!doc, selected=new Set(), groups=new Set(rows.map(r=>r.group));
@@ -4905,8 +4917,9 @@ function openAnswerGenerator(){
   wrap.innerHTML='<div class="card"><h3 id="auto-title" class="companion-title"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><span>模範解答から作る・編集</span></h3>'+
     '<p class="desc">まずは答えをどうぞ。欄の形は、てすとも君がお手伝いします。あとから直せるので、少しずつで大丈夫。</p>'+
     '<div class="auto-steps" role="tablist" aria-label="模範解答から作る手順"><button id="auto-tab-input" role="tab" aria-controls="auto-input-panel" data-step="input">① 答えを入力</button><button id="auto-tab-review" role="tab" aria-controls="auto-review-panel" data-step="review">② 確認・調整</button></div>'+
+    '<p class="desc">タイトル：<b>'+xmlEsc(doc ? doc.paper.title : initialTitle)+'</b></p>'+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select></div>'+
-    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div><p class="desc">大問番号だけの行の後に「問番号，答え，点数，知／思」を1問ずつ書きます。答えだけでも始められます。</p><textarea id="auto-source" rows="5" placeholder="１&#10;１，ア、２，知&#10;２，こんにちは、２、思&#10;２&#10;１，（１）、ウ、２、知"></textarea>'+
+    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div><p class="desc">大問番号だけの行の後に「問番号，答え，点数，ち／し」を1問ずつ書きます。「知／思」も使えます。答えだけでも始められます。</p><textarea id="auto-source" rows="6" placeholder="１&#10;１，ア、２，ち&#10;２，太陽，２，ち，漢字2字&#10;２&#10;１，（１）、ウ、２、ち&#10;（２）、相手の気持ちを考えたから、５，し，20字以内"></textarea>'+
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">「1，（1），ア，2，知」の次は「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数を省略すると0点、観点を省略すると答えから推定します。確認画面で調整してください。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
@@ -5075,7 +5088,7 @@ function openAnswerGenerator(){
     if (!rows.length) return;
     if (hadDoc && !q('#auto-replace').checked) return void(status.textContent='「現在の用紙を作り直す」にチェックしてください。');
     try {
-      const next=buildAutoDocument(rows,q('#auto-subject').value,doc && doc.paper);
+      const next=buildAutoDocument(rows,q('#auto-subject').value,doc && doc.paper,initialTitle);
       if (hadDoc){ ui.tab='sheet'; const h=history.sheet; h.undo.push(state(true)); if (h.undo.length>120) h.undo.shift(); h.redo=[]; }
       history.answer={undo:[],redo:[]}; history.draw={undo:[],redo:[]}; doc=next; uid=rows.length+1; ui.targets=[]; ui.seq=null; ui.dirty=true;
       wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。おつかれさまです！「模範解答の編集」で、いつでも直せます。');
@@ -5093,8 +5106,38 @@ function openAnswerGenerator(){
   drawRows(); if (rows.length) syncSource(); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):source).focus();
 }
 
+function openCreationTitle(method,subject,opener){
+  const wrap=document.createElement('div'); wrap.className='modal';
+  wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','creation-heading');
+  wrap.innerHTML='<form class="card" id="creation-form"><h3 id="creation-heading" class="companion-title">'+$('#start .buddy').outerHTML+'<span>まずは、テストのタイトルから。</span></h3>'+
+    '<p class="desc">'+(method==='answers'?'模範解答から作ります。':xmlEsc(subject)+(method==='template'?'の見本から作ります。':'の白紙から作ります。'))+'タイトルは、あとから画面上部で直せます。</p>'+
+    '<div class="row"><label for="creation-title">テストのタイトル</label><input id="creation-title" type="text" required placeholder="例：1年 国語 2学期中間テスト" autocomplete="off"></div>'+
+    '<div class="modal-actions"><button type="button" class="tb" id="creation-back">作り方に戻る</button><button type="submit" class="tb primary" id="creation-next">このタイトルで進む →</button></div></form>';
+  document.body.appendChild(wrap);
+  const input=wrap.querySelector('#creation-title');
+  const close=()=>{wrap.remove(); opener.focus();};
+  wrap.querySelector('#creation-back').onclick=close;
+  input.oninput=()=>input.setCustomValidity('');
+  wrap.querySelector('form').onsubmit=e=>{
+    e.preventDefault(); const title=input.value.trim();
+    if(!title){input.setCustomValidity('テストのタイトルを入力してください。'); input.reportValidity(); return;}
+    wrap.remove();
+    if(method==='answers') openAnswerGenerator(title);
+    else {doc=newDoc(subject); doc.paper.title=title; if(method==='template') applyTemplate(subject); startApp();}
+  };
+  wrap.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){e.preventDefault();close();}
+    if(e.key==='Tab'){
+      const last=wrap.querySelector('#creation-next');
+      if(e.shiftKey && document.activeElement===input){e.preventDefault();last.focus();}
+      else if(!e.shiftKey && document.activeElement===last){e.preventDefault();input.focus();}
+    }
+  });
+  input.focus();
+}
+
 function initStart(){
-  $('#btn-from-answers').onclick = openAnswerGenerator;
+  $('#btn-from-answers').onclick = e=>openCreationTitle('answers',null,e.currentTarget);
   const subjects = Object.keys(SUBJECTS);
   $('#tpl-row').innerHTML = Object.keys(TEMPLATES).map(s =>
     '<button class="subject-btn" data-tpl="'+s+'">'+s+'</button>').join('');
@@ -5102,11 +5145,11 @@ function initStart(){
     '<button class="subject-btn" data-blank="'+s+'">'+s+'</button>').join('');
   $('#tpl-row').addEventListener('click', e => {
     const b = e.target.closest('[data-tpl]'); if(!b) return;
-    doc = newDoc(b.dataset.tpl); applyTemplate(b.dataset.tpl); startApp();
+    openCreationTitle('template',b.dataset.tpl,b);
   });
   $('#blank-row').addEventListener('click', e => {
     const b = e.target.closest('[data-blank]'); if(!b) return;
-    doc = newDoc(b.dataset.blank); startApp();
+    openCreationTitle('blank',b.dataset.blank,b);
   });
   let bk = null;
   try { bk = localStorage.getItem(BK_KEY); } catch(e){}

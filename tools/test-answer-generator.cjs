@@ -29,6 +29,18 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const page = await context.newPage();
     await page.goto(url);
     const parse = text => page.evaluate(text => parseAutoAnswers(text),text);
+    const requestedPlaceholder='１\n１，ア、２，ち\n２，太陽，２，ち，漢字2字\n２\n１，（１）、ウ、２、ち\n（２）、相手の気持ちを考えたから、５，し，20字以内';
+    const kanaRows=await parse(requestedPlaceholder);
+    assert.equal(kanaRows.length,4);
+    assert.deepEqual(kanaRows.map(r=>r.aspect),['知技','知技','知技','思判表']);
+    assert.equal(kanaRows[1].kind,'kanji'); assert.equal(kanaRows[1].n,2);
+    assert.equal(kanaRows[3].label,'問一（２）'); assert.equal(kanaRows[3].n,20);
+    assert.deepEqual((await parse('1\n1,ア,2,し\n2,説明するため。,3,ち')).map(r=>r.aspect),['思判表','知技']);
+    assert.equal((await parse('ち'))[0].answer,'ち'); assert.equal((await parse('し'))[0].answer,'し');
+    assert.equal((await parse('問一 ち 2点 し'))[0].answer,'ち');
+    assert.equal((await parse('問一 ち 2点 し'))[0].aspect,'思判表');
+    assert.equal((await parse('1,し,2,ち'))[0].answer,'し');
+    pass('Hiragana aspects parse in the requested sample and override inference without consuming single-character answers');
     const plain = await parse('ア');
     assert.equal(plain[0].kind,'mark'); assert.equal(plain[0].points,0);
     assert.ok(plain[0].warnings.includes('観点を推定'));
@@ -147,7 +159,8 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
       assert.ok(result,source);
     }
     pass('Invalid metadata, fixed-length overflow, asymmetric extract overflow and oversized graphs are rejected');
-    await page.click('#btn-from-answers');
+    await page.click('#btn-from-answers'); await page.fill('#creation-title','確認テスト'); await page.click('#creation-next');
+    assert.equal(await page.locator('#auto-source').getAttribute('placeholder'),requestedPlaceholder);
     await page.fill('#auto-source',sample); await page.click('#auto-parse');
     assert.equal(await page.locator('[data-row]').count(),6);
     await page.locator('[data-row="0"] [data-k="points"]').selectOption('7');
@@ -162,6 +175,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(Object.keys(generated.answers).length,4);
     assert.equal(generated.fields[2].type,5); assert.equal(generated.fields[2].exact,false);
     assert.ok(Object.values(generated.texts).some(t=>t.bold && t.span>1));
+    assert.equal(await page.evaluate(()=>doc.paper.title),'確認テスト');
     pass('Preview edits generate all field types, answers, metadata and spanning section headings');
     const backup=await page.evaluate(()=>JSON.parse(docJson(true)));
     assert.deepEqual(backup.answers,{});
@@ -226,7 +240,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.ok(await page.evaluate(()=>document.querySelector('.auto-modal .card').scrollWidth<=document.querySelector('.auto-modal .card').clientWidth));
     pass('Generation editor fits a phone-width screen');
     const kokugo=await context.newPage(); await kokugo.goto(url);
-    await kokugo.click('#btn-from-answers'); await kokugo.click('#auto-example');
+    await kokugo.click('#btn-from-answers'); await kokugo.fill('#creation-title','確認テスト'); await kokugo.click('#creation-next'); await kokugo.click('#auto-example');
     assert.equal(await kokugo.locator('[data-row]').count(),9);
     assert.equal(await kokugo.locator('[data-row="8"] [data-k="kind"]').inputValue(),'blank');
     assert.equal(await kokugo.locator('[data-row="8"] [data-k="w"]').inputValue(),'1');
@@ -293,7 +307,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await kokugo.keyboard.press('Control+z');
     assert.deepEqual(await kokugo.evaluate(()=>JSON.parse(JSON.stringify(doc))),edited);
     pass('Generated fields use existing scoring, answer entry and drawing tools; replacement undo restores all edits');
-    const hierarchy=await context.newPage(); await hierarchy.goto(url); await hierarchy.click('#btn-from-answers');
+    const hierarchy=await context.newPage(); await hierarchy.goto(url); await hierarchy.click('#btn-from-answers'); await hierarchy.fill('#creation-title','確認テスト'); await hierarchy.click('#creation-next');
     await hierarchy.fill('#auto-source','1\n問一(1),ア,2,知,解答欄のみ,3×2\n(2),イ,2,知\n2\n1,ウ,2,知,解答欄のみ,2×2');
     await hierarchy.click('#auto-parse');
     assert.equal(await hierarchy.locator('[data-row="0"] [data-k="label"]').inputValue(),'問一');
@@ -347,7 +361,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await loaded.check('#auto-replace'); await loaded.click('#auto-apply');
     assert.deepEqual(await loaded.evaluate(()=>doc.fields.slice(0,2).map(f=>f.auto.label)),['問三(1)','問三(2)']);
     pass('Editing the shared parent cell updates both siblings when reopening and regenerating');
-    const blanks=await context.newPage(); await blanks.goto(url); await blanks.click('#btn-from-answers');
+    const blanks=await context.newPage(); await blanks.goto(url); await blanks.click('#btn-from-answers'); await blanks.fill('#creation-title','確認テスト'); await blanks.click('#creation-next');
     await blanks.fill('#auto-source','1\n1,,2,思,解答欄のみ\n2,ア,2,知'); await blanks.click('#auto-parse');
     const blankCard=blanks.locator('[data-row="0"]');
     assert.equal(await blankCard.locator('[data-k="w"]').inputValue(),'1');
@@ -373,7 +387,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await blanks.click('#btn-answer-editor');
     assert.equal(await blankCard.locator('[data-k="h"]').inputValue(),'11');
     pass('Answer-only size defaults are visible on parsing and type selection, remain editable, and survive regeneration');
-    const waveEditor=await context.newPage(); await waveEditor.goto(url); await waveEditor.click('#btn-from-answers');
+    const waveEditor=await context.newPage(); await waveEditor.goto(url); await waveEditor.click('#btn-from-answers'); await waveEditor.fill('#creation-title','確認テスト'); await waveEditor.click('#creation-next');
     await waveEditor.fill('#auto-source','1\n1,ア,2,思'); await waveEditor.click('#auto-parse');
     const waveCard=waveEditor.locator('[data-row="0"]');
     await waveCard.locator('[data-k="answer"]').fill('あああ～いいい');
@@ -396,6 +410,26 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(await waveEditor.evaluate(()=>doc.fields[0].type),6);
     assert.equal(await waveEditor.evaluate(()=>doc.answers.f1),'うう～ええ');
     pass('Wave markers infer the extract dropdown and character count during editing and survive generation/reopening; manual type overrides remain respected');
+    const alignmentPage=await context.newPage(); await alignmentPage.goto(url);
+    for(const subject of ['国語','数学','英語']){
+      const positions=await alignmentPage.evaluate(subject=>{
+        const vertical=subject==='国語';
+        doc=buildAutoDocument(parseAutoAnswers('1\n1,あいう,2,ち,解答欄のみ,'+(vertical?'1×10':'8×3')+'\n2,ABC,2,し,解答欄のみ,'+(vertical?'1×10':'8×3')),subject,null,'配置の確認');
+        startApp(); ui.tab='answer'; render();
+        const cells=[...buildCells(doc,true).values()].filter(c=>c.t==='あいう'||c.t==='ABC');
+        const r=doc.fields[0].rects[0], text=[...document.querySelectorAll('#sheet text')].find(n=>n.textContent==='あいう');
+        return {cells,top:doc.paper.marginY+r.r*RH,firstY:+(text.querySelector('tspan')||text).getAttribute('y'),anchor:text.getAttribute('text-anchor')};
+      },subject);
+      assert.equal(positions.cells.length,2);
+      for(const cell of positions.cells){
+        assert.equal(cell.align,subject==='国語'?'center':'left');
+        assert.equal(cell.valign,subject==='国語'?'top':'center');
+      }
+      if(subject==='国語') assert.ok(positions.firstY<positions.top+3,'vertical text should begin at the top of the tall field');
+      else assert.equal(positions.anchor,'start');
+    }
+    await alignmentPage.close();
+    pass('Free model answers begin at the top in Japanese and at the left in horizontal subjects, including Latin answers');
     const excel=spawnSync('python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
     if(excel.stdout) process.stdout.write(excel.stdout);
     if(excel.stderr) process.stderr.write(excel.stderr);
@@ -452,7 +486,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     pass('Both multi-column character fields and wide rectangles start at the top of a fresh column');
     const easy=await context.newPage();
     await easy.addInitScript(()=>localStorage.setItem('answer-sheet-maker/options',JSON.stringify({autoInput:{points:1000,kind:'chars',n:1000,group:'十',numStyle:'M'}})));
-    await easy.goto(url); await easy.click('#btn-from-answers');
+    await easy.goto(url); await easy.click('#btn-from-answers'); await easy.fill('#creation-title','確認テスト'); await easy.click('#creation-next');
     assert.equal(await easy.locator('#auto-next-group,#auto-save-defaults').count(),0);
     await easy.fill('#auto-source','１\n１，ア、２，知\n２，こんにちは、２、思\n２\n１，（１）、ウ、２、知');
     await easy.click('#auto-tab-input'); await easy.click('#auto-parse');

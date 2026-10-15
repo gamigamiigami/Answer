@@ -17,6 +17,13 @@ def inspect(directory, name):
     assert book.sheetnames == ['解答用紙', '模範解答']
     blank, model = book.worksheets
     for sheet in book:
+        title = work['paper']['title']
+        if work['paper']['writing'] == 'vertical':
+            actual = ''.join(str(sheet.cell(r + 2, work['grid']['cols']).value or '') for r in range(len(title)))
+            assert actual == title.replace('　', ''), (name, 'title changed during export')
+        else:
+            assert sheet.cell(1, 1).value == title, (name, 'title changed during export')
+    for sheet in book:
         assert str(sheet.page_setup.paperSize) == sheet.PAPERSIZE_A4
         assert sheet.page_setup.scale == 80
         assert sheet.page_setup.orientation == work['paper']['orientation']
@@ -126,6 +133,8 @@ def inspect(directory, name):
                 assert cell.font.sz == 11
             else:
                 assert 6 <= cell.font.sz <= 11
+                assert cell.alignment.horizontal == ('center' if vertical else 'left')
+                assert cell.alignment.vertical == ('top' if vertical else 'center')
                 if vertical and len(str(cell.value)) > 1 and any(ord(ch) > 127 for ch in str(cell.value)):
                     assert cell.alignment.textRotation == 255
         if kind == 'chars' and not field['exact'] and field['chars'] >= 5:
