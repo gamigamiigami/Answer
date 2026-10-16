@@ -241,6 +241,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     pass('Generation editor fits a phone-width screen');
     const kokugo=await context.newPage(); await kokugo.goto(url);
     await kokugo.click('#btn-from-answers'); await kokugo.fill('#creation-title','確認テスト'); await kokugo.click('#creation-next'); await kokugo.click('#auto-example');
+    await kokugo.click('#auto-parse');
     assert.equal(await kokugo.locator('[data-row]').count(),9);
     assert.equal(await kokugo.locator('[data-row="8"] [data-k="kind"]').inputValue(),'blank');
     assert.equal(await kokugo.locator('[data-row="8"] [data-k="w"]').inputValue(),'1');

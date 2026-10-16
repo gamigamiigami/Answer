@@ -5016,7 +5016,11 @@ function openAnswerGenerator(initialTitle=''){
       rows=parsed; parsedText=source.value; selected.clear(); rows.forEach(r=>groups.add(r.group)); drawRows(); showStep('review'); q('#auto-tab-review').focus();
     } catch(e){ status.textContent=e.message; }
   };
-  q('#auto-example').onclick=()=>{ source.value=AUTO_SAMPLE; parse(); };
+  q('#auto-example').onclick=()=>{
+    source.value=AUTO_SAMPLE;
+    status.textContent='入力例を入れました。自由に直してから「読み取って一覧にする」を押してください。';
+    source.focus();
+  };
   q('#auto-parse').onclick=parse;
   q('#auto-bulk-points').onchange=()=>{ q('#auto-bulk-point-custom').hidden=q('#auto-bulk-points').value!=='custom'; };
   q('#auto-bulk-apply').onclick=()=>{
