@@ -585,6 +585,14 @@ function computeGrid(paper){
   if (rows % CHAR_ROWS) rows -= rows % CHAR_ROWS;   // 文字マスで割り切れるように
   return { cols, rows };
 }
+function gridWithColumnWidths(d,paper=d.paper){
+  const grid=computeGrid(paper), cols=d.grid.cols, widths=d.colw;
+  // 同じ用紙では細い列で増やした列数も保つ。標準列数に戻すと欄が失われる。
+  if(paper.orientation===d.paper.orientation && paper.marginX===d.paper.marginX &&
+      Number.isInteger(cols) && cols>0 && cols<=120 && Array.isArray(widths) && widths.length===cols &&
+      widths.every(v=>Number(v)>0.3 && Number(v)<4) && widths.reduce((sum,v)=>sum+Number(v)*CW,0)<=PAGE[paper.orientation].w-paper.marginX*2+0.001) grid.cols=cols;
+  return grid;
+}
 
 function makeTitle(p){
   const parts = ['第'+p.grade+'学年'];
@@ -1584,6 +1592,7 @@ function drawStatus(){
   const s = $('#status');
   s.innerHTML = '';
   const chip = (txt, cls) => { const d2=document.createElement('span'); d2.className='chip'+(cls?' '+cls:''); d2.textContent=txt; s.appendChild(d2); };
+  if(doc.paper.autoFit) chip('作成時の自動調整：'+autoFitSummary(doc.paper));
   const mi = modeInfo();
   chip(mi.t, 'mode '+mi.cls);
   chip('用紙：A4 '+(doc.paper.orientation==='landscape'?'横':'縦')+' ／ '+doc.grid.cols+'列 × '+doc.grid.rows+'行 ／ 余白'+doc.paper.marginX+'mm・'+doc.paper.marginY+'mm');
@@ -3737,8 +3746,9 @@ function loadWork(text){
   d.drawings = arr(d.drawings);
   d.texts = obj(d.texts);
   d.answers = obj(d.answers);
+  const grid=gridWithColumnWidths(d);
   doc = d;                                   // ここまで通ってから差し替える
-  doc.grid = computeGrid(doc.paper);            // 余白設定に合わせ直す
+  doc.grid = grid;                            // 余白と保存した列幅に合わせ直す
   normalizeColw(doc);
   refitColumns();                               // 1枚に収まるように整える
   uid = 1;
@@ -4176,7 +4186,8 @@ async function openSettings(){
   // 用紙が小さくなる／向きが変わるとき、はみ出す欄がないか先に確かめる
   const trial = Object.assign({}, p, { writing:v.writing, orientation:v.orientation,
     marginX:+v.margin, marginY:(+v.margin===8) ? 9 : +v.margin });
-  const ng = countOutside(doc, computeGrid(trial));
+  const nextGrid=gridWithColumnWidths(doc,trial);
+  const ng = countOutside(doc, nextGrid);
   if (ng){
     const go = await ask('この設定にすると欄が用紙からはみ出します', [
       {key:'ok', label:'', type:'none',
@@ -4193,7 +4204,7 @@ async function openSettings(){
   // 手で書き換えたタイトル・氏名欄は上書きしない
   if (autoTitle) p.title = makeTitle(p);
   if (autoName)  p.nameLabel = makeNameLabel(p);
-  doc.grid = computeGrid(p);
+  doc.grid = nextGrid;
   normalizeColw(doc);
   refitColumns();                       // 列幅を変えていても1枚に収める
   ui.cur = { c: Math.min(ui.cur.c, doc.grid.cols-1), r: Math.min(ui.cur.r, doc.grid.rows-1) };
@@ -4760,13 +4771,39 @@ function autoLabelPointSize(label,width){
   return Math.floor(Math.min(11,(CW*width-1.2)/ptmm(1)*11/Math.max(1,length))*2)/2;
 }
 function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
+  rows.forEach((row,i)=>{ const error=autoRowError(row); if(error) throw new Error((i+1)+'問目：'+error); });
+  const hasGaps=new Set(rows.map(r=>r.group)).size>1;
+  const vertical=(currentPaper && currentPaper.subject===subject ? currentPaper.writing : SUBJECTS[subject].writing)==='vertical';
+  const gaps=hasGaps ? (vertical ? [1,0.8,0.6,0.4] : [1,0.5]) : [1];
+  const attempts=gaps.map(gap=>({gap,width:1}));
+  for(let percent=97.5;percent>=80;percent-=2.5) attempts.push({gap:gaps[gaps.length-1],width:percent/100});
+  let last;
+  for(const fit of attempts){
+    try { return buildAutoLayout(rows,subject,currentPaper,initialTitle,fit); }
+    catch(e){ if(!e.autoCapacity) throw e; last=e; }
+  }
+  throw new Error('大問間の空白を狭め、欄幅を80％まで調整してもA4・1枚に入りません。問題を別の用紙に分けるか、字数・幅・高さを見直してください。現在の用紙は変更しません。'+(last ? '（'+last.message+'）' : ''));
+}
+function autoFitSummary(paper){
+  const fit=paper.autoFit;
+  return fit ? '大問間の空白'+fit.gapPercent+'％・欄幅'+fit.widthPercent+'％' : '';
+}
+function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
   const beforeUid = uid;
   const d = newDoc(subject);
   uid = beforeUid;
   if (currentPaper && currentPaper.subject === subject){ d.paper = {...currentPaper}; d.grid = computeGrid(d.paper); normalizeColw(d); }
+  delete d.paper.autoFit;
   if (currentPaper) d.paper.title=currentPaper.title;
   else if (initialTitle) d.paper.title=initialTitle;
   const vertical = d.paper.writing === 'vertical';
+  const gapCount=Math.max(0,new Set(rows.map(r=>r.group)).size-1);
+  // 空白列を先に細くする。国語のタイトル・氏名・得点枠の幅は維持する。
+  const headerCols=vertical ? (d.paper.showScoreBox ? 6 : 2) : 0;
+  const gapCols=vertical ? gapCount : 0;
+  d.grid.cols=Math.floor((printableW(d)/CW-headerCols-gapCols*fit.gap+0.0001)/fit.width)+headerCols+gapCols;
+  d.colw=Array.from({length:d.grid.cols},(_,c)=>c<d.grid.cols-headerCols ? fit.width : 1);
+  const capacity=message=>Object.assign(new Error(message),{autoCapacity:true});
   const used = new Set(headerLayout(d).reserved);
   const origin = contentOrigin(d);
   let head = {...origin}, active = null, cur, minC, maxR, groupTop, questionMain='', questionFrame=null;
@@ -4793,10 +4830,13 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
     if (error) throw new Error((i+1)+'問目：'+error);
     if (row.group !== active){
       finishGroup();
-      // 大問が変わるときだけ、縦書きは1列、横書きは1文字行を空ける。
-      if (active !== null) head = vertical ? {c:minC-2,r:origin.r} : {c:origin.c,r:maxR+CHAR_ROWS};
+      // 空白の物理幅をすべての大問でそろえる。横書きは半行まで。
+      if (active !== null){
+        if(vertical) d.colw[minC-1]=fit.gap;
+        head = vertical ? {c:minC-2,r:origin.r} : {c:origin.c,r:maxR+Math.round(CHAR_ROWS*fit.gap)};
+      }
       const hd = vertical ? {c:head.c,r:head.r,w:1,h:1} : {c:head.c,r:head.r,w:1,h:CHAR_ROWS};
-      if (clash(hd)) throw new Error((i+1)+'問目の大問見出しがA4に入りません。問題を別の用紙に分けてください。');
+      if (clash(hd)) throw capacity((i+1)+'問目の大問見出しがA4に入りません。');
       take(hd);
       d.texts[hd.c+','+hd.r] = {t:row.group,size:Math.min(14,24/Math.max(1,autoLength(row.group))),bold:true,box:true};
       cur = vertical ? {c:head.c,r:head.r+1} : {c:head.c+1,r:head.r};
@@ -4828,7 +4868,7 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
       minC = Math.min(minC,cur.c); maxR = Math.max(maxR,cur.r+CHAR_ROWS);
       if (cur.c < 0 || cur.r >= d.grid.rows) break;
     }
-    if (!got) throw new Error((i+1)+'問目（大問'+row.group+' '+row.label+'）がA4に入りません。字数・幅・高さを見直すか、問題を別の用紙に分けてください。現在の用紙は変更しません。');
+    if (!got) throw capacity((i+1)+'問目（大問'+row.group+' '+row.label+'）がA4に入りません。');
     const id = 'f'+(i+1);
     const {answer, warnings, questionId, ...spec} = row;
     const f = {id,type,rects:got.rects,chars:fixed ? row.n : n,exact:!row.eight,
@@ -4837,7 +4877,7 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
     if (got.parent){
       questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
       d.decorations.push(questionFrame); take(questionFrame);
-      d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,1)};
+      d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,fit.width)};
       questionMain=numbering.main;
     }
     if (hierarchical) f.auto.questionId=questionFrame.id;
@@ -4845,7 +4885,7 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
     if (got.lab){
       f.label = got.lab; take(got.lab);
       const label=hierarchical ? numbering.suffix : row.label;
-      d.texts[got.lab.c+','+got.lab.r] = {t:label,size:autoLabelPointSize(label,got.lab.w)};
+      d.texts[got.lab.c+','+got.lab.r] = {t:label,size:autoLabelPointSize(label,got.lab.w*fit.width)};
     }
     got.rects.forEach(take); d.fields.push(f);
     if (row.answer){
@@ -4864,11 +4904,11 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
   // 左端の未使用列だけを減らし、現在の用紙には触れずA4幅を検査する。
   if (vertical){
     d.fields.filter(f=>f.type === 8).forEach(f=>f.rects.forEach(r=>{
-      for (let c=r.c;c<r.c+r.w;c++) d.colw[c] = KANJI_COL;
+      for (let c=r.c;c<r.c+r.w;c++) d.colw[c] = KANJI_COL*fit.width;
     }));
     while (d.colw.reduce((sum,v)=>sum+v*CW,0) > printableW(d)+0.001){
       if (d.fields.some(f=>f.rects.concat(f.label || []).some(r=>r.c === 0)) || Object.keys(d.texts).some(k=>k.startsWith('0,')))
-        throw new Error('漢字欄の列幅を広げるとA4に入りません。字数・幅・高さを見直すか、問題を別の用紙に分けてください。');
+        throw capacity('漢字欄の列幅を広げるとA4に入りません。');
       d.fields.forEach(f=>f.rects.concat(f.label || []).forEach(r=>r.c--));
       d.decorations.forEach(v=>v.c--);
       d.texts = Object.fromEntries(Object.entries(d.texts).map(([key,value])=>{
@@ -4877,6 +4917,13 @@ function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
       d.grid.cols--; d.colw.shift();
     }
   }
+  // 最終的な幅で再確認する。縮小による文字の欠落も許さない。
+  for(const f of d.fields){
+    const answer=d.answers[f.id]; if(!answer) continue;
+    const plan=answerPlan(d,f,answer);
+    if(plan.need>plan.room) throw capacity('模範解答が調整後の欄に入りません。');
+  }
+  if(fit.gap<1 || fit.width<1) d.paper.autoFit={gapPercent:gapCount ? fit.gap*100 : 100,widthPercent:fit.width*100};
   return d;
 }
 function currentAutoRows(){
@@ -4923,7 +4970,7 @@ function openAnswerGenerator(initialTitle=''){
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">「1，（1），ア，2，知」の次は「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数を省略すると0点、観点を省略すると答えから推定します。確認画面で調整してください。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">入りきらないときは、① 大問間の空白をそろえて狭める → ② 欄幅を少しずつ縮める（最大20％）の順に自動調整します。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
     (hadDoc?'<label class="auto-replace" hidden><input id="auto-replace" type="checkbox">現在の用紙を作り直す（手動の配置・描画も置き換えます。「戻す」で復元できます）</label>':'')+
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
@@ -5095,7 +5142,7 @@ function openAnswerGenerator(initialTitle=''){
       const next=buildAutoDocument(rows,q('#auto-subject').value,doc && doc.paper,initialTitle);
       if (hadDoc){ ui.tab='sheet'; const h=history.sheet; h.undo.push(state(true)); if (h.undo.length>120) h.undo.shift(); h.redo=[]; }
       history.answer={undo:[],redo:[]}; history.draw={undo:[],redo:[]}; doc=next; uid=rows.length+1; ui.targets=[]; ui.seq=null; ui.dirty=true;
-      wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。おつかれさまです！「模範解答の編集」で、いつでも直せます。');
+      wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。'+(doc.paper.autoFit ? autoFitSummary(doc.paper)+'に自動調整しました。' : 'おつかれさまです！')+'「模範解答の編集」で、いつでも直せます。');
     } catch(e){ status.textContent=e.message; }
   };
   wrap.addEventListener('keydown',e=>{
