@@ -84,6 +84,9 @@ node tools/build-artifact.mjs  # claude.ai の公開ページ用 dist/artifact.h
 
 ```sh
 node tools/test-answer-generator.cjs
+node tools/test-ui.cjs
+node tools/test-auto-fit.cjs
+node tools/test-graph-answers.cjs
 ```
 
 テストには Playwright、Chromium、Python 3 と openpyxl を使用します。アプリ本体の利用・ビルドに追加依存はありません。

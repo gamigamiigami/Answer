@@ -347,6 +347,13 @@ input[type=checkbox]{accent-color:var(--place)}
   #sheet{display:block;width:var(--pw)!important;height:var(--ph)!important;max-width:none}
   .guide{display:none}
 }
+.graph-modal .card{width:min(620px,96vw)}
+.graph-ranges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.graph-ranges label{display:flex;flex-direction:column;gap:5px;font-size:13px}
+.graph-ranges input{width:100%;min-width:0;box-sizing:border-box;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font:inherit}
+#graph-equations{width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--field);color:var(--ink);font:inherit;line-height:1.6}
+#graph-preview{display:block;width:100%;height:300px;background:#fff;border:1px solid var(--line);border-radius:12px}
+#graph-status{font-size:13px;min-height:1.5em}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -415,6 +422,7 @@ input[type=checkbox]{accent-color:var(--place)}
       <div class="workspace-guide"><div class="companion-heading"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><b id="workspace-heading">いっしょに、形に。</b></div><p id="workspace-tip"></p></div>
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
+        <p class="tip">丸数字と同じ数字キーでも追加できます（⓪は0）。</p>
         <div class="grid3" id="field-tools"></div>
         <details class="tool-section"><summary>番号を振る</summary><p class="tip">用紙上で番号を入れるマスを選んでから押します。</p><div class="grid5" id="stamp-tools"></div></details>
       </div>
@@ -613,7 +621,7 @@ function newDoc(subject){
   paper.nameLabel = makeNameLabel(paper);
   const d = {
     version:4, paper, grid:computeGrid(paper), colw:[],
-    fields:[], decorations:[], texts:{}, answers:{}, drawings:[]
+    fields:[], decorations:[], texts:{}, answers:{}, answerGraphs:{}, drawings:[]
   };
   normalizeColw(d);
   uid = 1;
@@ -963,6 +971,189 @@ function textPtOf(o){
 }
 const textScaleOf = o => textPtOf(o) / BASE_PT;
 
+// 式は四則演算・累乗・xだけを構文解析する。入力をJavaScriptとして実行しない。
+function normalizeMath(text){
+  return String(text).replace(/²/g,'^2').replace(/³/g,'^3').normalize('NFKC').replace(/[−–]/g,'-').replace(/[×・]/g,'*').replace(/÷/g,'/').replace(/\*\*/g,'^');
+}
+function compileGraphExpression(source){
+  let text=normalizeMath(source).trim().replace(/^y\s*=\s*/i,'').replace(/\s+/g,'');
+  if(!text || text.length>240) throw new Error('式は240文字以内で入力してください。例：y=3x+1');
+  const tokens=text.match(/(?:\d+(?:\.\d*)?|\.\d+)|[xX()+*/^\-]/g) || [];
+  if(tokens.join('')!==text || tokens.length>160) throw new Error('式には数字・x・括弧・+ − × ÷・^ を使えます。例：y=6/x、y=(1/2)x^2');
+  let pos=0, depth=0;
+  const peek=()=>tokens[pos];
+  const primary=()=>{
+    if(++depth>32) throw new Error('式の括弧が深すぎます。');
+    let node, token=tokens[pos++];
+    if(token==='('){node=sum();if(tokens[pos++]!==')') throw new Error('括弧を閉じてください。');}
+    else if(/^x$/i.test(token || '')) node={op:'x'};
+    else if(token && /^(?:\d|\.)/.test(token) && Number.isFinite(Number(token))) node={op:'n',n:Number(token)};
+    else throw new Error('式を確認してください。例：y=3x+1');
+    depth--;return node;
+  };
+  const power=()=>{let n=primary();if(peek()==='^'){pos++;n={op:'^',a:n,b:unary()};}return n;};
+  const unary=()=>{if(peek()==='+' || peek()==='-'){const op=tokens[pos++];if(++depth>32) throw new Error('式が複雑すぎます。');const n={op:'u'+op,a:unary()};depth--;return n;}return power();};
+  const product=()=>{let n=unary();while(peek()==='*' || peek()==='/' || /^(?:x|\(|\d|\.)/i.test(peek() || '')){
+    const op=peek()==='*' || peek()==='/' ? tokens[pos++] : '*';n={op,a:n,b:unary()};}return n;};
+  const sum=()=>{let n=product();while(peek()==='+' || peek()==='-'){const op=tokens[pos++];n={op,a:n,b:product()};}return n;};
+  const tree=sum();if(pos!==tokens.length) throw new Error('式の括弧や記号を確認してください。');
+  const value=(n,x)=>{
+    if(n.op==='n') return n.n;if(n.op==='x') return x;
+    const a=value(n.a,x);if(n.op==='u-') return -a;if(n.op==='u+') return a;
+    const b=value(n.b,x);return n.op==='+'?a+b:n.op==='-'?a-b:n.op==='*'?a*b:n.op==='/'?a/b:Math.pow(a,b);
+  };
+  return x=>value(tree,x);
+}
+const looksLikeGraph = text => /^\s*y\s*[=＝]/i.test(text);
+function graphEquations(text){
+  const lines=String(text).split(/[\n;；|]/).map(s=>s.trim()).filter(Boolean);
+  if(!lines.length || lines.length>4) throw new Error('式は1行に1つ、4本まで入力できます。');
+  return lines.map(source=>({source,fn:compileGraphExpression(source)}));
+}
+const DEFAULT_GRAPH_RANGE={xMin:-5,xMax:5,yMin:-5,yMax:5};
+function graphRange(value={}){
+  const range={...DEFAULT_GRAPH_RANGE,...value};
+  if(!Object.values(range).every(v=>typeof v==='number' && Number.isFinite(v) && Math.abs(v)<=1e6) ||
+      range.xMax-range.xMin<1e-6 || range.yMax-range.yMin<1e-6) throw new Error('x・yの最小値は最大値より小さくしてください（範囲は−1000000〜1000000）。');
+  return range;
+}
+function docColumnMM(d,c){let mm=0;for(let i=0;i<c;i++) mm+=CW*((d.colw || [])[i] || 1);return mm;}
+function rectMM(d,r){return {x:docColumnMM(d,r.c),y:r.r*RH,w:docColumnMM(d,r.c+r.w)-docColumnMM(d,r.c),h:r.h*RH};}
+function mathTokens(text){
+  const source=String(text), re=/(\([^()\n]+\)|\d+(?:\.\d+)?|[xy])\s*\/\s*(\([^()\n]+\)|\d+(?:\.\d+)?|[xy](?:\^\d+)?)/g;
+  const out=[];let end=0;
+  const plain=text=>{
+    const chars=Array.from(text);
+    for(let i=0;i<chars.length;i++){
+      if(chars[i]==='^' && /[23]/.test(chars[i+1] || '') && !/\d/.test(chars[i+2] || '')){out.push({t:chars[i+1]==='2'?'²':'³',raw:chars.slice(i,i+2).join('')});i++;}
+      else out.push({t:chars[i],raw:chars[i]});
+    }
+  };
+  for(const m of source.matchAll(re)){
+    plain(source.slice(end,m.index));
+    out.push({num:m[1].replace(/^\((.*)\)$/,'$1'),den:m[2].replace(/^\((.*)\)$/,'$1'),raw:m[0]});end=m.index+m[0].length;
+  }
+  plain(source.slice(end));return out;
+}
+function mathTextWidth(text,size){
+  const ctx=mathTextWidth.ctx || (mathTextWidth.ctx=document.createElement('canvas').getContext('2d'));
+  if(ctx) ctx.font=size+'px "Yu Gothic",sans-serif';
+  return ptmm(size)*(ctx ? ctx.measureText(text).width/size*1.08 : Array.from(text).length);
+}
+const mathDisplay = text => String(text).replace(/\^2/g,'²').replace(/\^3/g,'³').replace(/\*/g,'×');
+function mathTokenWidth(token,size){return token.num!==undefined ? Math.max(mathTextWidth(mathDisplay(token.num),size*.76),mathTextWidth(mathDisplay(token.den),size*.76))+.7 : mathTextWidth(mathDisplay(token.t),size);}
+function mathLinePrimitives(tokens,x,y,size){
+  const out=[];
+  for(const t of tokens){
+    const w=mathTokenWidth(t,size);
+    if(t.num!==undefined){
+      out.push({k:'text',x:x+w/2,y:y-ptmm(size)*.52,text:mathDisplay(t.num),size:size*.76},
+        {k:'line',x1:x+.12,y1:y,x2:x+w-.12,y2:y,width:.16},
+        {k:'text',x:x+w/2,y:y+ptmm(size)*.52,text:mathDisplay(t.den),size:size*.76});
+    } else if(t.t.trim()) out.push({k:'text',x:x+w/2,y,text:mathDisplay(t.t),size});
+    x+=w;
+  }
+  return out;
+}
+function fractionAnswerPlan(d,f,text){
+  if(f.fixedChars===true || (f.fixedChars!==false && [3,4,5,8].includes(f.type))) return null;
+  const tokens=mathTokens(text);if(!tokens.some(t=>t.num!==undefined)) return null;
+  const notes=f.note ? placeNote(d,f).map(p=>rectMM(d,{c:p.c,r:p.r,w:1,h:1})) : [];
+  let result;
+  for(let size=Math.min(40,textPtOf(f));size>=Math.min(6,textPtOf(f));size-=.5){
+    let index=0;const vectors=[],lineHeight=ptmm(size)*1.9;
+    for(const r of f.rects){
+      const box=rectMM(d,r);
+      for(let top=box.y+.55;top+lineHeight<=box.y+box.h-.3 && index<tokens.length;top+=lineHeight){
+        let segments=[[box.x+.5,box.x+box.w-.5]];
+        for(const note of notes.filter(n=>n.y<top+lineHeight && n.y+n.h>top)){
+          segments=segments.flatMap(([a,b])=>note.x>=b || note.x+note.w<=a ? [[a,b]] : [[a,Math.max(a,note.x-.2)],[Math.min(b,note.x+note.w+.2),b]]).filter(([a,b])=>b>a);
+        }
+        for(const [left,right] of segments){
+          const line=[];let width=0;
+          while(index<tokens.length){
+            const token=tokens[index];if(token.t==='\n'){index++;break;}
+            const next=mathTokenWidth(token,size);if(width+next>right-left) break;
+            width+=next;line.push(token);index++;
+          }
+          vectors.push(...mathLinePrimitives(line,left,top+lineHeight/2,size));
+        }
+      }
+    }
+    result={out:[],vectors,need:Array.from(text).length,room:Array.from(tokens.slice(0,index).map(t=>t.raw).join('')).length};
+    if(index===tokens.length) return result;
+  }
+  return result;
+}
+function clipGraphSegment(x1,y1,x2,y2,r){
+  let lo=0,hi=1;const dx=x2-x1,dy=y2-y1;
+  for(const [p,q] of [[-dx,x1-r.xMin],[dx,r.xMax-x1],[-dy,y1-r.yMin],[dy,r.yMax-y1]]){
+    if(p===0){if(q<0) return null;continue;}const t=q/p;
+    if(p<0) lo=Math.max(lo,t);else hi=Math.min(hi,t);if(lo>hi) return null;
+  }
+  return [x1+lo*dx,y1+lo*dy,x1+hi*dx,y1+hi*dy];
+}
+function graphPrimitives(d,f,text,range,withAnswers){
+  const box=rectMM(d,f.rects[0]), r=graphRange(range), out=[];
+  const equations=text.trim()?graphEquations(text):[],captionHeight=4+Math.max(1,equations.length)*4;
+  const plot={x:box.x+4,y:box.y+captionHeight,w:box.w-8,h:box.h-captionHeight-5};
+  if(plot.w<4 || plot.h<4) throw new Error('グラフ欄の幅・高さを大きくしてください。');
+  const X=x=>plot.x+(x-r.xMin)/(r.xMax-r.xMin)*plot.w, Y=y=>plot.y+(r.yMax-y)/(r.yMax-r.yMin)*plot.h;
+  const line=(x1,y1,x2,y2,width=.12,color='B0B0B0',dash=false)=>out.push({k:'line',x1,y1,x2,y2,width,color,dash});
+  const label=(x,y,text,size=7)=>out.push({k:'text',x,y,text,size});
+  const ticks=(min,max)=>{
+    const raw=(max-min)/5,base=10**Math.floor(Math.log10(raw)),step=[1,2,5,10].find(v=>v*base>=raw)*base,values=[];
+    for(let v=Math.ceil(min/step)*step;v<=max+step*1e-8 && values.length<12;v+=step) values.push(Math.abs(v)<step*1e-8?0:Number(v.toPrecision(8)));
+    return values;
+  };
+  const xt=ticks(r.xMin,r.xMax),yt=ticks(r.yMin,r.yMax),yw=Math.max(...yt.map(y=>mathTextWidth(String(y),7)),0),xw=Math.max(...xt.map(x=>mathTextWidth(String(x),7)),0);
+  const left=Math.max(4,yw+1.4,xw/2+.6),right=Math.max(4,xw/2+.6);
+  plot.x=box.x+left;plot.w=box.w-left-right;
+  if(plot.w<4) throw new Error('表示する目盛りに合わせて、グラフ欄の幅を大きくしてください。');
+  for(const x of xt){line(X(x),plot.y,X(x),plot.y+plot.h);label(X(x),plot.y+plot.h+2,String(x));}
+  for(const y of yt){line(plot.x,Y(y),plot.x+plot.w,Y(y));label(plot.x-.7-yw/2,Y(y),String(y));}
+  if(r.yMin<=0 && r.yMax>=0) line(plot.x,Y(0),plot.x+plot.w,Y(0),.24,'000000');
+  if(r.xMin<=0 && r.xMax>=0) line(X(0),plot.y,X(0),plot.y+plot.h,.24,'000000');
+  label(plot.x+plot.w-1,plot.y+plot.h-2,'x',8);label(plot.x+1,plot.y+1.4,'y',8);
+  if(!withAnswers || !text.trim()) return out;
+  for(const [index,equation] of equations.entries()){
+    // 分母が0になる所や不連続点をまたぐ線を描かない。
+    for(let i=0;i<512;i++){
+      const x1=r.xMin+(r.xMax-r.xMin)*i/512,x2=r.xMin+(r.xMax-r.xMin)*(i+1)/512;
+      const y1=equation.fn(x1),y2=equation.fn(x2),mid=equation.fn((x1+x2)/2),span=r.yMax-r.yMin;
+      if(![y1,y2,mid].every(Number.isFinite) || (Math.abs(y2-y1)>span*2 && Math.abs(mid-(y1+y2)/2)>span*.1)) continue;
+      const segment=clipGraphSegment(x1,y1,x2,y2,r);if(!segment) continue;
+      line(X(segment[0]),Y(segment[1]),X(segment[2]),Y(segment[3]),.35,'000000',index%2===1);
+    }
+  }
+  for(const [index,equation] of equations.entries()){
+    const tokens=mathTokens(equation.source);let size=9;
+    while(size>3 && tokens.reduce((s,t)=>s+mathTokenWidth(t,size),0)>box.w-2) size-=.5;
+    if(tokens.reduce((s,t)=>s+mathTokenWidth(t,size),0)>box.w-2) throw new Error('式が長いため、グラフ欄を広げるか、式を短くしてください。');
+    out.push(...mathLinePrimitives(tokens,box.x+1,box.y+3.7+index*4,size));
+  }return out;
+}
+function answerVectorGroups(d,withAnswers){
+  const out=[];
+  for(const f of d.fields){
+    const text=d.answers[f.id] || '';
+    if(f.type===7 && ((d.answerGraphs || {})[f.id] || looksLikeGraph(text))){
+      try{out.push({rect:f.rects[0],vectors:graphPrimitives(d,f,text,(d.answerGraphs || {})[f.id],withAnswers)});}catch(e){};
+    }else if(withAnswers && text){
+      const plan=fractionAnswerPlan(d,f,text);
+      if(plan){const c=Math.min(...f.rects.map(r=>r.c)),r=Math.min(...f.rects.map(r=>r.r));out.push({rect:{c,r,w:Math.max(...f.rects.map(v=>v.c+v.w))-c,h:Math.max(...f.rects.map(v=>v.r+v.h))-r},vectors:plan.vectors});}
+    }
+  }
+  return out;
+}
+function answerVectorPrimitives(d,withAnswers){return answerVectorGroups(d,withAnswers).flatMap(g=>g.vectors);}
+function appendVectorPrimitives(parent,primitives,x0=0,y0=0){
+  for(const v of primitives){
+    if(v.k==='line') parent.appendChild(el('line',{x1:x0+v.x1,y1:y0+v.y1,x2:x0+v.x2,y2:y0+v.y2,stroke:'#'+(v.color || '000000'),'stroke-width':v.width || .2,...(v.dash?{'stroke-dasharray':'1.2 1'}:{})}));
+    else {const t=el('text',{x:x0+v.x,y:y0+v.y,'text-anchor':'middle','dominant-baseline':'central','font-family':'"Yu Gothic",sans-serif','font-size':ptmm(v.size),fill:'#000'});t.textContent=v.text;parent.appendChild(t);}
+  }
+}
+
 // 字数自由の答えは、マスごとにばらさず連続した文字列として配置する。
 // 同じ結合セル・フォントサイズをSVGとExcelの両方で使う。
 function flowingAnswerPlan(d, f, text){
@@ -1043,6 +1234,8 @@ function flowingAnswerPlan(d, f, text){
 
 function answerPlan(d, f, text){
   const t = String(text == null ? '' : text);
+  if(f.type===7 && looksLikeGraph(t)){graphPrimitives(d,f,t,(d.answerGraphs || {})[f.id],true);return {out:[],room:1,need:1};}
+  const fractions=fractionAnswerPlan(d,f,t);if(fractions) return fractions;
   const flowing = flowingAnswerPlan(d, f, t);
   if (flowing) return flowing;
   const sc = textScaleOf(f);
@@ -1249,7 +1442,7 @@ function buildCells(d, withAnswers){
         });
       }
     }
-    if (f.type===7){
+    if (f.type===7 && !((d.answerGraphs || {})[f.id] || looksLikeGraph(d.answers[f.id] || ''))){
       // xyグラフ：細い破線の方眼＋真ん中を通るx軸y軸＋原点のO
       const r = f.rects[0];
       const gw = r.w, gh = r.h / GRAPH_ROWS;
@@ -1344,7 +1537,7 @@ const svg = $('#sheet');
 // 「選んでいた範囲」も一緒に残す。
 const TAB_KEYS = {
   sheet:  ['fields','decorations','texts','paper','grid','colw'],
-  answer: ['answers'],
+  answer: ['answers','answerGraphs'],
   draw:   ['drawings']
 };
 function state(full=false){
@@ -1502,6 +1695,9 @@ function render(){
     texts.appendChild(t);
   });
   svg.appendChild(texts);
+  const mathg=el('g',{'class':'answer-vectors'});
+  appendVectorPrimitives(mathg,answerVectorPrimitives(doc,ui.tab==='answer'),x0,y0);
+  svg.appendChild(mathg);
 
   // 描画（直線・点）
   const dg = el('g',{fill:'none'});
@@ -2388,7 +2584,7 @@ function clearSelection(){
     // 模範解答タブでは答えだけ消す
     let n=0;
     doc.fields.forEach(f=>{
-      if (charCells(doc,f).some(p=>keys.has(p.c+','+p.r)) && doc.answers[f.id]){ delete doc.answers[f.id]; n++; }
+      if (charCells(doc,f).some(p=>keys.has(p.c+','+p.r)) && doc.answers[f.id]){ delete doc.answers[f.id]; delete doc.answerGraphs[f.id]; n++; }
     });
     render(); return toast(n?'答えを消しました':'消すものがありません');
   }
@@ -2427,7 +2623,7 @@ async function clearAll(){
   ]);
   if (!v) return;
   snapshot();
-  doc.fields = []; doc.decorations = []; doc.texts = {}; doc.answers = {};
+  doc.fields = []; doc.decorations = []; doc.texts = {}; doc.answers = {}; doc.answerGraphs={};
   ui.cur = Object.assign({}, contentOrigin(doc));
   ui.sel = null; ui.extra = [];
   render();
@@ -2712,6 +2908,7 @@ function seqOpen(){
   if (t.k === 'a'){
     const f = boxById(t.id);
     if (!f) return seqNext();
+    if(f.type===7) return editGraphAnswer(f,()=>seqNext());
     if (t.part !== undefined){                       // 初終の「初め」「終わり」
       const pt = extractParts(doc, f);
       const rect = pt ? (t.part ? pt.b : pt.a) : f.rects[0];
@@ -2765,24 +2962,28 @@ function fieldsInArea(){
 }
 
 // 範囲の中の欄の答えを、1行に1問ずつまとめて入れる
-async function bulkAnswers(list){
+async function bulkAnswers(list,initialText){
   const v = await ask(list.length+'問ぶんの答えをまとめて入れる', [
     {key:'t', type:'area', rows:Math.min(16, Math.max(6, list.length)),
-     value:list.map(f => doc.answers[f.id] || '').join('\n'),
+     value:initialText===undefined ? list.map(f => f.type===7 ? (doc.answers[f.id] || '').replace(/\n/g,' ; ') : doc.answers[f.id] || '').join('\n') : initialText,
      hint:'1行に1問ずつ、読む順（'+(doc.paper.writing==='vertical' ? '右の列から上→下' : '上の行から左→右')+
           '）に入れてください。\n空の行はその問の答えを消します。決定は Ctrl+Enter。'}
   ]);
   if (!v) return;
-  snapshot();
   const lines = String(v.t || '').replace(/\r/g,'').split('\n');
+  try{list.forEach((f,i)=>{const text=(lines[i] || '').trim();if(f.type===7 && looksLikeGraph(text)) graphEquations(text);});}
+  catch(e){toast(e.message);return bulkAnswers(list,v.t);}
+  snapshot();
   let put = 0, over = 0;
   list.forEach((f,i) => {
-    const t = (lines[i] || '').trim();
+    let t = (lines[i] || '').trim();
+    if(f.type===7 && looksLikeGraph(t)) t=graphEquations(t).map(e=>e.source).join('\n');
     if (t){
       doc.answers[f.id] = t; put++;
+      if(f.type===7){if(looksLikeGraph(t)) doc.answerGraphs[f.id]=graphRange(doc.answerGraphs[f.id]);else delete doc.answerGraphs[f.id];}
       const pl = answerPlan(doc, f, t);
       if (pl.need > pl.room) over++;
-    } else delete doc.answers[f.id];
+    } else {delete doc.answers[f.id];delete doc.answerGraphs[f.id];}
   });
   render();
   toast(put+'問ぶん入れました'+(over ? '（'+over+'問は欄に入りきりません）' : ''));
@@ -2821,6 +3022,7 @@ async function enterInput(){
     const f = fieldAt(ui.cur.c, ui.cur.r) ||
               (ui.sel && fieldAt(ui.sel.c, ui.sel.r));
     if (!f) return toast('答えを入れる欄の上にカーソルを置いて Enter を押してください');
+    if(f.type===7) return editGraphAnswer(f);
     ui.editTarget = { kind:'answer', field:f };
     inp.value = doc.answers[f.id] || '';
     inp.placeholder = (f.type===EXTRACT_TYPE)
@@ -2834,6 +3036,58 @@ async function enterInput(){
   openInputBox(inp.value, inp.placeholder,
     (ui.editTarget && ui.editTarget.kind==='answer') ? boundsOf(ui.editTarget.field)
                                                      : { c:ui.cur.c, r:ui.cur.r, w:1, h:1 });
+}
+
+function editGraphAnswer(f,next){
+  openGraphEditor({answer:doc.answers[f.id] || '',range:(doc.answerGraphs || {})[f.id],d:doc,f,
+    onCancel:()=>{if(next)ui.seq=null;},
+    onSave:(answer,range)=>{
+      snapshot();doc.answers[f.id]=answer;doc.answerGraphs[f.id]=range;render();
+      if(next) next();else toast('模範解答のグラフを更新しました');
+    }});
+}
+function openGraphEditor({answer='',range,d,f,onSave,onCancel}){
+  const opener=document.activeElement,wrap=document.createElement('div');wrap.className='modal graph-modal';
+  wrap.setAttribute('role','dialog');wrap.setAttribute('aria-modal','true');wrap.setAttribute('aria-labelledby','graph-title');
+  const current=graphRange(range),previewDoc=d || {colw:Array(6).fill(1)},previewField=f || {rects:[{c:0,r:0,w:6,h:18}]};
+  wrap.innerHTML='<form class="card" id="graph-form"><h3 id="graph-title">式から模範解答のグラフを描く</h3>'+
+    '<p class="desc">1行に1つ、4本まで重ねられます。分数は「1/2」と入力すると上下に分けて表示します。x・yの最小値・最大値は表示する範囲です。</p>'+
+    '<label for="graph-equations">式</label><textarea id="graph-equations" rows="3" placeholder="y=3x+1&#10;y=6/x&#10;y=(1/2)x^2">'+xmlEsc(answer || 'y=3x+1')+'</textarea>'+
+    '<div class="row"><span class="desc">入力例：</span><button type="button" class="tb" data-equation="y=3x+1">一次関数</button><button type="button" class="tb" data-equation="y=6/x">反比例</button><button type="button" class="tb" data-equation="y=(1/2)x^2">二次関数</button></div>'+
+    '<div class="graph-ranges">'+[['xMin','xの最小値'],['xMax','xの最大値'],['yMin','yの最小値'],['yMax','yの最大値']].map(([key,label])=>'<label>'+label+'<input id="graph-'+key+'" data-range="'+key+'" inputmode="decimal" value="'+current[key]+'" required></label>').join('')+'</div>'+
+    '<svg id="graph-preview" role="img" aria-label="入力した式のグラフのプレビュー"></svg><p id="graph-status" role="status" aria-live="polite"></p>'+
+    '<div class="modal-actions"><button type="button" class="tb" id="graph-cancel">キャンセル</button><button type="submit" class="tb primary" id="graph-save">このグラフにする</button></div></form>';
+  document.body.appendChild(wrap);const q=s=>wrap.querySelector(s),source=q('#graph-equations'),status=q('#graph-status');
+  const close=()=>{wrap.remove();if(opener && opener.isConnected) opener.focus();};
+  const cancel=()=>{close();if(onCancel)onCancel();};
+  const read=()=>{
+    const answer=graphEquations(source.value.trim()).map(e=>looksLikeGraph(e.source)?e.source:'y='+e.source).join('\n');
+    const values={};wrap.querySelectorAll('[data-range]').forEach(input=>{
+      if(!input.value.trim() || /x/i.test(input.value)) throw new Error('表示範囲には数値を入れてください。分数も使えます。');
+      values[input.dataset.range]=compileGraphExpression(input.value)(0);
+    });return {answer,range:graphRange(values)};
+  };
+  const preview=()=>{
+    try{
+      const value=read(),box=rectMM(previewDoc,previewField.rects[0]),target=q('#graph-preview');
+      target.setAttribute('viewBox',[box.x,box.y,box.w,box.h].join(' '));target.replaceChildren();
+      const vectors=graphPrimitives(previewDoc,previewField,value.answer,value.range,true);appendVectorPrimitives(target,vectors);
+      status.textContent=vectors.some(v=>v.width===.35) ? 'よさそうなら「このグラフにする」を押してください。' : 'この表示範囲には曲線が見えません。式や範囲を確認してください。';q('#graph-save').disabled=false;return value;
+    }catch(e){status.textContent=e.message;q('#graph-save').disabled=true;return null;}
+  };
+  wrap.querySelectorAll('[data-equation]').forEach(button=>button.onclick=()=>{source.value=button.dataset.equation;preview();source.focus();});
+  wrap.addEventListener('input',preview);q('#graph-cancel').onclick=cancel;
+  q('#graph-form').onsubmit=e=>{e.preventDefault();const value=preview();if(!value) return;close();onSave(value.answer,value.range);};
+  wrap.addEventListener('keydown',e=>{
+    e.stopPropagation();
+    if(e.key==='Escape'){e.preventDefault();cancel();}
+    if(e.key==='Enter' && (e.ctrlKey || e.metaKey)){e.preventDefault();q('#graph-form').requestSubmit();}
+    if(e.key==='Tab'){
+      const nodes=Array.from(wrap.querySelectorAll('input,textarea,button')).filter(n=>!n.disabled),first=nodes[0],last=nodes[nodes.length-1];
+      if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}
+    }
+  });preview();source.focus();
 }
 
 // 入力欄を出す。今いじっている欄にはかぶせない（縦書きは左どなり、横書きは下）
@@ -3398,6 +3652,32 @@ function colXml(cols){
   return out.join('');
 }
 
+function vectorDrawingXml(v,id,bare=false){
+  const emu=value=>Math.round(value/SCALE*36000);
+  let x,y,w,h,body;
+  if(v.k==='line'){
+    x=emu(Math.min(v.x1,v.x2));y=emu(Math.min(v.y1,v.y2));w=emu(Math.abs(v.x2-v.x1));h=emu(Math.abs(v.y2-v.y1));
+    const flip=(v.x2<v.x1?' flipH="1"':'')+(v.y2<v.y1?' flipV="1"':'');
+    body='<xdr:spPr><a:xfrm'+flip+'><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="'+emu(v.width || .2)+'"><a:solidFill><a:srgbClr val="'+(v.color || '000000')+'"/></a:solidFill>'+(v.dash?'<a:prstDash val="dash"/>':'')+'</a:ln></xdr:spPr>';
+  }else{
+    const width=Math.max(.8,mathTextWidth(v.text,v.size)+.6),height=ptmm(v.size)*1.4;
+    x=emu(v.x-width/2);y=emu(v.y-height/2);w=emu(width);h=emu(height);
+    body='<xdr:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>'+
+      '<xdr:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ja-JP" sz="'+Math.round(v.size*100)+'"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Yu Gothic"/><a:ea typeface="游ゴシック"/></a:rPr><a:t>'+xmlEsc(v.text)+'</a:t></a:r></a:p></xdr:txBody>';
+  }
+  const shape='<xdr:sp><xdr:nvSpPr><xdr:cNvPr id="'+id+'" name="math'+id+'"/><xdr:cNvSpPr/></xdr:nvSpPr>'+body+'</xdr:sp>';
+  return bare?shape:'<xdr:absoluteAnchor><xdr:pos x="'+x+'" y="'+y+'"/><xdr:ext cx="'+w+'" cy="'+h+'"/>'+shape+'<xdr:clientData/></xdr:absoluteAnchor>';
+}
+function vectorGroupDrawingXml(d,group,nextId){
+  const r=group.rect,b=rectMM(d,r),emu=value=>Math.round(value/SCALE*36000),id=nextId++;
+  const shapes=group.vectors.map(v=>{
+    const local=v.k==='line'?{...v,x1:v.x1-b.x,y1:v.y1-b.y,x2:v.x2-b.x,y2:v.y2-b.y}:{...v,x:v.x-b.x,y:v.y-b.y};
+    return vectorDrawingXml(local,nextId++,true);
+  }).join('');
+  const marker=(name,c,row)=>'<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:'+name+'>';
+  return {nextId,xml:'<xdr:twoCellAnchor editAs="twoCell">'+marker('from',r.c,r.r)+marker('to',r.c+r.w,r.r+r.h)+
+    '<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id="'+id+'" name="answer'+id+'"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr><a:xfrm><a:off x="'+emu(b.x)+'" y="'+emu(b.y)+'"/><a:ext cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/><a:chOff x="0" y="0"/><a:chExt cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/></a:xfrm></xdr:grpSpPr>'+shapes+'</xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>'};
+}
 function buildXlsx(){
   const sheets = [
     { name:'解答用紙', cells: buildCells(doc, false) },
@@ -3460,10 +3740,12 @@ function buildXlsx(){
       '<xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ja-JP"/></a:p></xdr:txBody>'+
       '</xdr:sp><xdr:clientData/></xdr:absoluteAnchor>';
   }).join('');
-  const drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" '+
-    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'+shapes+'</xdr:wsDr>';
-  const hasDraw = doc.drawings.length > 0;
+  sheets.forEach((sh,i)=>{
+    let nextId=doc.drawings.length+2;
+    const vectors=answerVectorGroups(doc,i===1).map(group=>{const result=vectorGroupDrawingXml(doc,group,nextId);nextId=result.nextId;return result.xml;}).join('');
+    sh.drawingXml=shapes || vectors ? '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'+shapes+vectors+'</xdr:wsDr>' : '';
+  });
 
   const sheetXml = sheets.map(sh => {
     const { cols, rows } = doc.grid;
@@ -3507,7 +3789,7 @@ function buildXlsx(){
       '<printOptions horizontalCentered="1" verticalCentered="1"/>'+
       '<pageMargins left="'+mx+'" right="'+mx+'" top="'+my+'" bottom="'+my+'" header="0" footer="0"/>'+
       '<pageSetup paperSize="9" scale="'+Math.round(SCALE*100)+'" orientation="'+doc.paper.orientation+'"/>'+
-      (hasDraw ? '<drawing r:id="rId1"/>' : '')+
+      (sh.drawingXml ? '<drawing r:id="rId1"/>' : '')+
       '</worksheet>';
   });
 
@@ -3568,10 +3850,11 @@ function buildXlsx(){
     { name:'xl/styles.xml', data:styles }
   ];
   sheets.forEach((s,i)=> files.push({ name:'xl/worksheets/sheet'+(i+1)+'.xml', data:sheetXml[i] }));
-  if (hasDraw){
+  if (sheets.some(s=>s.drawingXml)){
     // シートごとに別の描画を持たせる（1つの描画を2シートで共有しない）
     sheets.forEach((s,i)=>{
-      files.push({ name:'xl/drawings/drawing'+(i+1)+'.xml', data:drawingXml });
+      if(!s.drawingXml) return;
+      files.push({ name:'xl/drawings/drawing'+(i+1)+'.xml', data:s.drawingXml });
       files.push({
         name:'xl/worksheets/_rels/sheet'+(i+1)+'.xml.rels',
         data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -3580,7 +3863,7 @@ function buildXlsx(){
           '</Relationships>' });
     });
     files[0].data = files[0].data.replace('</Types>',
-      sheets.map((s,i)=>'<Override PartName="/xl/drawings/drawing'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>').join('')+'</Types>');
+      sheets.map((s,i)=>s.drawingXml?'<Override PartName="/xl/drawings/drawing'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>':'').join('')+'</Types>');
   }
   return zipStore(files);
 }
@@ -3664,7 +3947,7 @@ let fileHandle = null;   // 上書き保存用（対応ブラウザのみ）
 
 function docJson(forBackup){
   const copy = JSON.parse(JSON.stringify(doc));
-  if (forBackup && !options.backupAnswers) copy.answers = {};
+  if (forBackup && !options.backupAnswers){ copy.answers = {}; copy.answerGraphs={}; }
   return JSON.stringify(copy);
 }
 function backup(){
@@ -3740,6 +4023,7 @@ function loadWork(text){
   d.drawings = arr(d.drawings);
   d.texts = obj(d.texts);
   d.answers = obj(d.answers);
+  d.answerGraphs = obj(d.answerGraphs);
   const grid=gridWithColumnWidths(d);
   doc = d;                                   // ここまで通ってから差し替える
   doc.grid = grid;                            // 余白と保存した列幅に合わせ直す
@@ -4376,8 +4660,8 @@ function icon(type){
 function buildTools(){
   const fw = $('#field-tools');
   fw.innerHTML = fieldOrder().map((k,i) =>
-    '<button class="tool" data-field="'+k+'" title="'+FIELD_DEFS[k].hint+'">'+icon(k)+
-    '<span class="nm">'+fieldName(k)+'</span><span class="k">'+(i===9?'0':(i+1))+'</span></button>').join('')+
+    '<button class="tool" data-field="'+k+'" aria-keyshortcuts="'+fieldKeyLabel(k)+'" title="'+FIELD_DEFS[k].hint+'（数字キー：'+fieldKeyLabel(k)+'）">'+icon(k)+
+    '<span class="nm">'+'①②③④⑤⑥⑦⑧⑨⓪'[i]+' '+fieldName(k)+'</span></button>').join('')+
     '<button class="tool" id="t-wiz" style="grid-column:1/-1" title="欄・小問の番号・大問の見出しをまとめて作ります">'+
     '<span class="nm">大問をまるごと作る</span><span class="k">N</span></button>'+
     '<button class="tool" id="t-auto" style="grid-column:1/-1"><span class="nm">模範解答から作る・編集</span></button>';
@@ -4418,6 +4702,7 @@ function buildTools(){
   $('#input-tools').innerHTML =
     tool('t-edit','文字','Enter','文字・答えを入れる（☑があれば順に）')+
     tool('t-bulk','一覧入力','⇧Enter','模範解答を1行1問でまとめて入れる')+
+    tool('t-graph','式からグラフ','','グラフ欄を選んで、式とx・yの表示範囲を設定',true)+
     tool('t-pts','配点','S','1行に1欄ぶん、点数をまとめて入れる')+
     tool('t-pick','セル選択','⇧Space','離れたマスを1つずつ選ぶ')+
     tool('t-pick2','☑ 対象：番号のマス','T','☑ を付ける相手を切り替える', true);
@@ -4462,6 +4747,12 @@ function buildTools(){
   $('#t-del').onclick   = clearSelection;
   $('#t-clear').onclick = clearAll;
   $('#t-edit').onclick  = enterInput;
+  $('#t-graph').onclick = ()=>{
+    if(ui.tab!=='answer') return toast('模範解答タブでグラフ欄を選んでください');
+    const f=fieldAt(ui.cur.c,ui.cur.r);
+    if(!f || f.type!==7) return toast('グラフ欄を選んでください。解答用紙タブの「'+fieldKeyLabel(7)+' グラフ」で欄を追加できます。');
+    editGraphAnswer(f);
+  };
   $('#t-prop').onclick  = openFieldPopup;
   $('#t-pick').onclick = () => {
     const i = ui.extra.findIndex(q => q.c===ui.cur.c && q.r===ui.cur.r);
@@ -4488,6 +4779,7 @@ function showPanels(){
   $('#edit-panel > summary').textContent=answer?'答えを消す':'配置を直す・削除する';
   $('#edit-tools').querySelectorAll('button').forEach(b=>b.hidden=answer && b.id!=='t-del');
   $('#t-bulk').hidden=!answer;
+  $('#t-graph').hidden=!answer;
   $('#t-pts').hidden=answer;
   $('#t-width').hidden=answer || dr;
   $('#t-prop').hidden=answer || dr;
@@ -4726,7 +5018,7 @@ function parseAutoAnswers(source, defaults={}){
     }
     if (!row.kind){
       const n = autoLength(row.answer);
-      row.kind = extractWaveParts(row.answer) ? 'extract' : n === 1 ? 'mark' : n <= 8 && !/[。！？!?\n]/.test(row.answer) ? 'word' : 'essay';
+      row.kind = looksLikeGraph(row.answer) ? 'graph' : extractWaveParts(row.answer) ? 'extract' : n === 1 ? 'mark' : n <= 8 && !/[。！？!?\n]/.test(row.answer) ? 'word' : 'essay';
       row.warnings.push('欄の種類を推定');
       row.kindAuto = true;
     }
@@ -4755,6 +5047,9 @@ function autoRowError(row){
   if (autoLength(row.answer) > 4000) return '1問の答えは4000文字以内にしてください。';
   if (['chars','kanji','extract'].includes(row.kind) && (!Number.isInteger(row.n) || row.n < 1 || row.n > 1000)) return '字数は1〜1000の整数にしてください。';
   if (row.kind==='extract' && /[～〜~]/.test(row.answer) && !extractWaveParts(row.answer)) return '初終は「初め～終わり」の形で、～の前後に答えを入れてください（～は1つ）。';
+  if(row.kind==='graph' && looksLikeGraph(row.answer)){
+    try{graphEquations(row.answer);graphRange(row.graphRange);}catch(e){return e.message;}
+  }
   if (!Number.isInteger(row.w) || !Number.isInteger(row.h) || row.w < 0 || row.h < 0 || row.w > 40 || row.h > 40) return '幅・高さは0〜40の整数にしてください（0は自動）。';
   return '';
 }
@@ -4886,6 +5181,7 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       const plan = answerPlan(d,f,row.answer);
       if (plan.need > plan.room) throw new Error((i+1)+'問目の模範解答が欄に入りきりません。字数・幅・高さを大きくしてください。');
       d.answers[id] = row.answer;
+      if(type===7 && looksLikeGraph(row.answer)) d.answerGraphs[id]=graphRange(row.graphRange);
     }
     const rs = [...got.rects,...(got.lab ? [got.lab] : []),...(got.parent ? [got.parent] : [])];
     minC = Math.min(minC,...rs.map(r=>r.c));
@@ -4934,7 +5230,7 @@ function currentAutoRows(){
     const kind=({2:'mark',3:'extract',4:'chars',5:'chars',6:answer ? autoLength(answer)<=8?'word':'essay' : 'blank',7:'graph',8:'kanji',9:'customA',10:'customB'})[f.type] || 'blank';
     const fallback={group:head ? head.group : '一',kind,n:f.chars || Math.max(1,charCells(doc,f).length),
       w:f.type===6 ? rect.w : f.type===7 ? rect.w : 0,h:f.type===6 ? Math.ceil(rect.h/CHAR_ROWS) : f.type===7 ? rect.h/GRAPH_ROWS : 0,kindAuto:false};
-    return {...fallback,...(f.auto || {}),answer,points:f.points || 0,aspect:f.aspect || '知技',
+    return {...fallback,...(f.auto || {}),answer,graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
       complete:!!f.complete,eight:f.type===5 && !f.exact,n:f.fixedChars === false ? (f.auto || {}).n || Math.max(1,autoLength(answer)) : f.chars || fallback.n,
       label:parentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
       ...(((f.auto || {}).kind || kind)==='blank' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
@@ -5006,7 +5302,7 @@ function openAnswerGenerator(initialTitle=''){
   const infer=r=>{
     if (r.kindAuto){
       const n=autoLength(r.answer), wave=extractWaveParts(r.answer);
-      r.kind=wave?'extract':n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay';
+      r.kind=looksLikeGraph(r.answer)?'graph':wave?'extract':n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay';
       r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
     }
     if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
@@ -5014,6 +5310,7 @@ function openAnswerGenerator(initialTitle=''){
   };
   const syncControls=card=>{
     const r=rows[+card.dataset.row];
+    card.querySelector('[data-graph]').hidden=r.kind!=='graph';
     card.querySelector('[data-k="kind"]').value=r.kind;
     card.querySelector('[data-k="aspect"]').value=r.aspect;
     for (const key of ['n','w','h','eight']){
@@ -5037,7 +5334,7 @@ function openAnswerGenerator(initialTitle=''){
       '<label>大問番号<select data-k="group" aria-label="大問番号">'+choices(groupChoices(r.group),r.group)+'</select></label>'+
       '<div><label>問番号<select data-k="label" aria-label="問番号">'+choices([...labels,['!custom','自由に指定…']],numbering.main)+'</select><span data-label-custom hidden>'+input('labelCustom',numbering.main,'text','問番号を自由に指定')+'</span></label>'+
       '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label></div>'+
-      '<label class="auto-answer">模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label>'+
+      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KINDS,r.kind)+'</select></label>'+
       '<label>配点<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices([['知技','知識・技能'],['思判表','思考・判断・表現']],r.aspect)+'</select></label></div>'+
@@ -5053,7 +5350,7 @@ function openAnswerGenerator(initialTitle=''){
     try {
       const previous=new Map(); rows.forEach(r=>{ const key=(autoNumberIndex(r.group) || r.group)+'\0'+r.label; if (!previous.has(key)) previous.set(key,[]); previous.get(key).push(r); });
       const parsed=parseAutoAnswers(source.value,getDefaults());
-      parsed.forEach(r=>{ const old=(previous.get((autoNumberIndex(r.group) || r.group)+'\0'+r.label) || []).shift(); if (old && old.appearance) r.appearance={...old.appearance}; });
+      parsed.forEach(r=>{ const old=(previous.get((autoNumberIndex(r.group) || r.group)+'\0'+r.label) || []).shift(); if (old && old.appearance) r.appearance={...old.appearance}; if(old && old.graphRange && r.kind==='graph') r.graphRange={...old.graphRange}; });
       rows=parsed; parsedText=source.value; selected.clear(); rows.forEach(r=>groups.add(r.group)); drawRows(); showStep('review'); q('#auto-tab-review').focus();
     } catch(e){ status.textContent=e.message; }
   };
@@ -5123,6 +5420,13 @@ function openAnswerGenerator(initialTitle=''){
     syncControls(card); syncSource(); status.textContent=rows.length+'問・合計'+rows.reduce((s,r)=>s+r.points,0)+'点。';
   });
   q('#auto-rows').addEventListener('click',e=>{
+    const graph=e.target.closest('[data-graph]');
+    if(graph){
+      const r=rows[+graph.dataset.graph];
+      openGraphEditor({answer:r.answer,range:r.graphRange,onSave:(answer,range)=>{
+        r.answer=answer;r.graphRange=range;r.kind='graph';r.kindAuto=false;drawRows(true);
+      }});return;
+    }
     const b=e.target.closest('[data-remove]'); if (!b) return;
     if (sourceDirty()) return void(status.textContent='先に「読み取って一覧にする」を押してください。');
     selected.delete(rows[+b.dataset.remove]); rows.splice(+b.dataset.remove,1); drawRows(true);
