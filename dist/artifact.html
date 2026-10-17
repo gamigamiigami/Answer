@@ -379,7 +379,7 @@ input[type=checkbox]{accent-color:var(--place)}
 .guide-sheet{display:grid;grid-template-columns:38px 1fr;max-width:210px;margin:12px auto;background:#fff;color:#333;border:2px solid #697b6d;text-align:center}
 .guide-sheet span{padding:7px;border:1px solid #697b6d;min-height:34px}
 .guide-chunks{display:grid;grid-template-columns:1fr auto 2fr auto 1fr auto 1fr;gap:6px;align-items:center;margin:12px 0}
-.guide-chunk{border:1px solid var(--line);border-top:5px solid #598273;background:var(--field);border-radius:10px;padding:10px 4px;text-align:center;min-width:0}
+.guide-chunk{border:1px solid var(--line);background:var(--field);border-radius:10px;padding:10px 4px;text-align:center;min-width:0}
 
 .guide-chunk b{display:block;font-size:25px}.guide-chunk small{display:block;font-size:12px}
 .guide-pair{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:20px 0}
@@ -398,20 +398,34 @@ input[type=checkbox]{accent-color:var(--place)}
 @media(max-width:520px){.guide-flow{gap:5px}.guide-step{padding:12px 5px}.guide-step strong{font-size:14px}.guide-step small{font-size:12px}.guide-arrow{font-size:18px}.guide-pair{grid-template-columns:1fr}.guide-pair>.guide-arrow{transform:rotate(90deg)}.guide-chunks{gap:3px}.guide-chunk b{font-size:21px}.guide-chunk small{font-size:11px}.help-modal .help-tabs{top:-16px}.guide-key-row{gap:8px}}
 
 /* 入力例と説明で共通の色。色に加えて項目名も表示する。 */
-.guide-group{--guide-color:#245c9c;--guide-bg:#eaf2ff}
-.guide-question{--guide-color:#236548;--guide-bg:#eaf6ed}
-.guide-answer{--guide-color:#854a0f;--guide-bg:#fff2d9}
-.guide-points{--guide-color:#7144a0;--guide-bg:#f3ebff}
-.guide-aspect{--guide-color:#a33659;--guide-bg:#ffedf2}
-.guide-token,.guide-legend-item,.guide-chunk[class*="guide-"]{color:var(--guide-color);background:var(--guide-bg)}
+.guide-group{--guide-color:#245c9c}
+.guide-question{--guide-color:#236548}
+.guide-answer{--guide-color:#854a0f}
+.guide-points{--guide-color:#7144a0}
+.guide-aspect{--guide-color:#a33659}
+.guide-token,.guide-legend-item,.guide-chunk[class*="guide-"]{color:var(--guide-color);background:transparent}
 .guide-token{border-radius:4px;padding:2px 4px;font-weight:700;box-decoration-break:clone;-webkit-box-decoration-break:clone}
-.guide-chunk{border-top-color:var(--guide-color)}
+.guide-chunk{border-color:var(--line)}
 .guide-legend{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.guide-legend-item{border:1px solid var(--guide-color);border-radius:8px;padding:6px 9px;font-size:13px}
-.guide-group-explain{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;border-left:5px solid #245c9c;background:#eaf2ff;color:#245c9c;border-radius:8px}
+.guide-legend-item{border:0;padding:6px 9px;font-size:13px}
+.guide-group-explain{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;color:var(--guide-color)}
 .guide-group-explain b{font-size:18px}.guide-group-explain small{font-size:13px}
 #help-basic-example{line-height:2.3;font-size:16px}
 .guide-sheet .guide-token{border-radius:0;padding:7px;font-weight:700}
+
+:root[data-theme="dark"] .guide-group{--guide-color:#91baff}
+:root[data-theme="dark"] .guide-question{--guide-color:#86cba4}
+:root[data-theme="dark"] .guide-answer{--guide-color:#dbb075}
+:root[data-theme="dark"] .guide-points{--guide-color:#c3a1e9}
+:root[data-theme="dark"] .guide-aspect{--guide-color:#e6a1b7}
+@media(prefers-color-scheme:dark){
+:root:not([data-theme="light"]) .guide-group{--guide-color:#91baff}
+:root:not([data-theme="light"]) .guide-question{--guide-color:#86cba4}
+:root:not([data-theme="light"]) .guide-answer{--guide-color:#dbb075}
+:root:not([data-theme="light"]) .guide-points{--guide-color:#c3a1e9}
+:root:not([data-theme="light"]) .guide-aspect{--guide-color:#e6a1b7}
+}
+.guide-sheet{background:var(--field);color:var(--ink)}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -4420,7 +4434,7 @@ function guideBasicExample(){
   return [guideToken('group','1'),question('1','ア','2','知'),question('2','太陽','2','知'),guideToken('group','2'),question('1','相手の気持ちを考えたから。','5','思')].join('\n');
 }
 function answerFormatDiagram(){
-  return '<div class="guide-group-explain"><b>'+guideToken('group','1')+' ← 大問番号</b><small>青のように、数字だけを1行に書く → 大問の始まり</small></div>'+
+  return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>青のように、数字だけを1行に書く → 大問の始まり</small></div>'+
     '<div class="guide-chunks" aria-label="入力例：問題番号1、答えア、点数2、観点知">'+
     '<div class="guide-chunk guide-question"><small>緑：問題番号</small><b>1</b></div><span>,</span>'+
     '<div class="guide-chunk guide-answer"><small>茶：答え</small><b>ア</b></div><span>,</span>'+
