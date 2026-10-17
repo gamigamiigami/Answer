@@ -119,3 +119,8 @@
 - buildCellsの模範解答の結合セルに横位置／縦位置を持たせ、SVGとExcelへ共通反映。自由記述の縦書きは上、横書きは左へ詰める。
 - openCreationTitleで新規作成3経路をまとめ、タイトル確定後に既存生成・テンプレ・白紙へ進む。buildAutoDocumentに初期タイトルを渡し、教科変更時も既存タイトルを保持する。
 - 既存の回帰テストを新しい導線へ更新し、かな観点・座標・Excel alignment/title・タイトル画面の操作を検証。
+
+
+## 公開についてのユーザー指示（2026-10-17）
+
+修正後は動作確認・ビルドだけで止めず、GitHub Pagesへの公開まで行う。ユーザーから「修正したら常に公開して」と明示された。対象は https://gamigamiigami.github.io/Answer/ 。公開用ブランチ claude/youthful-cerf-ypzjhe へのpushでPagesワークフローが実行される。公開成功を確認して結果を伝える。

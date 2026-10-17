@@ -354,6 +354,48 @@ input[type=checkbox]{accent-color:var(--place)}
 #graph-equations{width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--field);color:var(--ink);font:inherit;line-height:1.6}
 #graph-preview{display:block;width:100%;height:300px;background:#fff;border:1px solid var(--line);border-radius:12px}
 #graph-status{font-size:13px;min-height:1.5em}
+
+/* 取説：最初に必要な操作と詳しい操作を分ける */
+.help-modal{z-index:80}
+.help-modal .card{max-width:820px;font-size:15px;line-height:1.85}
+.help-tabs{display:flex;gap:6px;margin:16px 0;flex-wrap:wrap}
+.help-tabs button{flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font:inherit;cursor:pointer}
+.help-tabs button[aria-selected="true"]{background:var(--key);color:#fff;font-weight:700}
+.help-modal h4{font-size:17px;margin:22px 0 8px}
+.help-modal li{margin:10px 0}
+.help-modal pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:15px;line-height:1.9}
+.help-note{background:var(--field);border-left:4px solid var(--key);padding:12px 16px;border-radius:6px}
+.help-modal table{width:100%;border-collapse:collapse}
+.help-modal th,.help-modal td{padding:8px;text-align:left;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.help-modal details{margin:12px 0}.help-modal summary{cursor:pointer;font-weight:700}
+.help-modal .modal-actions{position:sticky;bottom:-22px;background:var(--panel);padding:12px 0}
+@media(max-width:520px){.help-modal .card{font-size:14px}.help-tabs button{padding:9px 5px;font-size:13px}.help-modal th,.help-modal td{padding:6px 3px}.help-modal .modal-actions{bottom:-16px}}
+
+/* 図で読むガイド */
+.guide-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:center;margin:18px 0}
+.guide-step{background:var(--field);border:1px solid var(--line);border-radius:16px;padding:16px;text-align:center;min-width:0}
+.guide-step strong{display:block;font-size:17px}.guide-step small{display:block;margin-top:8px;line-height:1.6}
+.guide-symbol{display:block;font-size:30px;color:var(--key);margin-bottom:8px}.guide-arrow{font-size:24px;color:var(--key);text-align:center}
+.guide-sheet{display:grid;grid-template-columns:38px 1fr;max-width:210px;margin:12px auto;background:#fff;color:#333;border:2px solid #697b6d;text-align:center}
+.guide-sheet span{padding:7px;border:1px solid #697b6d;min-height:34px}
+.guide-chunks{display:grid;grid-template-columns:1fr auto 2fr auto 1fr auto 1fr;gap:6px;align-items:center;margin:12px 0}
+.guide-chunk{border:1px solid var(--line);border-top:5px solid #598273;background:var(--field);border-radius:10px;padding:10px 4px;text-align:center;min-width:0}
+.guide-chunk:nth-of-type(2){border-top-color:#b77b48}.guide-chunk:nth-of-type(3){border-top-color:#6988af}.guide-chunk:nth-of-type(4){border-top-color:#9c759c}
+.guide-chunk b{display:block;font-size:25px}.guide-chunk small{display:block;font-size:12px}
+.guide-pair{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:20px 0}
+.guide-caption{font-weight:700;color:var(--key);margin:0 0 8px}
+.guide-key{border:2px solid var(--line);border-bottom-width:5px;border-radius:9px;padding:4px 12px;background:var(--field);font:700 24px monospace;display:inline-block}
+.guide-key-callout{border:2px solid #789780;background:var(--field);border-radius:16px;padding:16px;margin:20px 0}
+.guide-key-callout h4{margin:0 0 10px}.guide-key-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.guide-key-row svg{width:64px;height:40px}.guide-key-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.guide-key-list span{padding:5px 9px;border:1px solid var(--line);border-radius:8px}
+.guide-mini{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;font-size:14px}
+.guide-mini b{color:var(--key)}.guide-mini .tb{margin-left:auto}
+.start-guide{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 12px}.start-guide h2{font-size:16px;margin:0}
+.mode-desc{font-size:14px;color:var(--sub);margin:0 0 10px;line-height:1.7}
+.key-prompt{padding:10px;background:var(--field);border:1px solid #789780;border-radius:10px;font-size:13px;line-height:1.8;margin-bottom:12px}
+#field-tools .k{display:inline-block!important;font-size:14px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-bottom-width:3px;border-radius:5px;padding:1px 6px}
+.help-modal .card{max-width:940px;line-height:1.7}.help-modal h3{font-size:22px}.help-modal .help-tabs{position:sticky;top:-22px;background:var(--panel);padding:10px 0;z-index:1}
+@media(max-width:520px){.guide-flow{gap:5px}.guide-step{padding:12px 5px}.guide-step strong{font-size:14px}.guide-step small{font-size:12px}.guide-arrow{font-size:18px}.guide-pair{grid-template-columns:1fr}.guide-pair>.guide-arrow{transform:rotate(90deg)}.guide-chunks{gap:3px}.guide-chunk b{font-size:21px}.guide-chunk small{font-size:11px}.help-modal .help-tabs{top:-16px}.guide-key-row{gap:8px}}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -377,14 +419,15 @@ input[type=checkbox]{accent-color:var(--place)}
 <div id="start">
   <div class="box">
 <div class="welcome"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><div><p class="brand-kicker">テストのお供</p><h1>てすとも君</h1><p class="lead">先生の「あと少し」を、お手伝い。<br>今日の解答用紙も、いっしょに作りましょう。</p></div></div>
-    <button class="big-btn start-primary" id="btn-from-answers"><span class="start-action-note">はじめての方はこちらから</span><b>模範解答から作る <span aria-hidden="true">→</span></b><span>答えを入れたら、欄づくりはてすとも君におまかせ。</span></button>
+    <div class="start-guide"><h2>どの作り方にしますか？</h2><button class="tb" id="btn-start-help">？ 使い方</button></div>
+    <button class="big-btn start-primary" id="btn-from-answers"><span class="start-action-note">はじめての方はこちらから</span><b>模範解答から作る <span aria-hidden="true">→</span></b><span>答えを入力 → 欄と番号を自動で作成 → Excel出力。</span></button>
     <div class="start-row">
       <button class="big-btn" id="btn-resume" disabled><b>前回の続き</b><span>作りかけの用紙を、ここから。</span></button>
       <button class="big-btn" id="btn-open"><b>作業ファイルを開く</b><span>手元に保存した用紙（.json）を開きます。</span></button>
     </div>
-    <h2 style="font-size:13px;margin:22px 0 8px">見本の配置から始める</h2>
+    <h2 style="font-size:13px;margin:22px 0 8px">見本の配置から始める</h2><p class="mode-desc">▦ 教科の見本 → 欄や答えを直す。配置を見ながら作りたい方に。</p>
     <div class="subject-row" id="tpl-row"></div>
-    <h2 style="font-size:13px;margin:22px 0 8px">白紙から始める</h2>
+    <h2 style="font-size:13px;margin:22px 0 8px">白紙から始める</h2><p class="mode-desc">＋ 好きな場所を選ぶ → 数字キーで欄を追加。自分で並べたい方に。</p>
     <div class="subject-row" id="blank-row"></div>
     <p class="note">印刷・配布には Excel 出力をお使いください。PDF は確認用です。<br>
     このPCへの一時保存は、ブラウザの設定や共用PCの環境復元で消えることがあります。大事な作業は「作業ファイルを保存」で手元に残してください。</p>
@@ -402,9 +445,9 @@ input[type=checkbox]{accent-color:var(--place)}
     <span class="spacer"></span>
     <button class="tb primary" id="btn-xlsx">Excel出力</button>
     <button class="tb" id="btn-save">作業ファイルを保存</button>
+    <button class="tb" id="btn-help" title="使い方（F1）">使い方</button>
     <details id="more-menu" class="more-menu"><summary class="tb">その他</summary><div class="more-menu-items">
     <button class="tb" id="btn-pdf">PDF（確認用）</button>
-    <button class="tb" id="btn-help" title="使い方（F1）">使い方</button>
     <button class="tb" id="btn-settings" title="設定">設定</button></div></details>
   </div>
   <div id="workbar">
@@ -422,7 +465,7 @@ input[type=checkbox]{accent-color:var(--place)}
       <div class="workspace-guide"><div class="companion-heading"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><b id="workspace-heading">いっしょに、形に。</b></div><p id="workspace-tip"></p></div>
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
-        <p class="tip">丸数字と同じ数字キーでも追加できます（⓪は0）。</p>
+        <div class="key-prompt"><b>数字キーを押すだけで、欄ができる！</b><br>① 用紙の空いた場所をクリック<br>② 下のボタンと同じ数字キーを押す<br><small>ボタンをクリックしても置けます。</small></div>
         <div class="grid3" id="field-tools"></div>
         <details class="tool-section"><summary>番号を振る</summary><p class="tip">用紙上で番号を入れるマスを選んでから押します。</p><div class="grid5" id="stamp-tools"></div></details>
       </div>
@@ -436,7 +479,7 @@ input[type=checkbox]{accent-color:var(--place)}
       </details>
       <details id="edit-panel" class="tool-section"><summary>配置を直す・削除する</summary><div class="grid4" id="edit-tools"></div></details>
       <details id="misc-panel" class="tool-section"><summary>点検・道具の設定</summary><div class="grid2" id="misc-tools"></div></details>
-      <p class="tip">迷ったときは、上の「その他 → 使い方」へ。キーボード操作も確認できます。</p>
+      <p class="tip">迷ったときは、上の「使い方」へ。キーボード操作も確認できます。</p>
     </div>
     <div id="preview">
       <div id="paper"><svg id="sheet" xmlns="http://www.w3.org/2000/svg"></svg></div>
@@ -529,6 +572,20 @@ const SUBJECTS = {
   '社会':{orientation:'portrait' ,writing:'horizontal',numberStyle:'arabic'},
   'その他':{orientation:'portrait',writing:'horizontal',numberStyle:'arabic'}
 };
+
+// 参考用紙の共通寸法をA4・1枚のグリッドに合わせた初期値。国語・既存の寸法指定は変えない。
+// 幅は10.16mm単位、高さは7.62mm単位。基本セル寸法自体は保存済み用紙と共通。
+const SUBJECT_LAYOUTS = {
+  '数学':{shortW:4,shortH:2,essayH:4,blankW:6,blankH:3,
+    hint:'計算は高さのある枠、途中式・証明は大きな枠に。分数は 1/2、累乗は x^2 と入力できます。'},
+  '英語':{shortW:4,shortH:2,essayH:2,blankW:8,blankH:2,
+    hint:'単語・熟語は横長の枠、英文は広い記述欄に。空白・大文字・句読点を保ち、単語の途中を避けて折り返します。'},
+  '理科':{shortW:4,shortH:1,essayH:2,blankW:6,blankH:2,
+    hint:'語句は短い枠、化学式・計算は高さのある枠に。H₂O・CO₂・cm² のような添字や単位もそのまま入力できます。'},
+  '社会':{shortW:4,shortH:1,essayH:3,blankW:8,blankH:2,
+    hint:'人名・用語は短い枠、理由や資料の読み取りは広い記述欄に。字数指定がなければ1文字ずつのマスには分けません。'}
+};
+const subjectLayout = d => d && d.paper.writing==='horizontal' ? SUBJECT_LAYOUTS[d.paper.subject] : null;
 
 const KANJI = ['一','二','三','四','五','六','七','八','九','十',
                '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
@@ -1055,19 +1112,22 @@ function mathLinePrimitives(tokens,x,y,size){
   }
   return out;
 }
+// Excelのインデント1（半角スペース3個相当）を画面でも確保する。
+const answerInset = size => mathTextWidth('   ',size);
 function fractionAnswerPlan(d,f,text){
   if(f.fixedChars===true || (f.fixedChars!==false && [3,4,5,8].includes(f.type))) return null;
+  if(d.paper.subject==='英語' && (f.auto || {}).kind!=='formula') return null;
   const tokens=mathTokens(text);if(!tokens.some(t=>t.num!==undefined)) return null;
   const notes=f.note ? placeNote(d,f).map(p=>rectMM(d,{c:p.c,r:p.r,w:1,h:1})) : [];
   let result;
   for(let size=Math.min(40,textPtOf(f));size>=Math.min(6,textPtOf(f));size-=.5){
     let index=0;const vectors=[],lineHeight=ptmm(size)*1.9;
     for(const r of f.rects){
-      const box=rectMM(d,r);
-      for(let top=box.y+.55;top+lineHeight<=box.y+box.h-.3 && index<tokens.length;top+=lineHeight){
-        let segments=[[box.x+.5,box.x+box.w-.5]];
+      const box=rectMM(d,r), pad=Math.min(1.5,box.w*.15), topPad=1;
+      for(let top=box.y+topPad;top+lineHeight<=box.y+box.h-topPad && index<tokens.length;top+=lineHeight){
+        let segments=[[box.x+pad,box.x+box.w-pad-Math.max(0,(box.w-2*pad)*.08)]];
         for(const note of notes.filter(n=>n.y<top+lineHeight && n.y+n.h>top)){
-          segments=segments.flatMap(([a,b])=>note.x>=b || note.x+note.w<=a ? [[a,b]] : [[a,Math.max(a,note.x-.2)],[Math.min(b,note.x+note.w+.2),b]]).filter(([a,b])=>b>a);
+          segments=segments.flatMap(([a,b])=>note.x>=b || note.x+note.w<=a ? [[a,b]] : [[a,Math.max(a,note.x-.8)],[Math.min(b,note.x+note.w+.8),b]]).filter(([a,b])=>b>a);
         }
         for(const [left,right] of segments){
           const line=[];let width=0;
@@ -1195,6 +1255,11 @@ function flowingAnswerPlan(d, f, text){
       }
     }
   }
+  // 縦書きの長い欄は、上下1セルずつを空けた内側だけに文字を配置する。
+  // Excelにも同じ空きセルを残すため、画面だけの位置調整にしない。
+  if (vertical) regions.forEach(p=>{
+    if (p.mh>=6){ p.r++; p.mh-=2; p.insetRows=1; }
+  });
   // 日本語は全角幅、英数字は可変幅で見積もる。Canvasの測定値にも余白を加える。
   const ctx = flowingAnswerPlan.ctx || (flowingAnswerPlan.ctx = document.createElement('canvas').getContext('2d'));
   const trySize = size => {
@@ -1202,8 +1267,10 @@ function flowingAnswerPlan(d, f, text){
     let index = 0, room = 0;
     const out = [];
     for (const p of regions){
-      const available = vertical ? p.mh*RH-1.1 : width(p.c,p.mw)-1.3;
-      const across = vertical ? width(p.c,p.mw)-1 : p.mh*RH-0.6;
+      const inset=vertical ? 1.2 : p.mw>1 ? answerInset(size) : .8;
+      // 罫線際まで埋めず、折り返し・文字サイズの判定にも余裕を含める。
+      const available = (vertical ? p.mh*RH-2*inset : width(p.c,p.mw)-2*inset)*.92;
+      const across = vertical ? width(p.c,p.mw)-1.6 : p.mh*RH-1.6;
       if (ptmm(size)*1.15 > across) continue;
       const unit = vertical ? ptmm(size)*1.12 : ptmm(size);
       const capacity = Math.max(0,Math.floor(available/unit));
@@ -1213,10 +1280,17 @@ function flowingAnswerPlan(d, f, text){
         const ch = chars[index];
         if (ch === '\n'){ index++; break; }
         const advance = vertical ? unit : ptmm(Math.max(size*0.35,ctx ? ctx.measureText(ch).width*1.08 : size));
-        if (used + advance > available) break;
+        if (used + advance > available){
+          if (!vertical && d.paper.subject==='英語' && ch===' '){ part+=ch; index++; break; }
+          if (!vertical && d.paper.subject==='英語' && /[A-Za-z]/.test(ch) && /[A-Za-z]$/.test(part)){
+            const boundary=part.lastIndexOf(' ');
+            if (boundary>=0){ index-=Array.from(part.slice(boundary+1)).length; part=part.slice(0,boundary+1); }
+          }
+          break;
+        }
         used += advance; part += ch; index++;
       }
-      if (part) out.push({p:{...p,stack:vertical},ch:part,size});
+      if (part) out.push({p:{...p,stack:vertical,indent:!vertical && p.mw>1 ? 1 : 0},ch:part,size});
       if (index >= chars.length) break;
     }
     return {out,room:Math.max(room,index),need:chars.length,used:index};
@@ -1496,9 +1570,10 @@ function buildCells(d, withAnswers){
       if (!a) continue;
       answerPlan(d, f, a).out.forEach(({p, ch, size}) => {
         if (p.mh){
-          put(p.c, p.r, ch, size || 11, false, vertical ? 'center' : 'left', false);
+          put(p.c, p.r, ch, size || 11, false, vertical || !(p.mw>1) ? 'center' : 'left', false);
+          get(p.c,p.r).indent = !vertical ? p.indent || 0 : 0;
           merge(p.c, p.r, p.mw || 1, p.mh); get(p.c,p.r).stack = !!p.stack;
-          get(p.c,p.r).valign = vertical ? 'top' : 'center';
+          get(p.c,p.r).valign = vertical && p.insetRows ? 'top' : 'center';
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
       });
@@ -1680,7 +1755,7 @@ function render(){
     const a = { y: y0 + x.r*RH + mh*RH/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
     if (x.valign==='top') a.y = y0 + x.r*RH + 0.55 + fs/2;
-    if (x.align==='left'){ a.x = X(x.c) + 0.4; a['text-anchor']='start'; }
+    if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
     else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
     else { a.x = X(x.c) + W(x.c, mw)/2; a['text-anchor']='middle'; }
     if (x.bold) a['font-weight']='bold';
@@ -1755,7 +1830,7 @@ function render(){
       e.textContent = t; hint.appendChild(e); };
     line('数字キー（または左のボタン）で解答欄を置きます', -4, 5);
     line('範囲をドラッグで選んでから押すと、まとめて置けます', 3, 4.2);
-    line('困ったら上の「その他 → 使い方」を開いてください', 10, 4.2);
+    line('困ったら上の「使い方」を開いてください', 10, 4.2);
     svg.appendChild(hint);
   }
 
@@ -1944,9 +2019,10 @@ async function placeField(type){
     many = num(v.many, 0, many);
   }
   if (type===6){
+    const preset=subjectLayout(doc);
     const v = await ask('長方形の解答欄', [
-      {key:'tate',label:'縦（マス）',type:'number',value:3,min:1},
-      {key:'yoko',label:'横（マス）',type:'number',value:4,min:1}, manyRow()
+      {key:'tate',label:'縦（マス）',type:'number',value:preset ? preset.blankH : 3,min:1},
+      {key:'yoko',label:'横（マス）',type:'number',value:preset ? preset.blankW : 4,min:1}, manyRow()
     ]); if(!v) return; opt.tate=num(v.tate,1,3); opt.yoko=num(v.yoko,1,4);
     many = num(v.many, 0, many);
   }
@@ -3696,9 +3772,9 @@ function buildXlsx(){
     if (!borderKey.has(k)){ borderKey.set(k, borders.length); borders.push(b); }
     return borderKey.get(k);
   };
-  const addXf = (fi,bi,align,pi,stack=false,valign='center') => {
-    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack+'/'+valign;
-    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack,valign}); }
+  const addXf = (fi,bi,align,pi,stack=false,valign='center',indent=0) => {
+    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack+'/'+valign+'/'+indent;
+    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack,valign,indent}); }
     return xfKey.get(k);
   };
   const fillList = ['', ''];                    // 0:なし 1:gray125（Excelのきまり）
@@ -3766,7 +3842,7 @@ function buildXlsx(){
           bd = unionBorders(sh.cells, c, r, mg.w, mg.h);
         }
         const si = addXf(addFont(x.size||11, x.bold), addBorder(bd), x.align||'center',
-                         addFill(x.fill),!!x.stack,x.valign);
+                         addFill(x.fill),!!x.stack,x.valign,x.indent || 0);
         const ref = colName(c)+(r+1);
         rowXml += x.t
           ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+
@@ -3807,7 +3883,7 @@ function buildXlsx(){
   ).join('')+'</fills>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
     '<xf numFmtId="0" fontId="'+x.fi+'" fillId="'+x.pi+'" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyFill="1" applyAlignment="1">'+
-    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(x.valign==='top'?'top':'center')+'"'+(x.stack?' textRotation="255"':'')+'/></xf>'
+    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(x.valign==='top'?'top':'center')+'"'+(x.stack?' textRotation="255"':'')+(x.indent?' indent="'+x.indent+'"':'')+'/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
@@ -4252,9 +4328,9 @@ async function openCheck(){
         : '模範解答はすべて欄に収まっています', 'over')+
     '<p class="desc" style="margin:14px 0 0">「その欄に☑」を押すと、その欄だけに☑が付きます。'+
     'そのまま S（配点）や Enter（模範解答）に進めます。</p>'+
-    '<div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
+    '</details></section><div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
   document.body.appendChild(wrap);
-  const close = () => { wrap.remove(); document.body.focus(); };
+  const close = () => { wrap.remove(); if(opener && opener.isConnected) opener.focus(); };
   const pick = list => {
     if (!list.length) return close();
     ui.pickKind = 'answer';
@@ -4314,7 +4390,15 @@ async function bulkPoints(){
 }
 
 /* 使い方（この画面だけで分かるように） */
-function openHelp(){
+function answerFormatDiagram(){
+  return '<div class="guide-chunks" aria-label="入力例：問番号1、答えア、点数2、観点知">'+
+    '<div class="guide-chunk"><small>問番号</small><b>1</b></div><span>,</span>'+
+    '<div class="guide-chunk"><small>答え</small><b>ア</b></div><span>,</span>'+
+    '<div class="guide-chunk"><small>点数</small><b>2</b></div><span>,</span>'+
+    '<div class="guide-chunk"><small>観点</small><b>知</b></div></div>';
+}
+function openHelp(initialTab='quick'){
+  const opener=document.activeElement;
   const ord = fieldOrder();
   const keyOf = i => (i===9 ? '0' : String(i+1));
   const row = (k, t) => '<tr><td style="white-space:nowrap;padding:2px 10px 2px 0;font-weight:700">'+
@@ -4322,11 +4406,50 @@ function openHelp(){
   const table = rows => '<table style="border-collapse:collapse;font-size:13px;line-height:1.7">'+rows+'</table>';
   const h2 = t => '<h4 style="margin:16px 0 6px;font-size:13.5px">'+t+'</h4>';
   const wrap = document.createElement('div');
-  wrap.className = 'modal';
-  wrap.innerHTML = '<div class="card" style="max-width:640px">'+
-    '<h3>てすとも君の使い方</h3>'+
-    '<p class="desc"><b>①欄を置く → ②番号を振る → ③模範解答を入れる → ④Excel出力</b><br>'+
-    'マウスでも、キーボードだけでも作れます。困ったら「その他 → 使い方」（F1）を開いてください。</p>'+
+  wrap.className = 'modal help-modal';
+  wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','help-title');
+  wrap.innerHTML = '<div class="card">'+
+    `<h3 id="help-title">図でわかる！ てすとも君の使い方</h3>
+    <div class="help-tabs" role="tablist" aria-label="取説の内容">${[['quick','作り方・欄の置き方'],['format','模範解答から作る'],['advanced','詳しい機能']].map(([id,label])=>'<button type="button" id="help-tab-'+id+'" role="tab" aria-controls="help-panel-'+id+'" data-help-tab="'+id+'">'+label+'</button>').join('')}</div>
+    <section id="help-panel-quick" role="tabpanel" aria-labelledby="help-tab-quick">
+    <h4>作り方は3つ。自分に合う入口から。</h4>
+    <div class="guide-flow">
+      <div class="guide-step"><span class="guide-symbol" aria-hidden="true">✎</span><strong>模範解答から</strong><small>答えを書くと<br>欄と番号が自動でできる</small></div><span class="guide-arrow">／</span>
+      <div class="guide-step"><span class="guide-symbol" aria-hidden="true">▦</span><strong>見本から</strong><small>教科の見本を開いて<br>必要なところを直す</small></div><span class="guide-arrow">／</span>
+      <div class="guide-step"><span class="guide-symbol" aria-hidden="true">＋</span><strong>白紙から</strong><small>好きな場所に<br>自分で欄を並べる</small></div>
+    </div>
+    <button class="tb primary" data-help-go="format">✎ 模範解答から作る手順を見る →</button>
+    <div class="guide-key-callout"><h4>数字キーを押すだけで、解答欄を追加！</h4>
+      <div class="guide-key-row"><span>① 空いた場所をクリック</span><span class="guide-arrow">→</span><span>② <kbd class="guide-key">${keyOf(ord.indexOf(2))}</kbd> を押す</span><span class="guide-arrow">→</span><span>${icon(2)} 記号用の欄ができる</span></div>
+      <p>「解答用紙」タブで使えます。左のボタンの数字が、そのままキーです。</p>
+      <div class="guide-key-list">${ord.slice(0,6).map((t,i)=>'<span><b>'+keyOf(i)+'</b> '+fieldName(t)+'</span>').join('')}</div>
+    </div>
+    <div class="guide-flow"><div class="guide-step"><span class="guide-symbol">✓</span><strong>用紙と答えを確認</strong><small>2つのタブで見比べる</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">▤</span><strong>Excel出力</strong><small>印刷プレビューで確認</small></div><span class="guide-arrow">＋</span><div class="guide-step"><span class="guide-symbol">↧</span><strong>作業ファイルを保存</strong><small>次回も編集できる .json</small></div></div>
+    </section>
+    <section id="help-panel-format" role="tabpanel" aria-labelledby="help-tab-format" hidden>
+    <div class="guide-flow"><div class="guide-step"><span class="guide-symbol">① ✎</span><strong>答えを入力</strong><small>教科を選ぶ<br>「入力例を試す」で練習</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">② ✓</span><strong>一覧で確認</strong><small>「読み取って一覧にする」<br>答え・点数を見直す</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">③ ▤</span><strong>用紙が完成</strong><small>「この内容で用紙を作る」<br>欄と番号はおまかせ</small></div></div>
+    <h4>1問は、この4つ。間にカンマを入れます。</h4>
+    ${answerFormatDiagram()}
+    <p class="guide-caption">知 ＝ 知識・技能　／　思 ＝ 思考・判断・表現</p>
+    <div class="guide-pair"><div><p class="guide-caption">✎ 入力する例</p><pre id="help-basic-example">1
+1,ア,2,知
+2,太陽,2,知
+2
+1,相手の気持ちを考えたから。,5,思</pre></div><span class="guide-arrow" aria-label="用紙に変換">→</span><div class="guide-step"><strong>▤ できる用紙のイメージ</strong><p class="guide-caption">大問1：2問</p><div class="guide-sheet"><span>1</span><span>ア</span><span>2</span><span>太陽</span></div><p class="guide-caption">大問2：1問</p><div class="guide-sheet"><span>1</span><span>相手の気持ちを<br>考えたから。</span></div><small>実際の欄・番号は教科に合わせて変わります。</small></div></div>
+    <div class="guide-mini"><b>1 ← 数字だけの行</b><span>ここから大問1！</span><b>2 ← 次の数字だけの行</b><span>ここから大問2！</span></div>
+    <details><summary>答えに「、」が入るときは？</summary><pre>1,"こんにちは、先生",2,思</pre><p>答えを半角の「"」で囲みます。区切りには , ・ ， ・ 、 が使えます。</p></details>
+    <details><summary>答えだけで、まず試したい</summary><pre>ア
+太陽
+相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数は0点・観点は仮設定になるので、一覧で直してください。数字だけの答えは「1,12,2,知」の形で書きます。</p></details>
+    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「模範解答の編集」へ。作り直すと手動の配置・描画も置き換わります。</span></div>
+    <button class="tb" data-help-go="advanced">小問・字数指定などは「詳しい機能」へ →</button></section>`+
+    '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
+    '<h4>必要になったときだけ使う入力</h4>'+
+    '<details><summary>小問（1）（2）を作る</summary><pre>1\n1,(1),ア,2,知\n(2),イ,2,知</pre><p>大問1・問1の中に（1）（2）を作ります。2行目以降の小問は、親の問番号を省略できます。</p></details>'+
+    '<details><summary>字数指定・空欄・教科別の書き方</summary><pre>1,理由を書く。,5,思,20字以内\n2,,4,思,解答欄のみ</pre><p>末尾に条件を追加できます。「解答欄のみ」は答えを空にし、カンマを2つ続けます。幅や高さは確認画面の「細かな設定」で調整できます。</p><p>数学：<code>1,x = 1/2,3,知</code><br>英語：<code>1,"I like science, too.",4,思</code><br>理科：<code>1,H₂O,2,知,化学式</code><br>社会：<code>1,三権分立,2,知</code></p><p>教科を先に選んでください。「入力例を試す」で、その教科の例が入ります。</p></details>'+
+    '<details><summary>国語の漢字・初終・完答</summary><pre>1,太陽,2,知,漢字2字\n2,はじめ～おわり,4,思\n3,ア・ウ,4,知,完答</pre><p>初終は書き抜きの初めと終わりを「～」で区切ります。完答は、複数の答えがすべて合っているときの配点です。</p></details>'+
+    '<details><summary>用紙に入りきらない・欄を調整したい</summary><p>問題が多い場合は大問間の余白、次に欄幅を自動調整します。それでも入らない場合は問題を減らすか、用紙を分けて作ってください。確認画面の各問の「細かな設定」では字数・幅・高さなどを変更できます。</p></details>'+
+    '<details><summary>手で欄を作る・キーボード操作一覧</summary>'+
     h2('① 欄を置く（数字キー・左のボタン）')+
     table(ord.map((t,i) => row(keyOf(i), fieldName(t)+
       '<span style="color:var(--sub)">　'+FIELD_DEFS[t].hint+'</span>')).join('')+
@@ -4353,14 +4476,34 @@ function openHelp(){
       row('Ctrl+A', 'ぜんぶ選ぶ')+
       row('Excel出力', 'これが正本です。PDFは確認用')+
       row('作業ファイルを保存', 'あとで続きから直せます（.json）'))+
-    '<div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
+    '</details></section><div class="modal-actions"><button class="tb primary" data-act="ok">とじる</button></div></div>';
   document.body.appendChild(wrap);
-  const close = () => { wrap.remove(); document.body.focus(); };
-  wrap.addEventListener('click', e => { if (e.target.closest('button') || e.target===wrap) close(); });
-  wrap.addEventListener('keydown', e => { e.stopPropagation();
-    if (e.key==='Escape' || e.key==='Enter'){ e.preventDefault(); close(); } });
-  const card = wrap.querySelector('.card');
-  card.tabIndex = -1; card.focus(); card.scrollTop = 0;   // 上から読めるように
+  const close = () => { wrap.remove(); if(opener && opener.isConnected) opener.focus(); };
+  const showTab=id=>{
+    if(!['quick','format','advanced'].includes(id)) id='quick';
+    wrap.querySelectorAll('[data-help-tab]').forEach(button=>{
+      const active=button.dataset.helpTab===id;
+      button.setAttribute('aria-selected',String(active)); button.tabIndex=active?0:-1;
+      wrap.querySelector('#help-panel-'+button.dataset.helpTab).hidden=!active;
+    });
+  };
+  wrap.addEventListener('click', e => {
+    if(e.target===wrap || e.target.closest('[data-act="ok"]')) { close(); return; }
+    const button=e.target.closest('[data-help-tab],[data-help-go]');
+    if(button){ const id=button.dataset.helpTab||button.dataset.helpGo; showTab(id); wrap.querySelector('#help-tab-'+id).focus(); }
+  });
+  wireTabKeys(wrap.querySelector('.help-tabs'));
+  wrap.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if(e.key==='Escape'){ e.preventDefault(); close(); }
+    if(e.key==='Tab'){
+      const nodes=Array.from(wrap.querySelectorAll('button,summary')).filter(n=>n.tabIndex>=0 && n.getClientRects().length);
+      const first=nodes[0],last=nodes[nodes.length-1];
+      if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}
+    }
+  });
+  showTab(initialTab); wrap.querySelector('[aria-selected="true"]').focus();
 }
 
 /* 用紙だけを大きく見る（道具と帯を隠す） */
@@ -4520,6 +4663,14 @@ const TEMPLATES = {
 };
 
 function applyTemplate(subject){
+  if (subjectLayout(doc)){
+    const rows=parseAutoAnswers(SUBJECT_SAMPLES[subject],{subject,groupStyle:'digit'});
+    const next=buildAutoDocument(rows,subject,doc.paper);
+    next.answers={}; next.answerGraphs={};
+    next.fields.forEach(f=>{f.auto.kindAuto=false;});
+    // A template is a blank worksheet, not a hidden model answer.
+    doc=next; uid=doc.fields.length+1; return;
+  }
   const groups = TEMPLATES[subject] || [];
   const vertical = doc.paper.writing==='vertical';
   const origin = contentOrigin(doc);
@@ -4661,7 +4812,7 @@ function buildTools(){
   const fw = $('#field-tools');
   fw.innerHTML = fieldOrder().map((k,i) =>
     '<button class="tool" data-field="'+k+'" aria-keyshortcuts="'+fieldKeyLabel(k)+'" title="'+FIELD_DEFS[k].hint+'（数字キー：'+fieldKeyLabel(k)+'）">'+icon(k)+
-    '<span class="nm">'+'①②③④⑤⑥⑦⑧⑨⓪'[i]+' '+fieldName(k)+'</span></button>').join('')+
+    '<span class="nm">'+fieldName(k)+'</span><kbd class="k">'+fieldKeyLabel(k)+'</kbd></button>').join('')+
     '<button class="tool" id="t-wiz" style="grid-column:1/-1" title="欄・小問の番号・大問の見出しをまとめて作ります">'+
     '<span class="nm">大問をまるごと作る</span><span class="k">N</span></button>'+
     '<button class="tool" id="t-auto" style="grid-column:1/-1"><span class="nm">模範解答から作る・編集</span></button>';
@@ -4825,9 +4976,35 @@ function startApp(){
 }
 
 /* 模範解答から作る。解析→編集→配置は、確定まで現在の用紙に触れない。 */
-const AUTO_KINDS = [['mark','記号（1文字）'],['word','語句（自動幅）'],['essay','記述（字数自由）'],
+const AUTO_KINDS = [['formula','数式・数値・化学式'],['sentence','英文'],['working','途中式・説明'],['mark','記号（1文字）'],['word','語句（自動幅）'],['essay','記述（字数自由）'],
   ['chars','字数指定'],['blank','解答欄のみ'],['graph','グラフ'],['kanji','漢字'],['extract','初終'],['customA','カスタムA'],['customB','カスタムB']];
 const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ～おわり，４，思\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
+const SUBJECT_SAMPLES = {
+  '数学':'1\n1,12,2,知\n2,x = 1/2,3,知\n3,3x^2 + 2x,3,知\n2\n1,"2x + 3 = 7\nx = 2",5,思,途中式\n2,y = 2x + 1,5,思,グラフ',
+  '英語':'1\n1,ア,2,知\n2,plastic bags,2,知\n3,must not eat,3,知\n2\n1,What do you mean?,4,思\n2,"I like science, and I study it every day.",5,思,英文',
+  '理科':'1\n1,原子,2,知\n2,H₂O,2,知,化学式\n3,2H₂O → 2H₂ + O₂,3,知,化学式\n2\n1,6.8 km/s,3,思,数式\n2,あたたかく浅い海であったため。,4,思,記述\n3,,4,思,解答欄のみ',
+  '社会':'1\n1,ア,2,知\n2,三権分立,2,知\n3,地方分権,2,知\n2\n1,生活に必要なものが不足したため。,4,思,記述\n2,国民の権利を守るため。,4,思,20字以内'
+};
+function inferAutoKind(answer,subject='国語'){
+  const n=autoLength(answer), profile=SUBJECT_LAYOUTS[subject];
+  if (!profile) return looksLikeGraph(answer)?'graph':extractWaveParts(answer)?'extract':n===1?'mark':n<=8 && !/[。！？!?\n]/.test(answer)?'word':'essay';
+  if (subject==='理科' && /^(?:[A-Z][a-z]?[₀-₉0-9]*)+$/.test(answer.trim())) return 'formula';
+  if (subject==='数学' && /^[a-z]$/.test(answer.trim())) return 'formula';
+  if (/^[ア-ンA-ZＡ-Ｚ①-⑳]$/.test(answer.trim())) return 'mark';
+  if (subject==='数学' && looksLikeGraph(answer)) return 'graph';
+  if (subject==='英語' && /[a-zA-Z]/.test(answer)) return /[.!?\n]/.test(answer) || answer.trim().split(/\s+/).length>=4 ? 'sentence':'word';
+  if (['数学','理科'].includes(subject) && /[0-9０-９₀-₉=＝+＋−×÷²³√→]/.test(answer) && !/[。！？!?]/.test(answer)) return answer.includes('\n')?'working':'formula';
+  return n<=12 && !/[。！？!?\n]/.test(answer)?'word':'essay';
+}
+function subjectAnswerSize(row,d){
+  const p=subjectLayout(d); if(!p) return null;
+  const wide=Math.min(12,d.grid.cols-3), lines=String(row.answer).split('\n');
+  // 手書きの余白を含める。半角は全角の約半分として、英文を一字一マスにしない。
+  const units=Math.max(1,...lines.map(line=>Array.from(line).reduce((n,c)=>n+(/[\x00-\x7f]/.test(c)?0.55:1),0)));
+  if(row.kind==='blank') return {w:p.blankW,h:p.blankH};
+  if(row.kind==='word' || row.kind==='formula') return {w:Math.min(wide,Math.max(p.shortW,Math.ceil(units*.65+1))),h:Math.max(row.kind==='formula'?2:p.shortH,lines.length)};
+  return {w:wide,h:Math.max(row.kind==='working'?4:p.essayH,lines.reduce((n,line)=>n+Math.max(1,Math.ceil(Array.from(line).length/(wide*1.5))),0))};
+}
 const autoDigits = s => String(s).replace(/[０-９]/g, c => String(c.charCodeAt(0)-0xff10));
 const autoLength = s => Array.from(String(s || '')).length;
 const AUTO_NUMBER_STYLES = [['Q','問一・問二'],['P','(1)・(2)'],['M','①・②'],['A','ア・イ'],['digit','1・2'],['none','番号なし']];
@@ -4858,6 +5035,9 @@ function autoMeta(token, row){
   else if ((m = /^(?:横)?(\+?\d+)[×xｘX](?:縦)?(\+?\d+)(?:マス)?$/.exec(t))){ row.w = +m[1]; row.h = +m[2]; }
   else if (/^(?:記号|記号用)$/.test(t)) row.kind = 'mark';
   else if (/^カスタム[AB]$/.test(t)) row.kind=t.endsWith('A')?'customA':'customB';
+  else if (SUBJECT_LAYOUTS[row.subjectMode] && /^(?:数式|数値|計算|化学式)$/.test(t)) row.kind = 'formula';
+  else if (SUBJECT_LAYOUTS[row.subjectMode] && t === '英文') row.kind = 'sentence';
+  else if (SUBJECT_LAYOUTS[row.subjectMode] && /^(?:途中式|証明|説明)$/.test(t)) row.kind = 'working';
   else if (t === '語句') row.kind = 'word';
   else if (/^(?:記述|記述問題)$/.test(t)){ if (row.kind !== 'chars') row.kind = 'essay'; }
   else if (/^(?:枠のみ|解答欄のみ|長方形|作図)$/.test(t)) row.kind = 'blank';
@@ -4960,6 +5140,7 @@ function autoSourceExtras(row){
   else if (row.kind==='kanji') extras.push('漢字'+row.n+'字');
   else if (row.kind==='extract') extras.push('初終'+row.n+'字');
   else if (['blank','graph','customA','customB'].includes(row.kind)) extras.push(({blank:'解答欄のみ',graph:'グラフ',customA:'カスタムA',customB:'カスタムB'})[row.kind]);
+  else if (['formula','sentence','working'].includes(row.kind)) extras.push(({formula:'数式',sentence:'英文',working:'途中式'})[row.kind]);
   else if (!row.kindAuto) extras.push(row.kind==='word'?'語句':row.kind==='mark'?'記号':'記述');
   if (row.w || row.h) extras.push((row.w || 0)+'×'+(row.h || 0));
   if (row.complete) extras.push('完答');
@@ -4985,7 +5166,7 @@ function parseAutoAnswers(source, defaults={}){
     if (heading || customHeading){ group = heading ? heading[1] || heading[2] || heading[3] : customHeading[1]; groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; continue; }
     if (sectionBreak){ group = nextAutoGroup(groups,defaults.groupStyle); groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; }
     if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
-    const row = { group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
+    const row = { ...(SUBJECT_LAYOUTS[defaults.subject] ? {subjectMode:defaults.subject} : {}), group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
       w:0, h:0, eight:!!defaults.eight, complete:!!defaults.complete,
       points:defaults.points ?? null, aspect:defaults.aspect || '', warnings:[], sourceLine };
     if (row.kind === 'auto') row.kind = '';
@@ -5017,18 +5198,17 @@ function parseAutoAnswers(source, defaults={}){
     }).join('').trim();
     }
     if (!row.kind){
-      const n = autoLength(row.answer);
-      row.kind = looksLikeGraph(row.answer) ? 'graph' : extractWaveParts(row.answer) ? 'extract' : n === 1 ? 'mark' : n <= 8 && !/[。！？!?\n]/.test(row.answer) ? 'word' : 'essay';
+      row.kind = inferAutoKind(row.answer,defaults.subject);
       row.warnings.push('欄の種類を推定');
       row.kindAuto = true;
     }
     if (row.points === null){ row.points = 0; row.warnings.push('配点未指定（0点）'); }
     if (!row.aspect){
-      row.aspect = ['essay','chars','graph','blank'].includes(row.kind) ? '思判表' : '知技';
+      row.aspect = ['essay','sentence','working','chars','graph','blank'].includes(row.kind) ? '思判表' : '知技';
       row.warnings.push('観点を推定');
     }
     if (row.n === null) row.n = row.kind === 'extract' ? Math.max(1, ...splitExtract(row.answer).map(autoLength)) : Math.max(1, autoLength(row.answer));
-    if (row.kind === 'blank'){ row.w = row.w || 1; row.h = row.h || 10; }
+    if (row.kind === 'blank' && !SUBJECT_LAYOUTS[defaults.subject]){ row.w = row.w || 1; row.h = row.h || 10; }
     if (record!==null || /^問/.test(row.label)) recordQuestion=splitAutoQuestionLabel(row.label).main;
     if (!groups.includes(group)) groups.push(group);
     rows.push(row);
@@ -5043,7 +5223,7 @@ function autoRowError(row){
   if (!AUTO_KINDS.some(x => x[0] === row.kind)) return '欄の種類を選んでください。';
   if (!Number.isInteger(row.points) || row.points < 0 || row.points > 1000) return '配点は0〜1000の整数にしてください。';
   if (!['知技','思判表'].includes(row.aspect)) return '観点を選んでください。';
-  if (!row.answer.trim() && !['blank','graph'].includes(row.kind)) return '模範解答を入れるか「解答欄のみ」を選んでください。';
+  if (!row.answer.trim() && !['blank','graph','working'].includes(row.kind)) return '模範解答を入れるか「解答欄のみ」を選んでください。';
   if (autoLength(row.answer) > 4000) return '1問の答えは4000文字以内にしてください。';
   if (['chars','kanji','extract'].includes(row.kind) && (!Number.isInteger(row.n) || row.n < 1 || row.n > 1000)) return '字数は1〜1000の整数にしてください。';
   if (row.kind==='extract' && /[～〜~]/.test(row.answer) && !extractWaveParts(row.answer)) return '初終は「初め～終わり」の形で、～の前後に答えを入れてください（～は1つ）。';
@@ -5133,12 +5313,13 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       questionMain=''; questionFrame=null;
     }
     const numbering=splitAutoQuestionLabel(row.label), hierarchical=!!(numbering.main && numbering.suffix);
-    const type = ({mark:2,word:6,essay:6,chars:5,blank:6,graph:7,kanji:8,extract:3,customA:9,customB:10})[row.kind];
+    const type = ({formula:6,sentence:6,working:6,mark:2,word:6,essay:6,chars:5,blank:6,graph:7,kanji:8,extract:3,customA:9,customB:10})[row.kind];
     const n = autoLength(row.answer), fixed = ['chars','kanji','extract'].includes(row.kind);
     // 字数自由は筆記用の余白を確保。大きさは一覧から変更できる。
     const defaultW = row.kind === 'blank' ? 1 : row.kind === 'word' ? (vertical ? 1 : Math.max(2,n)) : (vertical ? Math.max(1,Math.ceil(n/18)) : Math.min(12,d.grid.cols-3));
     const defaultH = row.kind === 'blank' ? 10 : row.kind === 'word' ? (vertical ? Math.max(2,n) : 1) : (vertical ? Math.min(18,Math.max(4,n)) : Math.max(2,Math.ceil(n/12)));
-    const opt = {n:row.n, tate:row.h || defaultH, yoko:row.w || defaultW, w:row.w || 6, h:row.h || 6};
+    const size=subjectAnswerSize(row,d);
+    const opt = {n:row.n, tate:row.h || (size ? size.h : defaultH), yoko:row.w || (size ? size.w : defaultW), w:row.w || 6, h:row.h || 6};
     let got = null;
     for (let attempt=0;attempt<d.grid.cols+d.grid.rows;attempt++){
       const parentNeeded=hierarchical && (questionMain!==numbering.main || !questionFrame ||
@@ -5252,11 +5433,11 @@ function openAnswerGenerator(initialTitle=''){
   const wrap=document.createElement('div'); wrap.className='modal auto-modal';
   wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','auto-title');
   wrap.innerHTML='<div class="card"><h3 id="auto-title" class="companion-title"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><span>模範解答から作る・編集</span></h3>'+
-    '<p class="desc">まずは答えをどうぞ。欄の形は、てすとも君がお手伝いします。あとから直せるので、少しずつで大丈夫。</p>'+
+    '<div class="guide-mini"><b>✎ 答えを書く</b><span>→</span><b>✓ 一覧で確認</b><span>→</span><b>▤ 欄と番号が完成</b><button class="tb" id="auto-help">？ このモードの使い方</button></div>'+
     '<div class="auto-steps" role="tablist" aria-label="模範解答から作る手順"><button id="auto-tab-input" role="tab" aria-controls="auto-input-panel" data-step="input">① 答えを入力</button><button id="auto-tab-review" role="tab" aria-controls="auto-review-panel" data-step="review">② 確認・調整</button></div>'+
     '<p class="desc">タイトル：<b>'+xmlEsc(doc ? doc.paper.title : initialTitle)+'</b></p>'+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select></div>'+
-    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div><p class="desc">大問番号だけの行の後に「問番号，答え，点数，ち／し」を1問ずつ書きます。「知／思」も使えます。答えだけでも始められます。</p><textarea id="auto-source" rows="6" placeholder="１&#10;１，ア、２，ち&#10;２，太陽，２，ち，漢字2字&#10;２&#10;１，（１）、ウ、２、ち&#10;（２）、相手の気持ちを考えたから、５，し，20字以内"></textarea>'+
+    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+answerFormatDiagram()+'<p class="desc">1行に1問。数字だけの行で大問を分けます。知＝知識・技能 ／ 思＝思考・判断・表現</p><textarea id="auto-source" rows="6" placeholder="1&#10;1,ア,2,知&#10;2,太陽,2,知&#10;2&#10;1,相手の気持ちを考えたから。,5,思"></textarea>'+
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">「1，（1），ア，2，知」の次は「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数を省略すると0点、観点を省略すると答えから推定します。確認画面で調整してください。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
@@ -5266,6 +5447,7 @@ function openAnswerGenerator(initialTitle=''){
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
+  q('#auto-help').onclick=()=>openHelp('format');
   const showStep=step=>{
     const review=step==='review';
     q('#auto-input-panel').hidden=review; q('#auto-review-panel').hidden=!review;
@@ -5284,6 +5466,10 @@ function openAnswerGenerator(initialTitle=''){
   q('#auto-back').onclick=()=>{ showStep('input'); source.focus(); };
   wireTabKeys(q('.auto-steps'));
   q('#auto-subject').value=doc ? doc.paper.subject : '国語';
+  const subjectHint=document.createElement('p'); subjectHint.className='desc'; subjectHint.id='auto-subject-hint';
+  q('#auto-subject').closest('.row').after(subjectHint);
+  const updateSubjectHint=()=>{ const p=SUBJECT_LAYOUTS[q('#auto-subject').value]; subjectHint.textContent=p ? p.hint+' 幅・高さの0は教科に合わせた自動設定です。' : ''; subjectHint.hidden=!p; };
+  updateSubjectHint();
   const groupChoices=value=>Array.from(new Set([...groups,...KANJI,value].filter(Boolean))).map(g=>[g,'大問 '+g]);
   const updateGroups=value=>{
     const scope=q('#auto-bulk-scope').value || 'all';
@@ -5294,7 +5480,7 @@ function openAnswerGenerator(initialTitle=''){
   const getDefaults=()=>{
     const start=Number(q('#auto-number-start').value);
     if (!Number.isInteger(start) || start<1 || start>200) throw new Error('開始番号は1〜200にしてください。');
-    return {group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
+    return {subject:q('#auto-subject').value,group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
       numStyle:q('#auto-number-style').value,start,blankGroups:q('#auto-blank-groups').checked};
   };
   const close=()=>{ wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
@@ -5302,11 +5488,11 @@ function openAnswerGenerator(initialTitle=''){
   const infer=r=>{
     if (r.kindAuto){
       const n=autoLength(r.answer), wave=extractWaveParts(r.answer);
-      r.kind=looksLikeGraph(r.answer)?'graph':wave?'extract':n<=1?'mark':n<=8 && !/[。！？!?\n]/.test(r.answer)?'word':'essay';
+      r.kind=inferAutoKind(r.answer,q('#auto-subject').value);
       r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
     }
-    if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
-    if (r.kind==='blank'){ r.w=r.w || 1; r.h=r.h || 10; }
+    if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
+    if (r.kind==='blank' && !SUBJECT_LAYOUTS[q('#auto-subject').value]){ r.w=r.w || 1; r.h=r.h || 10; }
   };
   const syncControls=card=>{
     const r=rows[+card.dataset.row];
@@ -5314,7 +5500,7 @@ function openAnswerGenerator(initialTitle=''){
     card.querySelector('[data-k="kind"]').value=r.kind;
     card.querySelector('[data-k="aspect"]').value=r.aspect;
     for (const key of ['n','w','h','eight']){
-      const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['word','essay','blank','graph'].includes(r.kind);
+      const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','sentence','working','word','essay','blank','graph'].includes(r.kind);
       const node=card.querySelector('[data-k="'+key+'"]'); node.disabled=!enabled; node.closest('label').hidden=!enabled;
       if (key==='eight') node.checked=!!r.eight; else node.value=r[key];
     }
@@ -5335,7 +5521,7 @@ function openAnswerGenerator(initialTitle=''){
       '<div><label>問番号<select data-k="label" aria-label="問番号">'+choices([...labels,['!custom','自由に指定…']],numbering.main)+'</select><span data-label-custom hidden>'+input('labelCustom',numbering.main,'text','問番号を自由に指定')+'</span></label>'+
       '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label></div>'+
       '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
-      '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KINDS,r.kind)+'</select></label>'+
+      '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KINDS.filter(([kind])=>SUBJECT_LAYOUTS[q('#auto-subject').value] || !['formula','sentence','working'].includes(kind) || kind===r.kind),r.kind)+'</select></label>'+
       '<label>配点<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices([['知技','知識・技能'],['思判表','思考・判断・表現']],r.aspect)+'</select></label></div>'+
       '<details class="auto-detail"><summary>細かな設定<span class="auto-size-summary"></span></summary><div class="auto-options"><label>字数'+input('n',r.n,'number','字数')+'</label><label>幅'+input('w',r.w,'number','幅')+'</label><label>高さ'+input('h',r.h,'number','高さ')+'</label>'+
@@ -5355,10 +5541,11 @@ function openAnswerGenerator(initialTitle=''){
     } catch(e){ status.textContent=e.message; }
   };
   q('#auto-example').onclick=()=>{
-    source.value=AUTO_SAMPLE;
+    source.value=SUBJECT_SAMPLES[q('#auto-subject').value] || AUTO_SAMPLE;
     status.textContent='入力例を入れました。自由に直してから「読み取って一覧にする」を押してください。';
     source.focus();
   };
+  q('#auto-subject').onchange=()=>{ updateSubjectHint(); drawRows(); };
   q('#auto-parse').onclick=parse;
   q('#auto-bulk-points').onchange=()=>{ q('#auto-bulk-point-custom').hidden=q('#auto-bulk-points').value!=='custom'; };
   q('#auto-bulk-apply').onclick=()=>{
@@ -5526,7 +5713,8 @@ $('#btn-pdf').onclick  = printSheet;
 $('#btn-save').onclick = saveWork;
 $('#btn-settings').onclick = openSettings;
 $('#btn-zen').onclick = toggleZen;
-$('#btn-help').onclick = openHelp;
+$('#btn-help').onclick = ()=>openHelp();
+$('#btn-start-help').onclick = ()=>openHelp();
 $('#zen-out').onclick = toggleZen;
 $('#btn-zo').onclick   = ()=>setZoom(-1);
 $('#btn-zi').onclick   = ()=>setZoom(1);

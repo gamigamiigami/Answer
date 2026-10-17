@@ -424,9 +424,9 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
       assert.equal(positions.cells.length,2);
       for(const cell of positions.cells){
         assert.equal(cell.align,subject==='国語'?'center':'left');
-        assert.equal(cell.valign,subject==='国語'?'top':'center');
+        assert.equal(cell.valign,subject==='国語' && cell.stack?'top':'center');
       }
-      if(subject==='国語') assert.ok(positions.firstY<positions.top+3,'vertical text should begin at the top of the tall field');
+      if(subject==='国語') assert.ok(positions.firstY>positions.top+3.81 && positions.firstY<positions.top+7.62,'vertical text should begin near the top with a blank row of padding');
       else assert.equal(positions.anchor,'start');
     }
     await alignmentPage.close();

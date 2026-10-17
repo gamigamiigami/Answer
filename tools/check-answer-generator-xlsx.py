@@ -134,7 +134,14 @@ def inspect(directory, name):
             else:
                 assert 6 <= cell.font.sz <= 11
                 assert cell.alignment.horizontal == ('center' if vertical else 'left')
-                assert cell.alignment.vertical == ('top' if vertical else 'center')
+                stacked = vertical and len(str(cell.value)) > 1 and any(ord(ch) > 127 for ch in str(cell.value))
+                containing = next(rect for rect in field['rects'] if rect['c'] <= cell.column - 1 < rect['c'] + rect['w'] and rect['r'] <= cell.row - 1 < rect['r'] + rect['h'])
+                padded = stacked and containing['h'] >= 6
+                assert cell.alignment.vertical == ('top' if padded else 'center')
+                if padded:
+                    assert cell.row >= containing['r'] + 2
+                    merged = next(m for m in model.merged_cells.ranges if cell.coordinate in m)
+                    assert merged.max_row <= containing['r'] + containing['h'] - 1
                 if vertical and len(str(cell.value)) > 1 and any(ord(ch) > 127 for ch in str(cell.value)):
                     assert cell.alignment.textRotation == 255
         if kind == 'chars' and not field['exact'] and field['chars'] >= 5:
