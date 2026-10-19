@@ -408,6 +408,8 @@ input[type=checkbox]{accent-color:var(--place)}
 .guide-answer{--guide-color:#854a0f}
 .guide-points{--guide-color:#7144a0}
 .guide-aspect{--guide-color:#a33659}
+.guide-completion{--guide-color:#536071}
+.guide-child{--guide-color:#006d80}
 .guide-token,.guide-legend-item,.guide-chunk[class*="guide-"]{color:var(--guide-color);background:transparent}
 .guide-token{border-radius:4px;padding:2px 4px;font-weight:700;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .guide-chunk{border-color:var(--line)}
@@ -423,12 +425,16 @@ input[type=checkbox]{accent-color:var(--place)}
 :root[data-theme="dark"] .guide-answer{--guide-color:#dbb075}
 :root[data-theme="dark"] .guide-points{--guide-color:#c3a1e9}
 :root[data-theme="dark"] .guide-aspect{--guide-color:#e6a1b7}
+:root[data-theme="dark"] .guide-completion{--guide-color:#bac6d6}
+:root[data-theme="dark"] .guide-child{--guide-color:#7bd4e4}
 @media(prefers-color-scheme:dark){
 :root:not([data-theme="light"]) .guide-group{--guide-color:#91baff}
 :root:not([data-theme="light"]) .guide-question{--guide-color:#86cba4}
 :root:not([data-theme="light"]) .guide-answer{--guide-color:#dbb075}
 :root:not([data-theme="light"]) .guide-points{--guide-color:#c3a1e9}
 :root:not([data-theme="light"]) .guide-aspect{--guide-color:#e6a1b7}
+:root:not([data-theme="light"]) .guide-completion{--guide-color:#bac6d6}
+:root:not([data-theme="light"]) .guide-child{--guide-color:#7bd4e4}
 }
 .guide-sheet{background:var(--field);color:var(--ink)}
 
@@ -451,6 +457,12 @@ input[type=checkbox]{accent-color:var(--place)}
 @media(max-width:600px){.auto-aspect-range{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.auto-aspect-range label:nth-of-type(3){grid-column:1/3}.auto-aspect-range>button{grid-column:3}}
 
 .auto-completion-note{grid-column:1/-1;margin:0 0 6px;font-weight:600;color:var(--place)}
+
+.completion-guide-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:22px;align-items:start}
+.completion-example{white-space:pre-wrap;overflow-wrap:anywhere;font-size:18px!important;line-height:2.4!important;padding:14px;border:1px solid var(--line);border-radius:12px}
+.completion-guide-key{margin:0}.completion-guide-key>div{padding:8px 0;border-bottom:1px solid var(--line)}
+.completion-guide-key dt{font-size:16px}.completion-guide-key dd{margin:3px 0 0 4px;line-height:1.6;font-size:14px}
+@media(max-width:650px){.completion-guide-grid{grid-template-columns:1fr;gap:10px}.completion-example{font-size:17px!important}}
 </style>
 </head>
 <body>
@@ -4571,8 +4583,22 @@ function guideBasicExample(){
   const question=(number,answer,points,aspect)=>[['question',number],['answer',answer],['points',points],['aspect',aspect]].map(([kind,value])=>guideToken(kind,value)).join(',');
   return [guideToken('group','1'),question('1','ア','2','知'),question('2','太陽','2','知'),guideToken('group','2'),question('1','相手の気持ちを考えたから。','5','思')].join('\n');
 }
+function completionGuideExample(){
+  const line=parts=>parts.map(([kind,text])=>guideToken(kind,text)).join('，');
+  return [line([['completion','完答開始'],['points','2'],['aspect','し']]),
+    line([['question','5'],['child','①'],['answer','ア']]),
+    line([['child','②'],['answer','イ']]),guideToken('completion','完答終了')].join('\n');
+}
 function completionAndDepthHelp(){
-  return '<details class="auto-common"><summary>①②をまとめて完答／（１）の中のA・B・C</summary><div class="guide-pair"><div><h4>①②が両方正解で2点</h4><pre>完答開始，2\n問五①，ア\n②，イ\n完答終了</pre><p>囲んだ欄が1組になります。点数は合計に1回だけ加えます。観点も指定するなら <code>完答開始，2，知</code>。</p></div><div><h4>問一 →（１）→ A・B・C</h4><pre>問一（１）A，ア\nB，イ\nC，ウ</pre><p>A〜Cは同じ（１）に入ります。<code>1，（１），A，ア</code> と分けてもOK。</p></div></div><p>確認画面では「小問内の番号」を直せます。入力済みの欄を完答にするなら「配点・観点をまとめて変更」を開き、連続する欄にチェック → 組全体の点数を選ぶ →「チェックした欄をまとめて完答」。</p></details>';
+  const definitions=[
+    ['completion','完答開始 ／ 完答終了','ここから・ここまでが、1組の完答です。'],
+    ['points','2','組全体の点数。①②を合わせて2点です。'],
+    ['aspect','し','観点＝思考・判断・表現。「思」でもOK。知識・技能なら「ち」か「知」。'],
+    ['question','5','問番号。「問五」の5です。'],
+    ['child','① ／ ②','小問番号。問5の中の①と②です。'],
+    ['answer','ア ／ イ','それぞれの模範解答です。']
+  ];
+  return '<details class="auto-common completion-depth-help"><summary>①②をまとめて完答／（１）の中のA・B・C</summary><h4>①②が両方正解で2点（思考・判断・表現）</h4><p class="guide-caption">同じ文字色の部分と説明を見比べてください。</p><div class="completion-guide-grid"><div><p><b>この4行を入力します</b></p><pre class="completion-example" data-completion-example>'+completionGuideExample()+'</pre><p>①はア、②はイ。<b>両方正解なら、合わせて2点。</b></p><p class="desc">1行目：点数・観点の設定<br>2・3行目：小問ごとの答え<br>4行目：完答の組の終わり</p></div><dl class="completion-guide-key">'+definitions.map(([kind,text,description])=>'<div><dt>'+guideToken(kind,text)+'</dt><dd>'+description+'</dd></div>').join('')+'</dl></div><p><b>「②，イ」の行は「問5」を省略しています。</b>「5，②，イ」と書いても同じです。観点を省略すると、その大問の設定が入ります。</p><hr><h4>問一 →（１）→ A・B・C</h4><pre>問一（１）A，ア\nB，イ\nC，ウ</pre><p>A〜Cは同じ（１）に入ります。<code>1，（１），A，ア</code> と分けてもOK。</p><p>確認画面では「小問内の番号」を直せます。入力済みの欄を完答にするなら「配点・観点をまとめて変更」を開き、連続する欄にチェック → 組全体の点数を選ぶ →「チェックした欄をまとめて完答」。</p></details>';
 }
 function compactAnswerDiagram(){
   return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>数字だけを1行に書くと、その大問の始まりです。</small></div><div class="guide-chunks" style="grid-template-columns:1fr auto 1fr" aria-label="入力例：問題番号1、答えア"><div class="guide-chunk guide-question"><small>緑：問題番号</small><b>1</b></div><span>，</span><div class="guide-chunk guide-answer"><small>茶：答え</small><b>ア</b></div></div><p class="desc">点数・観点は上の設定から入るので省略OK。違う問題だけ <code>1，ア，5，思</code> のように追加できます。</p>';
