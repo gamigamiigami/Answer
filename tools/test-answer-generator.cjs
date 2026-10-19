@@ -160,7 +160,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     }
     pass('Invalid metadata, fixed-length overflow, asymmetric extract overflow and oversized graphs are rejected');
     await page.click('#btn-from-answers'); await page.fill('#creation-title','確認テスト'); await page.click('#creation-next');
-    assert.equal(await page.locator('#auto-source').getAttribute('placeholder'),'1\n1,ア,2,知\n2,太陽,2,知\n2\n1,相手の気持ちを考えたから。,5,思');
+    assert.equal(await page.locator('#auto-source').getAttribute('placeholder'),'1\n1，ア\n2，太陽\n2\n1，相手の気持ちを考えたから。');
     await page.fill('#auto-source',sample); await page.click('#auto-parse');
     assert.equal(await page.locator('[data-row]').count(),6);
     await page.locator('[data-row="0"] [data-k="points"]').selectOption('7');

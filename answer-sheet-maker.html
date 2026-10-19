@@ -440,6 +440,15 @@ input[type=checkbox]{accent-color:var(--place)}
 .kanbun-rows fieldset{border:1px solid var(--line);border-radius:10px;margin:0 0 12px;padding:10px;min-width:0}
 #kanbun-preview{background:#fff;color:#000;text-align:center}
 @media(max-width:600px){.kanbun-layout{grid-template-columns:1fr}#kanbun-preview{max-height:170px;overflow:auto}.kanbun-inputs{gap:6px}.kanbun-check{flex-wrap:wrap}}
+
+.auto-scoring-setup{border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0 22px}
+.auto-scoring-setup h4{margin:0 0 10px}
+.auto-scoring-setup .auto-defaults{grid-template-columns:repeat(2,minmax(0,1fr));max-width:600px}
+.auto-aspect-range{display:grid;grid-template-columns:minmax(60px,1fr) auto minmax(60px,1fr) minmax(140px,2fr) auto;align-items:end;gap:8px;margin:10px 0}
+.auto-aspect-range label{display:grid;gap:5px;font-size:13px;color:var(--sub)}
+.auto-aspect-range input,.auto-aspect-range select{width:100%;min-width:0;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--field);color:var(--ink)}
+.auto-aspect-range>span{padding-bottom:10px}
+@media(max-width:600px){.auto-aspect-range{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.auto-aspect-range label:nth-of-type(3){grid-column:1/3}.auto-aspect-range>button{grid-column:3}}
 </style>
 </head>
 <body>
@@ -4526,6 +4535,9 @@ function guideBasicExample(){
   const question=(number,answer,points,aspect)=>[['question',number],['answer',answer],['points',points],['aspect',aspect]].map(([kind,value])=>guideToken(kind,value)).join(',');
   return [guideToken('group','1'),question('1','ア','2','知'),question('2','太陽','2','知'),guideToken('group','2'),question('1','相手の気持ちを考えたから。','5','思')].join('\n');
 }
+function compactAnswerDiagram(){
+  return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>数字だけを1行に書くと、その大問の始まりです。</small></div><div class="guide-chunks" style="grid-template-columns:1fr auto 1fr" aria-label="入力例：問題番号1、答えア"><div class="guide-chunk guide-question"><small>緑：問題番号</small><b>1</b></div><span>，</span><div class="guide-chunk guide-answer"><small>茶：答え</small><b>ア</b></div></div><p class="desc">点数・観点は上の設定から入るので省略OK。違う問題だけ <code>1，ア，5，思</code> のように追加できます。</p>';
+}
 function answerFormatDiagram(){
   return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>青のように、数字だけを1行に書く → 大問の始まり</small></div>'+
     '<div class="guide-chunks" aria-label="入力例：問題番号1、答えア、点数2、観点知">'+
@@ -4565,7 +4577,12 @@ function openHelp(initialTab='quick'){
     </section>
     <section id="help-panel-format" role="tabpanel" aria-labelledby="help-tab-format" hidden>
     <div class="guide-flow"><div class="guide-step"><span class="guide-symbol">① ✎</span><strong>答えを入力</strong><small>教科を選ぶ<br>「入力例を試す」で練習</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">② ✓</span><strong>一覧で確認</strong><small>「読み取って一覧にする」<br>答え・点数を見直す</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">③ ▤</span><strong>用紙が完成</strong><small>「この内容で用紙を作る」<br>欄と番号はおまかせ</small></div></div>
-    <h4>同じ色を見比べると、書く場所がわかります。</h4>
+    <h4>先に設定すれば、問題番号と答えだけでOK！</h4>
+    <div class="guide-flow"><div class="guide-step"><strong>基本点数：2点</strong><small>毎問の点数をまとめて設定</small></div><span class="guide-arrow">＋</span><div class="guide-step"><strong>大問1〜3：知識</strong><small>大問4〜5：思考<br>「大問の範囲を追加」で設定</small></div></div>
+    <pre>${guideToken('group','1')}
+${guideToken('question','1')}，${guideToken('answer','ア')}
+${guideToken('question','2')}，${guideToken('answer','太陽')}</pre><p>これだけで点数・観点も入ります。設定は次回も引き継ぎます。</p>
+    <h4>点数や観点が違う問題だけ、後ろに追加。</h4>
     ${answerFormatDiagram()}
     <p class="guide-caption">知 ＝ 知識・技能　／　思 ＝ 思考・判断・表現</p>
     <div class="guide-pair"><div><p class="guide-caption">✎ 色付きの部分と、下の説明が対応しています</p><pre id="help-basic-example">${guideBasicExample()}</pre>${guideLegend()}</div><span class="guide-arrow" aria-label="用紙に変換">→</span><div class="guide-step"><strong>▤ できる用紙のイメージ</strong><p>${guideToken("group","大問1：2問")}</p><div class="guide-sheet">${guideToken("question","1")}${guideToken("answer","ア")}${guideToken("question","2")}${guideToken("answer","太陽")}</div><p>${guideToken("group","大問2：1問")}</p><div class="guide-sheet">${guideToken("question","1")}${guideToken("answer","相手の気持ちを考えたから。")}</div><small>色は説明のための目印です。<br>実際の欄・番号は教科に合わせて変わります。</small></div></div>
@@ -4573,7 +4590,7 @@ function openHelp(initialTab='quick'){
     <details><summary>答えに「、」が入るときは？</summary><pre>1,"こんにちは、先生",2,思</pre><p>答えを半角の「"」で囲みます。区切りには , ・ ， ・ 、 が使えます。</p></details>
     <details><summary>答えだけで、まず試したい</summary><pre>ア
 太陽
-相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数は0点・観点は仮設定になるので、一覧で直してください。数字だけの答えは「1,12,2,知」の形で書きます。</p></details>
+相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数・観点は入力画面の基本設定と大問の範囲に従います。数字だけの答えは「1,12」の形で書きます。</p></details>
     <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「模範解答の編集」へ。作り直すと手動の配置・描画も置き換わります。</span></div>
     <button class="tb" data-help-go="advanced">小問・字数指定などは「詳しい機能」へ →</button></section>`+
     '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
@@ -5260,18 +5277,21 @@ function splitAutoQuestionLabel(label){
   const m=/^(.*?)([（(][^()（）]+[)）])$/.exec(label);
   return m ? {main:m[1],suffix:m[2]} : {main:label,suffix:''};
 }
-function autoRowsSource(rows){
+function autoRowsSource(rows,defaults){
   const quote=value=>{ const s=String(value); return /[,，、"\n]/.test(s) || /^[（(][^()（）]+[)）]$/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
   const output=[]; let group=null;
   for (const row of rows){
     if (row.group!==group){ const n=autoNumberIndex(row.group); output.push(n ? String(n) : '大問'+row.group); group=row.group; }
+    const metadata=[];
+    if(!defaults || row.points!==defaults.points)metadata.push(String(row.points));
+    if(!defaults || row.aspect!==autoDefaultAspect(defaults,row.group))metadata.push(row.aspect);
     const label=/^問([0-9一二三四五六七八九十百]+)([（(][^()（）]+[)）])?$/.exec(row.label);
     // 独自の番号は引用した先頭項目で保持する。
     if (!label){
-      output.push(['"'+row.label.replace(/"/g,'""')+'"',quote(row.answer),String(row.points),row.aspect,...autoSourceExtras(row)].join('，')); continue;
+      output.push(['"'+row.label.replace(/"/g,'""')+'"',quote(row.answer),...metadata,...autoSourceExtras(row)].join('，')); continue;
     }
     const n=autoNumberIndex(label[1]);
-    output.push([String(n),...(label[2]?[label[2]]:[]),quote(row.answer),String(row.points),row.aspect,...autoSourceExtras(row)].join('，'));
+    output.push([String(n),...(label[2]?[label[2]]:[]),quote(row.answer),...metadata,...autoSourceExtras(row)].join('，'));
   }
   return output.join('\n');
 }
@@ -5289,7 +5309,26 @@ function autoSourceExtras(row){
   return extras;
 }
 
+function validateAutoScoring(settings={}){
+  const points=settings.points ?? null,aspect=settings.aspect || '',aspectRanges=settings.aspectRanges || [];
+  if(points!==null && (!Number.isInteger(points) || points<0 || points>1000))throw new Error('基本点数は0〜1000の整数にしてください。');
+  if(!['','知技','思判表'].includes(aspect))throw new Error('基本の観点を選んでください。');
+  if(!Array.isArray(aspectRanges) || aspectRanges.length>20)throw new Error('観点の範囲は20件までです。');
+  const occupied=new Set();
+  for(const range of aspectRanges){
+    if(!Number.isInteger(range.from) || !Number.isInteger(range.to) || range.from<1 || range.to>200 || range.from>range.to)
+      throw new Error('大問の範囲は1〜200で、始まり≦終わりにしてください。');
+    if(!['知技','思判表'].includes(range.aspect))throw new Error('範囲の観点を選んでください。');
+    for(let n=range.from;n<=range.to;n++){if(occupied.has(n))throw new Error('大問'+n+'の範囲が重複しています。範囲を分けてください。');occupied.add(n);}
+  }
+  return {points,aspect,aspectRanges:aspectRanges.map(r=>({...r}))};
+}
+function autoDefaultAspect(settings,group){
+  const n=autoNumberIndex(group),range=(settings.aspectRanges || []).find(r=>n>=r.from && n<=r.to);
+  return range ? range.aspect : settings.aspect || '';
+}
 function parseAutoAnswers(source, defaults={}){
+  const scoring=validateAutoScoring(defaults);
   if (source.length > 50000) throw new Error('入力は5万文字以内にしてください。');
   const rows = [];
   let group = defaults.group || '一', question = '', recordQuestion='', number = 0, sectionBreak = false;
@@ -5310,7 +5349,7 @@ function parseAutoAnswers(source, defaults={}){
     if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
     const row = { ...(SUBJECT_LAYOUTS[defaults.subject] ? {subjectMode:defaults.subject} : {}), group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
       w:0, h:0, eight:!!defaults.eight, complete:!!defaults.complete,
-      points:defaults.points ?? null, aspect:defaults.aspect || '', warnings:[], sourceLine };
+      points:null, aspect:'', warnings:[], sourceLine };
     if (row.kind === 'auto') row.kind = '';
     const record=readAutoRecord(text,row,recordQuestion || question);
     const label = /^(問\s*[0-9０-９一二三四五六七八九十百]+(?:\s*[（(][0-9０-９一二三四五六七八九十]+[)）])?|[（(][0-9０-９一二三四五六七八九十]+[)）]|[①-⑳]|[0-9０-９]+[.．、])\s*[:：]?\s*/.exec(text);
@@ -5344,6 +5383,9 @@ function parseAutoAnswers(source, defaults={}){
       row.warnings.push('欄の種類を推定');
       row.kindAuto = true;
     }
+    row.pointsDefault=row.points===null; row.aspectDefault=!row.aspect;
+    if(row.pointsDefault && scoring.points!==null)row.points=scoring.points;
+    if(row.aspectDefault)row.aspect=autoDefaultAspect(scoring,row.group);
     if (row.points === null){ row.points = 0; row.warnings.push('配点未指定（0点）'); }
     if (!row.aspect){
       row.aspect = ['essay','sentence','working','chars','graph','blank'].includes(row.kind) ? '思判表' : '知技';
@@ -5555,7 +5597,7 @@ function currentAutoRows(){
     const kind=({11:'kanbun',2:'mark',3:'extract',4:'chars',5:'chars',6:answer ? autoLength(answer)<=8?'word':'essay' : 'blank',7:'graph',8:'kanji',9:'customA',10:'customB'})[f.type] || 'blank';
     const fallback={group:head ? head.group : '一',kind,n:f.chars || Math.max(1,charCells(doc,f).length),
       w:f.type===6 ? rect.w : f.type===7 ? rect.w : 0,h:f.type===6 ? Math.ceil(rect.h/CHAR_ROWS) : f.type===7 ? rect.h/GRAPH_ROWS : 0,kindAuto:false};
-    return {...fallback,...(f.auto || {}),answer,kanbunGiven:f.kanbunGiven || '',graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
+    return {...fallback,...(f.auto || {}),aspectDefault:!!(f.auto || {}).aspectDefault && f.aspect===(f.auto || {}).aspect,answer,kanbunGiven:f.kanbunGiven || '',graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
       complete:!!f.complete,eight:f.type===5 && !f.exact,n:f.fixedChars === false ? (f.auto || {}).n || Math.max(1,autoLength(answer)) : f.chars || fallback.n,
       label:parentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
       ...(((f.auto || {}).kind || kind)==='blank' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
@@ -5567,7 +5609,8 @@ function currentAutoRows(){
 function openAnswerGenerator(initialTitle=''){
   if (typeof initialTitle!=='string') initialTitle='';
   if (ui.mode==='input'){ ui.seq=null; commitInput(); }
-  let rows=currentAutoRows() || [], parsedText='';
+  let rows=currentAutoRows() || [], parsedText='',scoringDirty=false;
+  const initialScoring=(doc && doc.paper.autoScoring) || options.autoScoring || {points:2,aspect:'知技',aspectRanges:[]};
   const hadDoc=!!doc, selected=new Set(), groups=new Set(rows.map(r=>r.group));
   const initialGroup=rows.length ? rows[rows.length-1].group : '一'; groups.add(initialGroup);
   const pointValues=[0,1,2,3,4,5,6,7,8,9,10,15,20,25,30,40,50,100];
@@ -5581,8 +5624,8 @@ function openAnswerGenerator(initialTitle=''){
     '<div class="auto-steps" role="tablist" aria-label="模範解答から作る手順"><button id="auto-tab-input" role="tab" aria-controls="auto-input-panel" data-step="input">① 答えを入力</button><button id="auto-tab-review" role="tab" aria-controls="auto-review-panel" data-step="review">② 確認・調整</button></div>'+
     '<p class="desc">タイトル：<b>'+xmlEsc(doc ? doc.paper.title : initialTitle)+'</b></p>'+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select></div>'+
-    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+answerFormatDiagram()+'<p class="desc">1行に1問。数字だけの行で大問を分けます。知＝知識・技能 ／ 思＝思考・判断・表現</p><textarea id="auto-source" rows="6" placeholder="1&#10;1,ア,2,知&#10;2,太陽,2,知&#10;2&#10;1,相手の気持ちを考えたから。,5,思"></textarea>'+
-    '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">「1，（1），ア，2，知」の次は「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数を省略すると0点、観点を省略すると答えから推定します。確認画面で調整してください。</p></details>'+
+    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><section class="auto-scoring-setup" aria-labelledby="auto-scoring-title"><h4 id="auto-scoring-title">① 点数・観点を先に決める</h4><div class="auto-defaults"><label>基本点数（1問あたり）<input id="auto-base-points" type="number" min="0" max="1000" step="1" value="2"></label><label>基本の観点<select id="auto-base-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option><option value="">答えから推定</option></select></label></div><p class="desc">大問ごとに観点を変えるなら、範囲を追加。例：大問1〜3は知識、大問4〜5は思考。</p><div id="auto-aspect-ranges"></div><button class="tb" id="auto-range-add">＋ 大問の範囲を追加</button></section><h4>② 問題番号と答えを書く</h4><div class="guide-mini"><b>これだけでOK</b><span>大問は数字だけの行。各問は <code>1，ア</code> の形で書きます。</span></div><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+compactAnswerDiagram()+'<p class="desc">1行に1問。数字だけの行で大問を分けます。知＝知識・技能 ／ 思＝思考・判断・表現</p><textarea id="auto-source" rows="6" placeholder="1&#10;1，ア&#10;2，太陽&#10;2&#10;1，相手の気持ちを考えたから。"></textarea>'+
+    '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">「1，（1），ア，2，知」の次は「（2），イ，2，知」と書けます。「問一（1），ア，2，知」も使えます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数・観点を省略すると上の設定が入ります。個別に書いた点数・観点を優先します（例：1，ア，5，思）。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     kanbunHelp()+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
@@ -5592,6 +5635,19 @@ function openAnswerGenerator(initialTitle=''){
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
+  const addRange=(range={from:1,to:3,aspect:'知技'})=>{
+    const row=document.createElement('div');row.className='auto-aspect-range';
+    row.innerHTML='<label>大問<input data-range="from" aria-label="範囲の始まり" type="number" min="1" max="200" value="'+xmlEsc(String(range.from))+'"></label><span>〜</span><label>大問<input data-range="to" aria-label="範囲の終わり" type="number" min="1" max="200" value="'+xmlEsc(String(range.to))+'"></label><label>観点<select data-range="aspect">'+choices([['知技','知識・技能'],['思判表','思考・判断・表現']],range.aspect)+'</select></label><button class="tb" data-range-remove aria-label="この範囲を削除">削除</button>';
+    q('#auto-aspect-ranges').appendChild(row);
+  };
+  q('#auto-base-points').value=initialScoring.points ?? 2;q('#auto-base-aspect').value=initialScoring.aspect || '';
+  (initialScoring.aspectRanges || []).forEach(addRange);
+  const scoringSettings=()=>validateAutoScoring({points:q('#auto-base-points').value.trim()===''?NaN:Number(q('#auto-base-points').value),aspect:q('#auto-base-aspect').value,
+    aspectRanges:[...wrap.querySelectorAll('.auto-aspect-range')].map(row=>({from:Number(row.querySelector('[data-range="from"]').value),to:Number(row.querySelector('[data-range="to"]').value),aspect:row.querySelector('[data-range="aspect"]').value}))});
+  const changedScoring=()=>{scoringDirty=true;status.textContent='点数・観点の設定を変更しました。「読み取って一覧にする」で反映します。';};
+  q('.auto-scoring-setup').addEventListener('input',changedScoring);
+  q('#auto-range-add').onclick=()=>{const last=q('#auto-aspect-ranges').lastElementChild;const from=last ? Number(last.querySelector('[data-range="to"]').value)+1 : 1;addRange({from,to:from,aspect:'思判表'});changedScoring();};
+  q('#auto-aspect-ranges').addEventListener('click',e=>{const button=e.target.closest('[data-range-remove]');if(button){button.closest('.auto-aspect-range').remove();changedScoring();}});
   q('#auto-help').onclick=()=>openHelp('format');
   const showStep=step=>{
     const review=step==='review';
@@ -5625,7 +5681,7 @@ function openAnswerGenerator(initialTitle=''){
   const getDefaults=()=>{
     const start=Number(q('#auto-number-start').value);
     if (!Number.isInteger(start) || start<1 || start>200) throw new Error('開始番号は1〜200にしてください。');
-    return {subject:q('#auto-subject').value,group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
+    return {...scoringSettings(),subject:q('#auto-subject').value,group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
       numStyle:q('#auto-number-style').value,start,blankGroups:q('#auto-blank-groups').checked};
   };
   const close=()=>{ wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
@@ -5636,7 +5692,9 @@ function openAnswerGenerator(initialTitle=''){
       r.kind=inferAutoKind(r.answer,q('#auto-subject').value);
       r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
     }
-    if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
+    const defaultAspect=r.aspectDefault ? autoDefaultAspect(scoringSettings(),r.group) : '';
+    if(defaultAspect){r.aspect=defaultAspect;r.warnings=r.warnings.filter(w=>!w.startsWith('観点'));}
+    else if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
     if (r.kind==='blank' && !SUBJECT_LAYOUTS[q('#auto-subject').value]){ r.w=r.w || 1; r.h=r.h || 10; }
   };
   const syncControls=card=>{
@@ -5653,8 +5711,8 @@ function openAnswerGenerator(initialTitle=''){
     card.querySelector('.auto-size-summary').textContent=(['chars','kanji','extract'].includes(r.kind)?' · '+r.n+'字':r.w && r.h?' · 幅'+r.w+'・高さ'+r.h:'')+(r.complete?' · 完答':'')+(r.eight && r.kind==='chars'?' · 8割ライン':'');
     card.querySelector('.auto-hint').textContent=r.warnings.join('／'); card.querySelector('.auto-hint').hidden=!r.warnings.length;
   };
-  const syncSource=()=>{ source.value=autoRowsSource(rows); parsedText=source.value; };
-  const sourceDirty=()=>source.value!==parsedText;
+  const syncSource=()=>{ source.value=autoRowsSource(rows,scoringSettings()); parsedText=source.value; };
+  const sourceDirty=()=>scoringDirty || source.value!==parsedText;
   const drawRows=(writeSource=false)=>{
     rows.forEach(infer); updateGroups(q('#auto-default-group').value);
     q('#auto-batch').hidden=!rows.length;
@@ -5683,7 +5741,7 @@ function openAnswerGenerator(initialTitle=''){
       const previous=new Map(); rows.forEach(r=>{ const key=(autoNumberIndex(r.group) || r.group)+'\0'+r.label; if (!previous.has(key)) previous.set(key,[]); previous.get(key).push(r); });
       const parsed=parseAutoAnswers(source.value,getDefaults());
       parsed.forEach(r=>{ const old=(previous.get((autoNumberIndex(r.group) || r.group)+'\0'+r.label) || []).shift(); if(old && r.kind==='kanbun') r.kanbunGiven=old.kanbunGiven || ''; if (old && old.appearance) r.appearance={...old.appearance}; if(old && old.graphRange && r.kind==='graph') r.graphRange={...old.graphRange}; });
-      rows=parsed; parsedText=source.value; selected.clear(); rows.forEach(r=>groups.add(r.group)); drawRows(); showStep('review'); q('#auto-tab-review').focus();
+      rows=parsed; parsedText=source.value;scoringDirty=false;options.autoScoring=scoringSettings();saveOptions(); selected.clear(); rows.forEach(r=>groups.add(r.group)); drawRows(); showStep('review'); q('#auto-tab-review').focus();
     } catch(e){ status.textContent=e.message; }
   };
   q('#auto-example').onclick=()=>{
@@ -5705,7 +5763,7 @@ function openAnswerGenerator(initialTitle=''){
       if (score!==null && (!Number.isInteger(score) || score<0 || score>1000)) throw new Error('配点は0〜1000の整数にしてください。');
       list.forEach(r=>{
         if (score!==null){ r.points=score; r.warnings=r.warnings.filter(w=>!w.startsWith('配点')); }
-        if (aspect){ r.aspect=aspect; r.aspectAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
+        if (aspect){ r.aspect=aspect; r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
       });
       drawRows(true); status.textContent=list.length+'問の'+(score!==null && aspect?'配点・観点':score!==null?'配点':'観点')+'を変更しました。';
     } catch(e){ status.textContent=e.message; }
@@ -5746,7 +5804,7 @@ function openAnswerGenerator(initialTitle=''){
     } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='n' && r.kindAuto && r.kind==='extract'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
-    if (key==='aspect'){ r.aspectAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
+    if (key==='aspect'){ r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
     if (key==='points') r.warnings=r.warnings.filter(w=>!w.startsWith('配点'));
     if (key==='group') groups.add(r.group);
     if (['kind','answer','aspect'].includes(key)) infer(r);
@@ -5773,6 +5831,7 @@ function openAnswerGenerator(initialTitle=''){
     if (hadDoc && !q('#auto-replace').checked) return void(status.textContent='「現在の用紙を作り直す」にチェックしてください。');
     try {
       const next=buildAutoDocument(rows,q('#auto-subject').value,doc && doc.paper,initialTitle);
+      next.paper.autoScoring=scoringSettings();options.autoScoring=scoringSettings();saveOptions();
       if (hadDoc){ ui.tab='sheet'; const h=history.sheet; h.undo.push(state(true)); if (h.undo.length>120) h.undo.shift(); h.redo=[]; }
       history.answer={undo:[],redo:[]}; history.draw={undo:[],redo:[]}; doc=next; uid=rows.length+1; ui.targets=[]; ui.seq=null; ui.dirty=true;
       wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。'+(doc.paper.autoFit ? autoFitSummary(doc.paper)+'に自動調整しました。' : 'おつかれさまです！')+'「模範解答の編集」で、いつでも直せます。');
