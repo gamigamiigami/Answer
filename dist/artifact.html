@@ -458,6 +458,9 @@ input[type=checkbox]{accent-color:var(--place)}
 .completion-guide-key{margin:0}.completion-guide-key>div{padding:8px 0;border-bottom:1px solid var(--line)}
 .completion-guide-key dt{font-size:16px}.completion-guide-key dd{margin:3px 0 0 4px;line-height:1.6;font-size:14px}
 @media(max-width:650px){.completion-guide-grid{grid-template-columns:1fr;gap:10px}.completion-example{font-size:17px!important}}
+
+.score-box{cursor:grab;touch-action:none;outline:none}.score-box:active{cursor:grabbing}
+.score-box-focus{opacity:0;pointer-events:none}.score-box:hover .score-box-focus,.score-box:focus .score-box-focus{opacity:1}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -722,11 +725,10 @@ function makeTitle(p){
   parts.push('解答用紙');
   return parts.join('　');
 }
-function makeNameLabel(p){
-  return p.nameOrder==='short'
-    ? '　　組　　番　氏名（　　　　　　　）'
-    : p.grade+'年　　組　　番　氏名（　　　　　　　）';
+function standardNameLabel(p,spaces){
+  return (p.nameOrder==='short'?'　　組　　番　氏名（':p.grade+'年　　組　　番　氏名（')+'　'.repeat(spaces)+'）';
 }
+function makeNameLabel(p){return standardNameLabel(p,10);}
 
 function newDoc(subject){
   const s = SUBJECTS[subject] || SUBJECTS['その他'];
@@ -769,25 +771,38 @@ const H_SCORE_W   = H_SCORE_SEC * SCORE_ASPECTS.length; // 6列
 const H_SCORE_H   = SCORE_SEC;
 const H_TITLE_H   = 3;    // 横書きのタイトルが使う行
 
-// 得点枠の中身を組み立てる。区分ごとに「見出し」「点数」を連結したマスに置く
-function scoreBoxParts(c0, r0, w, h, stackDown, totals){
-  const texts = [], borders = [];
-  SCORE_ASPECTS.forEach((a, i) => {
-    const c = stackDown ? c0 : c0 + i*H_SCORE_SEC;
-    const r = stackDown ? r0 + i*SCORE_SEC : r0;
-    const sw = stackDown ? w : H_SCORE_SEC;
-    const sh = SCORE_SEC;
-    const half = Math.floor(sh/2);
-    borders.push({ c, r, w:sw, h:sh, style:'thin' });            // 区分の仕切り
-    texts.push({ c, r, t:a.label, size:a.size, align:'center', mg:{w:sw, h:half} });
-    const pt = totals[a.key];
-    texts.push({ c, r:r+half, t: pt > 0 ? toFullWidth(pt) : '',  // 配点前は空けておく
-                 size:12, align:'right', mg:{w:sw, h:sh-half} });
-  });
-  borders.push({ c:c0, r:r0, w, h, style:'medium' });            // 外枠は太線
-  return { texts, borders };
+function columnAtMM(d,x){
+  let acc=0;for(let c=0;c<d.grid.cols;c++){acc+=(d.colw[c] || 1)*CW;if(x<acc)return c;}return d.grid.cols-1;
 }
-
+function scoreBoxBounds(d){
+  if(!d.paper.showScoreBox)return null;
+  const vertical=d.paper.writing==='vertical',gw=docColumnMM(d,d.grid.cols),gh=d.grid.rows*RH;
+  const w=(vertical?V_SCORE_W:H_SCORE_W)*CW,h=(vertical?V_SCORE_H:H_SCORE_H)*RH;
+  const position=d.paper.scoreBoxPosition;
+  const x=position && Number.isFinite(position.x)?position.x:docColumnMM(d,d.grid.cols-(vertical?5:H_SCORE_W));
+  const y=position && Number.isFinite(position.y)?position.y:(d.grid.rows-(vertical?V_SCORE_TOP:H_SCORE_H))*RH;
+  return {x:Math.max(0,Math.min(gw-w,x)),y:Math.max(0,Math.min(gh-h,y)),w,h};
+}
+function scoreBoxVectors(d){
+  const b=scoreBoxBounds(d);if(!b)return [];
+  const vertical=d.paper.writing==='vertical',totals=scoreTotals(d);
+  const out=[{k:'rect',...b,fill:'FFFFFF',width:.45}];
+  SCORE_ASPECTS.forEach((a,i)=>{
+    const sw=vertical?b.w:b.w/3,sh=vertical?b.h/3:b.h,x=vertical?b.x:b.x+i*sw,y=vertical?b.y+i*sh:b.y;
+    if(i)out.push(vertical?{k:'line',x1:b.x,y1:y,x2:b.x+b.w,y2:y,width:.22}:{k:'line',x1:x,y1:b.y,x2:x,y2:b.y+b.h,width:.22});
+    out.push({k:'text',x:x+sw/2,y:y+sh*.25,text:a.label,size:a.size});
+    const text=totals[a.key]>0?toFullWidth(totals[a.key]):'';
+    if(text)out.push({k:'text',x:x+sw-1.2-mathTextWidth(text,12)/2,y:y+sh*.75,text,size:12});
+  });return out;
+}
+function renderScoreBox(){
+  const b=scoreBoxBounds(doc);if(!b)return;
+  const g=el('g',{'class':'score-box',tabindex:'0',role:'button','aria-label':'得点欄。ドラッグで移動。矢印キーでも移動できます。'});
+  const title=el('title',{});title.textContent='得点欄をドラッグで移動（矢印キーでも移動）';g.appendChild(title);
+  appendVectorPrimitives(g,scoreBoxVectors(doc),geo.x0,geo.y0);
+  const hint=el('rect',{x:geo.x0+b.x,y:geo.y0+b.y,width:b.w,height:b.h,'class':'guide score-box-focus',fill:'none',stroke:'#236548','stroke-width':.6,'stroke-dasharray':'1.5 1'});g.appendChild(hint);
+  svg.appendChild(g);
+}
 function headerLayout(d){
   const { cols, rows } = d.grid;
   const vertical = d.paper.writing === 'vertical';
@@ -795,51 +810,35 @@ function headerLayout(d){
   const borders = [];    // {c,r,w,h,style,inner}
   const reserved = new Set();
   const mark = (c,r,w,h) => { for(let i=0;i<w;i++) for(let j=0;j<h;j++) reserved.add((c+i)+','+(r+j)); };
-  const totals = scoreTotals(d);
 
   if (vertical){
     // 右端2列：タイトル・氏名欄。
-    // お手本は結合セルの縦書きで文字が詰まっているので、1行に1文字で縦に中央ぞろえする。
-    const put = (col, str, size) => {
-      const top = 1;                       // お手本と同じく上から（1行目は余白）
-      for (let i=0;i<str.length;i++){
-        const r = top + i;
-        if (r >= rows) break;
-        if (str[i] !== '　') texts.push({c:col, r, t:str[i], size, bold:size>=14});
-      }
-      mark(col, 0, 1, rows);
+    // 大きな縦書き文字を結合セル内に配置し、文字サイズに合わせて間隔を取る。
+    const put=(col,str,size)=>{
+      const room=(rows-2)*RH-1;
+      const fitSize=Math.min(size,room/Math.max(1,Array.from(str).length)/ptmm(1)/1.12);
+      texts.push({c:col,r:1,t:str,size:Math.max(8,Math.floor(fitSize*2)/2),bold:col===cols-1,align:'center',mg:{w:1,h:rows-2},stack:true,valign:'top'});
+      mark(col,0,1,rows);
     };
-    put(cols-1, d.paper.title, 13);
-    put(cols-2, d.paper.nameLabel, 11);
+    put(cols-1,d.paper.title,d.paper.titlePt || 18);
+    put(cols-2,d.paper.nameLabel,d.paper.namePt || 16);
 
-    // 得点枠：氏名欄の左3列、下のほう（お手本と同じ位置）
-    if (d.paper.showScoreBox){
-      const c0 = cols - 5, r0 = rows - V_SCORE_TOP;
-      const sb = scoreBoxParts(c0, r0, V_SCORE_W, V_SCORE_H, true, totals);
-      sb.texts.forEach(t => texts.push(t));
-      sb.borders.forEach(b => borders.push(b));
-      mark(c0, r0, V_SCORE_W, V_SCORE_H);
-    }
+
   } else {
     // 横書き：タイトルは一番上。氏名欄と得点枠は一番下にまとめる
-    texts.push({c:0, r:0, t:d.paper.title, size:14, bold:true, align:'left'});
+    texts.push({c:0, r:0, t:d.paper.title, size:d.paper.titlePt || 18, bold:true, align:'left'});
     mark(0, 0, cols, H_TITLE_H);
 
     const band = rows - H_SCORE_H;                 // 一番下の帯（氏名欄と得点枠）
     const scoreW = d.paper.showScoreBox ? H_SCORE_W : 0;
     texts.push({c:0, r:band + Math.floor(H_SCORE_H/2) - 1,
-                t:d.paper.nameLabel, size:11, align:'left'});
+                t:d.paper.nameLabel, size:d.paper.namePt || 14, align:'left'});
     mark(0, band, Math.max(1, cols - scoreW), H_SCORE_H);
 
-    // 得点枠：右下。縦書きと同じ形を、3区分を横に並べて置く
-    if (d.paper.showScoreBox){
-      const c0 = cols - H_SCORE_W, r0 = band;
-      const sb = scoreBoxParts(c0, r0, H_SCORE_W, H_SCORE_H, false, totals);
-      sb.texts.forEach(t => texts.push(t));
-      sb.borders.forEach(b => borders.push(b));
-      mark(c0, r0, H_SCORE_W, H_SCORE_H);
-    }
   }
+  const sb=scoreBoxBounds(d);
+  if(sb){const c0=columnAtMM(d,sb.x),c1=columnAtMM(d,sb.x+sb.w-.0001);mark(c0,Math.floor(sb.y/RH),c1-c0+1,Math.ceil((sb.y+sb.h)/RH)-Math.floor(sb.y/RH));}
+
   return { texts, borders, reserved };
 }
 
@@ -1371,7 +1370,8 @@ function answerVectorGroups(d,withAnswers){
 function answerVectorPrimitives(d,withAnswers){return answerVectorGroups(d,withAnswers).flatMap(g=>g.vectors);}
 function appendVectorPrimitives(parent,primitives,x0=0,y0=0){
   for(const v of primitives){
-    if(v.k==='line') parent.appendChild(el('line',{x1:x0+v.x1,y1:y0+v.y1,x2:x0+v.x2,y2:y0+v.y2,stroke:'#'+(v.color || '000000'),'stroke-width':v.width || .2,...(v.dash?{'stroke-dasharray':'1.2 1'}:{})}));
+    if(v.k==='rect'){parent.appendChild(el('rect',{x:x0+v.x,y:y0+v.y,width:v.w,height:v.h,fill:'#'+(v.fill || 'FFFFFF'),stroke:'#000','stroke-width':v.width || .2}));}
+    else if(v.k==='line') parent.appendChild(el('line',{x1:x0+v.x1,y1:y0+v.y1,x2:x0+v.x2,y2:y0+v.y2,stroke:'#'+(v.color || '000000'),'stroke-width':v.width || .2,...(v.dash?{'stroke-dasharray':'1.2 1'}:{})}));
     else {const t=el('text',{x:x0+v.x,y:y0+v.y,'text-anchor':'middle','dominant-baseline':'central','font-family':'"Yu Gothic",sans-serif','font-size':ptmm(v.size),fill:'#000'});t.textContent=v.text;parent.appendChild(t);}
   }
 }
@@ -1622,6 +1622,7 @@ function buildCells(d, withAnswers){
   head.texts.forEach(t => {
     put(t.c,t.r,t.t,t.size,t.bold,t.align);
     if (t.mg) merge(t.c, t.r, t.mg.w, t.mg.h);
+    if(t.stack){get(t.c,t.r).stack=true;get(t.c,t.r).valign=t.valign || 'top';}
   });
 
   // (2) 欄
@@ -1777,8 +1778,8 @@ const svg = $('#sheet');
 // 「選んでいた範囲」も一緒に残す。
 const TAB_KEYS = {
   sheet:  ['fields','decorations','texts','paper','grid','colw'],
-  answer: ['answers','answerGraphs'],
-  draw:   ['drawings']
+  answer: ['answers','answerGraphs','paper'],
+  draw:   ['drawings','paper']
 };
 function state(full=false){
   const part = {};
@@ -1957,6 +1958,8 @@ function render(){
       'stroke-dasharray':'1 1','class':'guide'}));
   }
 
+  renderScoreBox();
+
   // ☑ チェックした対象（印刷には出ない案内）
   if (ui.targets.length){
     const cg = el('g',{'class':'guide'});
@@ -2028,6 +2031,7 @@ function drawStatus(){
   chip('用紙：A4 '+(doc.paper.orientation==='landscape'?'横':'縦')+' ／ '+doc.grid.cols+'列 × '+doc.grid.rows+'行 ／ 余白'+doc.paper.marginX+'mm・'+doc.paper.marginY+'mm');
   chip('カーソル：'+(ui.cur.c+1)+'列 '+(ui.cur.r+1)+'行');
   chip('欄：'+doc.fields.length+'個');
+  if(doc.paper.showScoreBox)chip('得点欄：ドラッグで移動できます');
   const completionCount=completionGroups(doc.fields).size;if(completionCount)chip('まとめて完答：'+completionCount+'組（配点は1組につき1回）');
   const selN = selectedCells().length;
   if (selN > 1) chip('選択中：'+selN+'セル');
@@ -3589,8 +3593,55 @@ document.addEventListener('keydown', ev => {
   if (ev.key.length === 1 && !ctrl){ ev.preventDefault(); toast('文字を入れるには Enter'); }
 });
 
+// 得点欄はセルから独立した図形。用紙内で自由に移動し、履歴には1回だけ記録する。
+let scoreDrag=null;
+function scorePointerMM(ev){
+  const b=svg.getBoundingClientRect(),p=PAGE[doc.paper.orientation];
+  return {x:(ev.clientX-b.left)/b.width*p.w-geo.x0,y:(ev.clientY-b.top)/b.height*p.h-geo.y0};
+}
+function moveScoreBox(x,y){
+  const b=scoreBoxBounds(doc);if(!b)return;
+  doc.paper.scoreBoxPosition={x:Math.round(Math.max(0,Math.min(gridWmm()-b.w,x))*100)/100,y:Math.round(Math.max(0,Math.min(doc.grid.rows*RH-b.h,y))*100)/100};
+  render();
+}
+svg.addEventListener('pointerdown',ev=>{
+  if(ev.button!==0 || !ev.target.closest('.score-box'))return;
+  ev.preventDefault();ev.stopPropagation();
+  if(ui.mode==='input')commitInput();
+  dragging=false;const b=scoreBoxBounds(doc),p=scorePointerMM(ev);
+  scoreDrag={id:ev.pointerId,start:p,box:b,original:doc.paper.scoreBoxPosition?{...doc.paper.scoreBoxPosition}:null,moved:false,dirty:ui.dirty,redo:history[ui.tab].redo.slice()};
+  svg.setPointerCapture(ev.pointerId);
+});
+svg.addEventListener('pointermove',ev=>{
+  if(!scoreDrag || ev.pointerId!==scoreDrag.id)return;
+  ev.preventDefault();const p=scorePointerMM(ev),dx=p.x-scoreDrag.start.x,dy=p.y-scoreDrag.start.y;
+  if(!scoreDrag.moved && Math.hypot(dx,dy)<.4)return;
+  if(!scoreDrag.moved){snapshot();scoreDrag.moved=true;}
+  moveScoreBox(scoreDrag.box.x+dx,scoreDrag.box.y+dy);
+});
+function finishScoreDrag(cancel=false){
+  if(!scoreDrag)return;const current=scoreDrag;scoreDrag=null;
+  if(svg.hasPointerCapture(current.id))svg.releasePointerCapture(current.id);
+  if(cancel && current.moved){
+    if(current.original)doc.paper.scoreBoxPosition=current.original;else delete doc.paper.scoreBoxPosition;
+    history[ui.tab].undo.pop();history[ui.tab].redo=current.redo;ui.dirty=current.dirty;render();
+  }else if(current.moved)toast('得点欄を移動しました（戻すで元に戻せます）');
+}
+svg.addEventListener('pointerup',ev=>{if(scoreDrag && ev.pointerId===scoreDrag.id){ev.preventDefault();finishScoreDrag();}});
+svg.addEventListener('pointercancel',()=>finishScoreDrag(true));
+svg.addEventListener('keydown',ev=>{
+  if(!ev.target.closest('.score-box'))return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' '].includes(ev.key)){
+    ev.preventDefault();ev.stopPropagation();const delta=ev.shiftKey?5:1,b=scoreBoxBounds(doc);
+    if(ev.key.startsWith('Arrow')){snapshot();moveScoreBox(b.x+(ev.key==='ArrowRight'?delta:ev.key==='ArrowLeft'?-delta:0),b.y+(ev.key==='ArrowDown'?delta:ev.key==='ArrowUp'?-delta:0));svg.querySelector('.score-box').focus();}
+    else toast('得点欄をドラッグ、または矢印キーで移動できます');
+  }
+});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape' && scoreDrag){ev.preventDefault();ev.stopImmediatePropagation();finishScoreDrag(true);}},true);
+
 /* クリック操作 */
 svg.addEventListener('mousedown', ev => {
+  if(ev.target.closest('.score-box'))return;
   if (ev.button !== 0) return;                 // 右クリックは contextmenu で受ける
   if (ui.mode==='input') commitInput();
   if (ui.tab === 'draw'){ drawStart(ev); dragging = true; return; }
@@ -3628,7 +3679,7 @@ document.addEventListener('mouseup', ()=>{
 });
 // 右クリック：囲っているところを強制的に☑にする
 svg.addEventListener('contextmenu', ev => {
-  ev.preventDefault();
+  ev.preventDefault();if(ev.target.closest('.score-box'))return;
   if (ui.tab === 'draw') return;
   if (ui.mode === 'input') commitInput();
   const p = pointToCell(ev); if (!p) return;
@@ -3636,7 +3687,7 @@ svg.addEventListener('contextmenu', ev => {
   forceTarget(p);
 });
 
-svg.addEventListener('dblclick', ev => { const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
+svg.addEventListener('dblclick', ev => { if(ev.target.closest('.score-box'))return;const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
 
 $('#cell-input').addEventListener('blur', ()=>{ if (ui.mode==='input') commitInput(); });
 
@@ -3903,7 +3954,10 @@ function colXml(cols){
 function vectorDrawingXml(v,id,bare=false){
   const emu=value=>Math.round(value/SCALE*36000);
   let x,y,w,h,body;
-  if(v.k==='line'){
+  if(v.k==='rect'){
+    x=emu(v.x);y=emu(v.y);w=emu(v.w);h=emu(v.h);
+    body='<xdr:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="'+(v.fill || 'FFFFFF')+'"/></a:solidFill><a:ln w="'+emu(v.width || .2)+'"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></xdr:spPr>';
+  }else if(v.k==='line'){
     x=emu(Math.min(v.x1,v.x2));y=emu(Math.min(v.y1,v.y2));w=emu(Math.abs(v.x2-v.x1));h=emu(Math.abs(v.y2-v.y1));
     const flip=(v.x2<v.x1?' flipH="1"':'')+(v.y2<v.y1?' flipV="1"':'');
     body='<xdr:spPr><a:xfrm'+flip+'><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="'+emu(v.width || .2)+'"><a:solidFill><a:srgbClr val="'+(v.color || '000000')+'"/></a:solidFill>'+(v.dash?'<a:prstDash val="dash"/>':'')+'</a:ln></xdr:spPr>';
@@ -3917,14 +3971,15 @@ function vectorDrawingXml(v,id,bare=false){
   return bare?shape:'<xdr:absoluteAnchor><xdr:pos x="'+x+'" y="'+y+'"/><xdr:ext cx="'+w+'" cy="'+h+'"/>'+shape+'<xdr:clientData/></xdr:absoluteAnchor>';
 }
 function vectorGroupDrawingXml(d,group,nextId){
-  const r=group.rect,b=rectMM(d,r),emu=value=>Math.round(value/SCALE*36000),id=nextId++;
+  const r=group.rect,b=group.box || rectMM(d,r),emu=value=>Math.round(value/SCALE*36000),id=nextId++;
   const shapes=group.vectors.map(v=>{
     const local=v.k==='line'?{...v,x1:v.x1-b.x,y1:v.y1-b.y,x2:v.x2-b.x,y2:v.y2-b.y}:{...v,x:v.x-b.x,y:v.y-b.y};
     return vectorDrawingXml(local,nextId++,true);
   }).join('');
+  const physicalMarker=(name,x,y)=>{const c=columnAtMM(d,x),row=Math.max(0,Math.min(d.grid.rows-1,Math.floor(y/RH)));return '<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>'+emu(x-docColumnMM(d,c))+'</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>'+emu(y-row*RH)+'</xdr:rowOff></xdr:'+name+'>';};
   const marker=(name,c,row)=>'<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:'+name+'>';
-  return {nextId,xml:'<xdr:twoCellAnchor editAs="twoCell">'+marker('from',r.c,r.r)+marker('to',r.c+r.w,r.r+r.h)+
-    '<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id="'+id+'" name="answer'+id+'"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr><a:xfrm><a:off x="'+emu(b.x)+'" y="'+emu(b.y)+'"/><a:ext cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/><a:chOff x="0" y="0"/><a:chExt cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/></a:xfrm></xdr:grpSpPr>'+shapes+'</xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>'};
+  return {nextId,xml:'<xdr:twoCellAnchor editAs="'+(group.box?'absolute':'twoCell')+'">'+(group.box?physicalMarker('from',b.x,b.y)+physicalMarker('to',b.x+b.w,b.y+b.h):marker('from',r.c,r.r)+marker('to',r.c+r.w,r.r+r.h))+
+    '<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id="'+id+'" name="'+(group.name || 'answer'+id)+'"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr><a:xfrm><a:off x="'+emu(b.x)+'" y="'+emu(b.y)+'"/><a:ext cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/><a:chOff x="0" y="0"/><a:chExt cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/></a:xfrm></xdr:grpSpPr>'+shapes+'</xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>'};
 }
 function buildXlsx(){
   const sheets = [
@@ -3990,7 +4045,9 @@ function buildXlsx(){
   }).join('');
   sheets.forEach((sh,i)=>{
     let nextId=doc.drawings.length+2;
-    const vectors=answerVectorGroups(doc,i===1).map(group=>{const result=vectorGroupDrawingXml(doc,group,nextId);nextId=result.nextId;return result.xml;}).join('');
+    const score=scoreBoxBounds(doc);
+    const groups=answerVectorGroups(doc,i===1);if(score)groups.push({name:'score-box',box:score,vectors:scoreBoxVectors(doc)});
+    const vectors=groups.map(group=>{const result=vectorGroupDrawingXml(doc,group,nextId);nextId=result.nextId;return result.xml;}).join('');
     sh.drawingXml=shapes || vectors ? '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
       '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'+shapes+vectors+'</xdr:wsDr>' : '';
   });
@@ -4251,6 +4308,7 @@ function loadWork(text){
   // 足りない項目は既定値で補う。壊れたファイルで作業中のデータを巻き添えにしない
   const arr = v => Array.isArray(v) ? v : [];
   const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  if(d.paper.nameLabel===standardNameLabel(d.paper,7))d.paper.nameLabel=makeNameLabel(d.paper);
   d.fields = arr(d.fields).filter(f => f && Array.isArray(f.rects) && f.rects.length);
   // 古いファイルは欄の番号が違うので読み替える
   const ver = Number(d.version) || 1;
@@ -4797,7 +4855,7 @@ function openButtonSetup(){
 async function openSettings(){
   const p = doc.paper;
   const autoTitle = (p.title === makeTitle(p));       // 手で直していなければ作り直す
-  const autoName  = (p.nameLabel === makeNameLabel(p));
+  const autoName  = (p.nameLabel === makeNameLabel(p) || p.nameLabel===standardNameLabel(p,7));
   const v = await ask('用紙と表示の設定', [
     {key:'grade',label:'学年',type:'text',value:p.grade,hint:'例：一／1'},
     {key:'term',label:'学期',type:'text',value:p.term,hint:'例：２学期中間（空欄でも可）'},
@@ -4807,6 +4865,8 @@ async function openSettings(){
     {key:'numberStyle',label:'番号',type:'seg',value:p.numberStyle,options:[['kanji','漢数字'],['arabic','算用数字']]},
     {key:'nameOrder',label:'氏名欄',type:'seg',value:p.nameOrder,options:[['full','○年○組○番'],['short','○組○番']]},
     {key:'margin',label:'余白',type:'seg',value:String(p.marginX),options:[['8','狭い 8mm'],['10','10mm'],['12','12mm']]},
+    {key:'titlePt',label:'タイトルの文字（pt）',type:'number',value:p.titlePt || 18,min:8,max:32},
+    {key:'namePt',label:'氏名欄の文字（pt）',type:'number',value:p.namePt || (p.writing==='vertical'?16:14),min:8,max:32},
     {key:'showScoreBox',label:'観点別得点枠',type:'check',value:p.showScoreBox},
     {key:'uiLarge',label:'画面の文字',type:'seg',value:options.uiLarge?'lg':'md',
       options:[['md','ふつう'],['lg','大きめ']],hint:'左のボタンや帯の文字の大きさです（用紙には影響しません）'},
@@ -4815,6 +4875,7 @@ async function openSettings(){
     {key:'clearOnExit',label:'閉じるときに一時保存を消す',type:'check',value:options.clearOnExit}
   ]);
   if (!v) return;
+  const layoutChanged=p.writing!==v.writing || p.orientation!==v.orientation;
   // 用紙が小さくなる／向きが変わるとき、はみ出す欄がないか先に確かめる
   const trial = Object.assign({}, p, { writing:v.writing, orientation:v.orientation,
     marginX:+v.margin, marginY:(+v.margin===8) ? 9 : +v.margin });
@@ -4831,6 +4892,10 @@ async function openSettings(){
   snapshot();
   p.grade = v.grade || '一'; p.term = v.term || ''; p.testName = v.testName || '';
   p.writing = v.writing; p.orientation = v.orientation; p.numberStyle = v.numberStyle;
+  const titlePt=Math.max(8,Math.min(32,Number(v.titlePt)||18)),namePt=Math.max(8,Math.min(32,Number(v.namePt)||16));
+  if(p.titlePt!==undefined || titlePt!==18)p.titlePt=titlePt;
+  if(p.namePt!==undefined || namePt!==(v.writing==='vertical'?16:14))p.namePt=namePt;
+  if(layoutChanged)delete p.scoreBoxPosition;
   p.nameOrder = v.nameOrder; p.showScoreBox = !!v.showScoreBox;
   p.marginX = +v.margin; p.marginY = (+v.margin===8) ? 9 : +v.margin;
   // 手で書き換えたタイトル・氏名欄は上書きしない

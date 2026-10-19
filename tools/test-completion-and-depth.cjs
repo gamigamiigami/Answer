@@ -43,13 +43,16 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   assert.deepEqual(errors,[]);
   const check=spawnSync('python3',['-c',`
 from openpyxl import load_workbook
+from zipfile import ZipFile
+from xml.etree import ElementTree as E
 import sys
 for p in sys.argv[1:]:
  b=load_workbook(p)
- for s in b:
+ for i,s in enumerate(b,1):
+  with ZipFile(p) as z:score_values=[n.text for n in E.fromstring(z.read(f'xl/drawings/drawing{i}.xml')).findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}t')]
   values=[str(c.value) for row in s for c in row if c.value is not None]
   for t in ['問五','①','②','問一','（１）','A','B','C']:assert values.count(t)==1,(p,s.title,t)
-  assert '８' in values
+  assert '８' in score_values
   ranges=list(s.merged_cells.ranges)
   for i,r in enumerate(ranges):
    for t in ranges[i+1:]:assert r.max_col<t.min_col or t.max_col<r.min_col or r.max_row<t.min_row or t.max_row<r.min_row

@@ -48,6 +48,10 @@ p=sys.argv[1];ns={'a':'http://schemas.openxmlformats.org/drawingml/2006/main','x
 with ZipFile(p) as z:
  assert z.testzip() is None
  a=E.fromstring(z.read('xl/drawings/drawing1.xml'));b=E.fromstring(z.read('xl/drawings/drawing2.xml'))
+ for drawing in [a,b]:
+  for anchor in list(drawing):
+   group=anchor.find('xdr:grpSp/xdr:nvGrpSpPr/xdr:cNvPr',ns)
+   if group is not None and group.attrib.get('name')=='score-box':drawing.remove(anchor)
  assert [n.text for n in a.findall('.//a:t',ns)]==['レ']
  texts=[n.text for n in b.findall('.//a:t',ns)]
  assert all(t in texts for t in ['不','ズ','習','ブ','レ','下','二','上','6'])

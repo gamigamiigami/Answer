@@ -41,10 +41,12 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   assert.deepEqual(errors,[]);
   const check=spawnSync('python3',['-c',`
 from openpyxl import load_workbook
+from zipfile import ZipFile
+from xml.etree import ElementTree as E
 import sys
 b=load_workbook(sys.argv[1]);assert b.sheetnames==['解答用紙','模範解答']
-for s in b:
- texts=[str(c.value) for row in s for c in row if c.value is not None]
+for i,s in enumerate(b,1):
+ with ZipFile(sys.argv[1]) as z:texts=[n.text for n in E.fromstring(z.read(f'xl/drawings/drawing{i}.xml')).findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}t')]
  assert '３１' in texts and '２３' in texts and '８' in texts
 print('PASS: independent Excel totals: knowledge 23, thinking 8, total 31')
 `,path.join(output,'scoring.xlsx')],{encoding:'utf8'});process.stdout.write(check.stdout);process.stderr.write(check.stderr);assert.equal(check.status,0);

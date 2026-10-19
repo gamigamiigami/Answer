@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from unicodedata import normalize
 from zipfile import ZipFile
+from xml.etree import ElementTree as E
 
 from openpyxl import load_workbook
 
@@ -13,17 +14,20 @@ def inspect(directory, name):
     work = json.loads((directory / f'{name}.json').read_text())
     with ZipFile(directory / f'{name}.xlsx') as archive:
         assert archive.testzip() is None, 'ZIP checksum failure'
+        drawing_values = [[n.text for n in E.fromstring(archive.read(f'xl/drawings/drawing{i}.xml')).findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}t')] for i in (1, 2)]
     book = load_workbook(directory / f'{name}.xlsx')
     assert book.sheetnames == ['解答用紙', '模範解答']
     blank, model = book.worksheets
     for sheet in book:
         title = work['paper']['title']
         if work['paper']['writing'] == 'vertical':
-            actual = ''.join(str(sheet.cell(r + 2, work['grid']['cols']).value or '') for r in range(len(title)))
-            assert actual == title.replace('　', ''), (name, 'title changed during export')
+            cell = sheet.cell(2, work['grid']['cols'])
+            assert cell.value == title, (name, 'title changed during export')
+            assert cell.alignment.textRotation == 255 and cell.alignment.vertical == 'top'
+            assert cell.font.sz > 13
         else:
             assert sheet.cell(1, 1).value == title, (name, 'title changed during export')
-    for sheet in book:
+    for sheet_index, sheet in enumerate(book):
         assert str(sheet.page_setup.paperSize) == sheet.PAPERSIZE_A4
         assert sheet.page_setup.scale == 80
         assert sheet.page_setup.orientation == work['paper']['orientation']
@@ -36,6 +40,7 @@ def inspect(directory, name):
                 seen.add(coordinate)
         expected_total = str(sum(field['points'] for field in work['fields']))
         values = [normalize('NFKC', str(cell.value)) for row in sheet for cell in row if cell.value is not None]
+        values += [normalize('NFKC', str(v)) for v in drawing_values[sheet_index]]
         assert expected_total in values, (name, sheet.title, expected_total)
     vertical = work['paper']['writing'] == 'vertical'
     if name == 'blanks':

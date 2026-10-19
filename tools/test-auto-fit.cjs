@@ -124,7 +124,8 @@ for name in ['gap','width','horizontal-width']:
    width=next(v.width for v in s.column_dimensions.values() if v.min<=c<=v.max)
    assert abs(width-6.125*factor)<0.0002, (name,c,width,factor)
   if d['paper']['writing']=='vertical':
-   assert ''.join(str(s.cell(r+2,d['grid']['cols']).value or '') for r in range(len(d['paper']['title'])))==d['paper']['title']
+   assert s.cell(2,d['grid']['cols']).value==d['paper']['title']
+   assert s.cell(2,d['grid']['cols']).alignment.textRotation==255
   else: assert s.cell(1,1).value==d['paper']['title']
   seen=set()
   for m in s.merged_cells.ranges:
