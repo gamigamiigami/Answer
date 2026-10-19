@@ -449,6 +449,8 @@ input[type=checkbox]{accent-color:var(--place)}
 .auto-aspect-range input,.auto-aspect-range select{width:100%;min-width:0;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--field);color:var(--ink)}
 .auto-aspect-range>span{padding-bottom:10px}
 @media(max-width:600px){.auto-aspect-range{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.auto-aspect-range label:nth-of-type(3){grid-column:1/3}.auto-aspect-range>button{grid-column:3}}
+
+.auto-completion-note{grid-column:1/-1;margin:0 0 6px;font-weight:600;color:var(--place)}
 </style>
 </head>
 <body>
@@ -839,11 +841,41 @@ function headerLayout(d){
 const toFullWidth = n => String(n).replace(/[0-9]/g, d => String.fromCharCode(d.charCodeAt(0)+0xFEE0));
 
 // 観点別の配点合計（欄の配点を積み上げる）
+function scoringItems(items){
+  const seen=new Set();return items.filter(o=>{if(!o.completeGroup)return true;if(seen.has(o.completeGroup))return false;seen.add(o.completeGroup);return true;});
+}
+function linkedScore(items,target,points,aspect){
+  items.filter(o=>o===target || target.completeGroup && o.completeGroup===target.completeGroup).forEach(o=>{
+    if(points!==undefined)o.points=points;if(aspect!==undefined){o.aspect=aspect;o.aspectDefault=false;o.aspectAuto=false;}
+  });
+}
+function completionGroups(rows){
+  const groups=new Map();rows.forEach((r,i)=>{if(r.completeGroup){if(!groups.has(r.completeGroup))groups.set(r.completeGroup,[]);groups.get(r.completeGroup).push({r,i});}});return groups;
+}
+function completionOutlines(d){
+  const out=[],vertical=d.paper.writing==='vertical';
+  for(const entries of completionGroups(d.fields).values()){
+    const bands=new Map();
+    entries.forEach(({r:f})=>[...f.rects,...(f.label?[f.label]:[])].forEach(r=>{
+      const key=vertical?r.c+','+r.w:r.r+','+r.h;
+      if(!bands.has(key))bands.set(key,[]);bands.get(key).push(r);
+    }));
+    bands.forEach(rs=>{const c=Math.min(...rs.map(r=>r.c)),r=Math.min(...rs.map(r=>r.r));out.push({c,r,w:Math.max(...rs.map(r=>r.c+r.w))-c,h:Math.max(...rs.map(r=>r.r+r.h))-r});});
+  }return out;
+}
+function validateCompletionGroups(rows){
+  for(const entries of completionGroups(rows).values()){
+    if(entries.length<2)throw new Error('まとめて完答は2つ以上の解答欄を1組にしてください。');
+    const first=entries[0].r;
+    entries.forEach(({r,i},j)=>{if(i!==entries[0].i+j || r.group!==first.group)throw new Error('完答の組は同じ大問の連続した解答欄にしてください。');
+      if(r.points!==first.points || r.aspect!==first.aspect)throw new Error('完答の組の点数・観点がそろっていません。組全体の設定を確認してください。');});
+  }
+}
 function scoreTotals(d){
   let ki=0, si=0;
   const add = o => { const p = Number(o.points)||0;
     if (o.aspect === '思判表') si += p; else ki += p; };
-  d.fields.forEach(add);
+  scoringItems(d.fields).forEach(add);
   (d.decorations || []).forEach(add);     // シンプル枠にも配点を入れられる
   return { '知技':ki, '思判表':si, '合計':ki+si };
 }
@@ -1591,7 +1623,7 @@ function buildCells(d, withAnswers){
   for (const f of d.fields){
     const fc = fillOf(f);
     if (fc) f.rects.forEach(r => paint(r.c, r.r, r.w, r.h, fc));
-    const outer = f.complete ? 'medium' : (f.line || 'thin');
+    const outer = f.complete && !f.completeGroup ? 'medium' : (f.line || 'thin');
     if(f.type!==11) f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
     if (MARK_TYPES.indexOf(f.type) >= 0) f.rects.forEach(r => merge(r.c, r.r, r.w, r.h));  // 1マスに連結
     // 太線モードで作った欄は、番号欄の外枠も太線にする
@@ -1657,6 +1689,8 @@ function buildCells(d, withAnswers){
     // 欄に入れる文字（先頭・中央・お尻）。詰めて入れるので1マス1字にはしない
     if (f.note) placeNote(d, f).forEach((p,i) => put(p.c, p.r, f.note[i], 11*textScaleOf(f)));
   }
+
+  completionOutlines(d).forEach(r=>box(r.c,r.r,r.w,r.h,'medium'));
 
   // (3) 太枠（選択範囲に引いた枠）
   d.decorations.forEach(v => {
@@ -1988,6 +2022,7 @@ function drawStatus(){
   chip('用紙：A4 '+(doc.paper.orientation==='landscape'?'横':'縦')+' ／ '+doc.grid.cols+'列 × '+doc.grid.rows+'行 ／ 余白'+doc.paper.marginX+'mm・'+doc.paper.marginY+'mm');
   chip('カーソル：'+(ui.cur.c+1)+'列 '+(ui.cur.r+1)+'行');
   chip('欄：'+doc.fields.length+'個');
+  const completionCount=completionGroups(doc.fields).size;if(completionCount)chip('まとめて完答：'+completionCount+'組（配点は1組につき1回）');
   const selN = selectedCells().length;
   if (selN > 1) chip('選択中：'+selN+'セル');
   const noPt = doc.fields.concat(doc.decorations.filter(v => !isNumberCell(v)))
@@ -3635,12 +3670,12 @@ async function openFieldPopup(){
     const pt = num(v.points,0,0);
     const ts = num(v.textPt, 4, BASE_PT);
     targets.forEach(o => {
-      o.points = pt; o.aspect = v.aspect; o.textPt = ts; delete o.textScale;
+      linkedScore(doc.fields,o,pt,v.aspect);o.points = pt; o.aspect = v.aspect; o.textPt = ts; delete o.textScale;
       if (o.rects) o.complete = !!v.complete;
       else o.style = v.complete ? 'medium' : 'thin';
     });
     render();
-    return toast(targets.length+'個に'+pt+'点ずつ入れました（合計'+(pt*targets.length)+'点）');
+    return toast(targets.length+'個の欄の配点を更新しました（用紙の合計'+scoreTotals(doc)['合計']+'点）');
   }
 
   const f = fieldAt(ui.cur.c, ui.cur.r);
@@ -3650,7 +3685,7 @@ async function openFieldPopup(){
     return toast('欄の上にカーソルを置いて Space を押してください');
   }
   const rows = [
-    {key:'points',label:'配点',type:'number',value:f.points,min:0},
+    {key:'points',label:f.completeGroup?'組全体の配点':'配点',type:'number',value:f.points,min:0,hint:f.completeGroup?'この欄と同じ完答の組に含まれる全欄に反映します。':''},
     {key:'aspect',label:'観点',type:'seg',value:f.aspect,options:[['知技','知・技'],['思判表','思・判・表']]},
     {key:'complete',label:'完答（太枠）',type:'check',value:f.complete}
   ];
@@ -3663,8 +3698,7 @@ async function openFieldPopup(){
   const v = await ask(FIELD_DEFS[f.type].name+'の設定', rows);
   if (!v) return;
   snapshot();
-  f.points = num(v.points,0,0);
-  f.aspect = v.aspect;
+  linkedScore(doc.fields,f,num(v.points,0,0),v.aspect);
   f.complete = !!v.complete;
   f.textPt = num(v.textPt, 4, BASE_PT); delete f.textScale;
   if (f.type===5) f.exact = !v.exact;
@@ -4439,6 +4473,7 @@ async function openCheck(){
   if (!doc) return;
   const boxes = doc.fields.concat(doc.decorations.filter(v => !isNumberCell(v)).map(decoBox));
   const noPoint = boxes.filter(o => !(Number(o.points) > 0));
+  const brokenCompletion=[...completionGroups(doc.fields).values()].filter(g=>g.length<2);
   const noAnswer = boxes.filter(o => !String(doc.answers[o.id] || '').trim());
   const over = boxes.filter(o => { const a = doc.answers[o.id]; if (!a) return false;
     const pl = answerPlan(doc, o, a); return pl.need > pl.room; });
@@ -4454,6 +4489,7 @@ async function openCheck(){
     row(noPoint.length, noPoint.length ? '配点が入っていない欄が '+noPoint.length+'個あります'
         : '配点はすべて入っています', 'point')+
     row(tot['合計'] !== 100, '配点の合計は '+tot['合計']+'点です（知技'+tot['知技']+'／思判表'+tot['思判表']+'）')+
+    row(brokenCompletion.length, brokenCompletion.length ? '完答の組で欄が1つだけになっています。模範解答の編集で組を確認してください。' : '完答の組の欄はそろっています')+
     row(noAnswer.length, noAnswer.length ? '模範解答が入っていない欄が '+noAnswer.length+'個あります'
         : '模範解答はすべて入っています', 'answer')+
     row(over.length, over.length ? '欄に入りきらない模範解答が '+over.length+'個あります'
@@ -4513,8 +4549,8 @@ async function bulkPoints(){
     const raw = only1 ? lines.find(x => x.trim() !== '') : lines[i];
     const n = Math.max(0, Math.round(Number(String(raw == null ? '' : raw).trim()) || 0));
     const t = realBox(o);
-    t.points = n;
-    if (v.aspect !== 'keep') t.aspect = v.aspect;
+    linkedScore(doc.fields,t,n,v.aspect==='keep'?undefined:v.aspect);
+    t.points=n;if(v.aspect!=='keep')t.aspect=v.aspect;
   });
   render();
   const tot = scoreTotals(doc);
@@ -4534,6 +4570,9 @@ function guideLegend(){
 function guideBasicExample(){
   const question=(number,answer,points,aspect)=>[['question',number],['answer',answer],['points',points],['aspect',aspect]].map(([kind,value])=>guideToken(kind,value)).join(',');
   return [guideToken('group','1'),question('1','ア','2','知'),question('2','太陽','2','知'),guideToken('group','2'),question('1','相手の気持ちを考えたから。','5','思')].join('\n');
+}
+function completionAndDepthHelp(){
+  return '<details class="auto-common"><summary>①②をまとめて完答／（１）の中のA・B・C</summary><div class="guide-pair"><div><h4>①②が両方正解で2点</h4><pre>完答開始，2\n問五①，ア\n②，イ\n完答終了</pre><p>囲んだ欄が1組になります。点数は合計に1回だけ加えます。観点も指定するなら <code>完答開始，2，知</code>。</p></div><div><h4>問一 →（１）→ A・B・C</h4><pre>問一（１）A，ア\nB，イ\nC，ウ</pre><p>A〜Cは同じ（１）に入ります。<code>1，（１），A，ア</code> と分けてもOK。</p></div></div><p>確認画面では「小問内の番号」を直せます。入力済みの欄を完答にするなら「配点・観点をまとめて変更」を開き、連続する欄にチェック → 組全体の点数を選ぶ →「チェックした欄をまとめて完答」。</p></details>';
 }
 function compactAnswerDiagram(){
   return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>数字だけを1行に書くと、その大問の始まりです。</small></div><div class="guide-chunks" style="grid-template-columns:1fr auto 1fr" aria-label="入力例：問題番号1、答えア"><div class="guide-chunk guide-question"><small>緑：問題番号</small><b>1</b></div><span>，</span><div class="guide-chunk guide-answer"><small>茶：答え</small><b>ア</b></div></div><p class="desc">点数・観点は上の設定から入るので省略OK。違う問題だけ <code>1，ア，5，思</code> のように追加できます。</p>';
@@ -4596,6 +4635,7 @@ ${guideToken('question','2')}，${guideToken('answer','太陽')}</pre><p>これ�
     '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
     '<h4>必要になったときだけ使う入力</h4>'+
     '<details><summary>字数指定・空欄・教科別の書き方</summary><pre>1,理由を書く。,5,思,20字以内\n2,,4,思,解答欄のみ</pre><p>末尾に条件を追加できます。「解答欄のみ」は答えを空にし、カンマを2つ続けます。幅や高さは確認画面の「細かな設定」で調整できます。</p><p>数学：<code>1,x = 1/2,3,知</code><br>英語：<code>1,"I like science, too.",4,思</code><br>理科：<code>1,H₂O,2,知,化学式</code><br>社会：<code>1,三権分立,2,知</code></p><p>教科を先に選んでください。「入力例を試す」で、その教科の例が入ります。</p></details>'+
+    completionAndDepthHelp()+
     kanbunHelp()+
     '<details><summary>小問の①・A・（１）を自動判別</summary><pre>1\n1，①，ア\n②，イ\n2，A，ウ\nB，エ\n3，（１），オ\n（２），カ</pre><p>最初は「問番号，小問番号，答え」。続く小問では問番号を省略できます。①・A・（１）の形を保ちます。「1①，ア」「問一A，ア」も使えます。大問を変えると親の問番号はリセットされます。数字が答えの場合は「1A，12」や「1，A，"12"」のように書くと確実です。</p></details>'+
     '<details><summary>国語の漢字・初終・完答</summary><pre>1,太陽,2,知,漢字2字\n2,はじめ～おわり,4,思\n3,ア・ウ,4,知,完答</pre><p>初終は書き抜きの初めと終わりを「～」で区切ります。完答は、複数の答えがすべて合っているときの配点です。</p></details>'+
@@ -5241,8 +5281,8 @@ function splitAutoRecord(text){
 }
 const AUTO_SUB_LABEL = '(?:[（(][^()（）]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ])';
 const isAutoSubLabel = text => new RegExp('^'+AUTO_SUB_LABEL+'$').test(text);
-const autoMainNumber = new RegExp('^([0-9０-９]+)\\s*('+AUTO_SUB_LABEL+')?$');
-const autoNamedNumber = new RegExp('^(問\\s*[0-9０-９一二三四五六七八九十百]+)\\s*('+AUTO_SUB_LABEL+')?$');
+const autoMainNumber = new RegExp('^([0-9０-９]+)\\s*('+AUTO_SUB_LABEL+')?\\s*('+AUTO_SUB_LABEL+')?$');
+const autoNamedNumber = new RegExp('^(問\\s*[0-9０-９一二三四五六七八九十百]+)\\s*('+AUTO_SUB_LABEL+')?\\s*('+AUTO_SUB_LABEL+')?$');
 function readAutoRecord(text,row,parentQuestion=''){
   const parts=splitAutoRecord(text);
   const first=autoMainNumber.exec(parts[0].value);
@@ -5270,26 +5310,38 @@ function readAutoRecord(text,row,parentQuestion=''){
       if (!Number.isSafeInteger(n) || n<1) throw new Error('問番号は1以上の整数にしてください。');
       main='問'+kanji(n);
     } else main=named[1].replace(/\s/g,'');
-    let suffix=(first || named)[2] || '';
-    if (!suffix && end>start+1 && !parts[start].quoted && isAutoSubLabel(parts[start].value)){ suffix=parts[start++].value; }
-    row.label=main+suffix.replace(/\s/g,'');
-  } else row.label=child ? parentQuestion+parts[0].value.replace(/\s/g,'') : parts[0].value;
+    const suffixes=[(first || named)[2],(first || named)[3]].filter(Boolean);
+    while(suffixes.length<2 && end>start+1 && !parts[start].quoted && isAutoSubLabel(parts[start].value))suffixes.push(parts[start++].value);
+    row.label=main+suffixes.join('').replace(/\s/g,'');
+  } else {
+    row.label=child ? inheritAutoChild(parentQuestion,parts[0].value.replace(/\s/g,'')) : parts[0].value;
+    const path=splitAutoQuestionLabel(row.label);
+    if(child && path.main && !path.leaf && end>start+1 && !parts[start].quoted && isAutoSubLabel(parts[start].value))row.label+=parts[start++].value;
+  }
   if (start>=end) throw new Error('問番号の後ろに模範解答を入れてください。');
   return end===start+1 ? parts[start].value : text.slice(parts[start].start,parts[end-1].end).trim();
 }
+function autoSubStyle(label){return /^[（(]/.test(label)?'bracket':/^[A-Za-zＡ-Ｚａ-ｚ]$/.test(label)?'alpha':'circle';}
+function inheritAutoChild(previous,child){
+  const p=splitAutoQuestionLabel(previous);
+  return p.main+(p.leaf && autoSubStyle(child)===autoSubStyle(p.leaf) ? p.suffix : '')+child;
+}
 function splitAutoQuestionLabel(label){
+  const nested=new RegExp('^(問[0-9０-９一二三四五六七八九十百]+|[0-9０-９]+)('+AUTO_SUB_LABEL+')('+AUTO_SUB_LABEL+')$').exec(label);
+  if(nested)return {main:nested[1],suffix:nested[2],leaf:nested[3]};
   const m=new RegExp('^(.*?)('+AUTO_SUB_LABEL+')$').exec(label);
   if(m && /^[A-Za-zＡ-Ｚａ-ｚ]$/.test(m[2]) && m[1] && !/^(?:問.*|[0-9０-９]+)$/.test(m[1]))return {main:label,suffix:''};
   return m ? {main:m[1],suffix:m[2]} : {main:label,suffix:''};
 }
 function autoRowsSource(rows,defaults){
   const quote=value=>{ const s=String(value); return /[,，、"\n]/.test(s) || /^[（(][^()（）]+[)）]$/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-  const output=[]; let group=null;
+  const output=[]; let group=null,completion='';
   for (const row of rows){
+    if(completion!== (row.completeGroup || '')){if(completion)output.push('完答終了');completion=row.completeGroup || '';if(completion)output.push(['完答開始',String(row.points),row.aspect].join('，'));}
     if (row.group!==group){ const n=autoNumberIndex(row.group); output.push(n ? String(n) : '大問'+row.group); group=row.group; }
     const metadata=[];
-    if(!defaults || row.points!==defaults.points)metadata.push(String(row.points));
-    if(!defaults || row.aspect!==autoDefaultAspect(defaults,row.group))metadata.push(row.aspect);
+    if(!row.completeGroup && (!defaults || row.points!==defaults.points))metadata.push(String(row.points));
+    if(!row.completeGroup && (!defaults || row.aspect!==autoDefaultAspect(defaults,row.group)))metadata.push(row.aspect);
     const parts=splitAutoQuestionLabel(row.label);
     // 小問の後ろの数値・観点語は、短縮しても配点などと取り違えないよう引用する。
     const answer=parts.suffix && (/^-?\d+(?:\.\d+)?$/.test(autoDigits(row.answer)) || autoMeta(row.answer,{...row}))
@@ -5300,8 +5352,9 @@ function autoRowsSource(rows,defaults){
       output.push(['"'+row.label.replace(/"/g,'""')+'"',answer,...metadata,...autoSourceExtras(row)].join('，')); continue;
     }
     const n=autoNumberIndex(label[1]);
-    output.push([String(n),...(parts.suffix?[parts.suffix]:[]),answer,...metadata,...autoSourceExtras(row)].join('，'));
+    output.push([String(n),...(parts.suffix?[parts.suffix]:[]),...(parts.leaf?[parts.leaf]:[]),answer,...metadata,...autoSourceExtras(row)].join('，'));
   }
+  if(completion)output.push('完答終了');
   return output.join('\n');
 }
 function autoSourceExtras(row){
@@ -5314,7 +5367,7 @@ function autoSourceExtras(row){
   else if (['formula','sentence','working'].includes(row.kind)) extras.push(({formula:'数式',sentence:'英文',working:'途中式'})[row.kind]);
   else if (!row.kindAuto) extras.push(row.kind==='word'?'語句':row.kind==='mark'?'記号':'記述');
   if (row.w || row.h) extras.push((row.w || 0)+'×'+(row.h || 0));
-  if (row.complete) extras.push('完答');
+  if (row.complete && !row.completeGroup) extras.push('完答');
   return extras;
 }
 
@@ -5341,10 +5394,29 @@ function parseAutoAnswers(source, defaults={}){
   if (source.length > 50000) throw new Error('入力は5万文字以内にしてください。');
   const rows = [];
   let group = defaults.group || '一', question = '', recordQuestion='', number = 0, sectionBreak = false;
-  const groups = [];
+  const groups = [];let completion=null,completionNumber=0;
   for (const {text:raw,line:sourceLine} of splitAutoInputLines(source.replace(/\r/g,''))){
     let text = raw.trim();
     if (!text){ if (defaults.blankGroups && number) sectionBreak = true; continue; }
+    const directive=splitAutoRecord(text),command=directive[0].value;
+    if(command==='完答開始'){
+      if(completion)throw new Error(sourceLine+'行目：完答の組を入れ子にはできません。先に「完答終了」を書いてください。');
+      const points=directive[1] ? Number(autoDigits(directive[1].value).replace(/点$/,'')) : scoring.points ?? 2;
+      const meta={};if(directive[2])autoMeta(directive[2].value,meta);
+      const config=validateAutoScoring({points,aspect:directive[2] ? meta.aspect || 'invalid' : ''});
+      if(directive.length>3)throw new Error('完答開始は「完答開始，点数，観点（省略可）」の形です。');
+      completion={id:'cg'+(++completionNumber),start:rows.length,points:config.points,aspect:config.aspect};continue;
+    }
+    if(command==='完答終了'){
+      if(directive.length!==1)throw new Error('「完答終了」は1行にそれだけを書いてください。');
+      if(!completion)throw new Error(sourceLine+'行目：「完答開始」がありません。');
+      const members=rows.slice(completion.start);if(members.length<2)throw new Error('まとめて完答は2つ以上の解答欄を入れてください。');
+      const aspect=completion.aspect || members[0].aspect;
+      members.forEach(r=>{if(!r.pointsDefault && r.points!==completion.points)throw new Error('完答の点数は「完答開始」の行にまとめて指定してください。');
+        if(!r.aspectDefault && r.aspect!==aspect)throw new Error('1つの完答の組の観点はそろえてください。');
+        r.completeGroup=completion.id;r.points=completion.points;r.aspect=aspect;r.complete=true;r.aspectDefault=false;r.pointsDefault=false;
+        r.warnings=r.warnings.filter(w=>!w.startsWith('配点') && !w.startsWith('観点'));});completion=null;continue;
+    }
     if (/^[_＿─━-]{3,}$/.test(text)) continue;
     if (/^[0-9０-９]+$/.test(text)){
       const n=Number(autoDigits(text));
@@ -5361,14 +5433,17 @@ function parseAutoAnswers(source, defaults={}){
       points:null, aspect:'', warnings:[], sourceLine };
     if (row.kind === 'auto') row.kind = '';
     const record=readAutoRecord(text,row,recordQuestion || question);
+    const prefixAtom='(?:[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ])';
+    const namedPrefix=new RegExp('^(問\\s*[0-9０-９一二三四五六七八九十百]+(?:\\s*'+prefixAtom+'){0,2})(?=\\s|[:：]|$)\\s*[:：]?\\s*').exec(text);
     let label = /^(問\s*[0-9０-９一二三四五六七八九十百]+(?:\s*(?:[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ](?=[\s:：])))?|[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ](?=[\s:：])|[0-9０-９]+[.．、])\s*[:：]?\s*/.exec(text);
+    if(namedPrefix)label=namedPrefix;
     if(label && /^[A-Za-zＡ-Ｚａ-ｚ]$/.test(label[1]) && !recordQuestion && !question && !/^[A-Za-zＡ-Ｚａ-ｚ]\s*[:：]/.test(text))label=null;
     number++;
     if (record !== null) row.answer=record;
     else {
     if (label){
       row.label = label[1].replace(/\s/g,'');
-      if ((recordQuestion || question) && isAutoSubLabel(row.label)) row.label = (recordQuestion || question) + row.label;
+      if ((recordQuestion || question) && isAutoSubLabel(row.label)) row.label = inheritAutoChild(recordQuestion || question,row.label);
       text = text.slice(label[0].length);
     } else row.label = question || autoNumberLabel(defaults.numStyle || 'P',(defaults.start || 1)+number-1);
     // 括弧の中をすべて指定として読めたときだけ除去する。数式や引用は答えとして残す。
@@ -5403,10 +5478,12 @@ function parseAutoAnswers(source, defaults={}){
     }
     if (row.n === null) row.n = row.kind === 'extract' ? Math.max(1, ...splitExtract(row.answer).map(autoLength)) : Math.max(1, autoLength(row.answer));
     if (row.kind === 'blank' && !SUBJECT_LAYOUTS[defaults.subject]){ row.w = row.w || 1; row.h = row.h || 10; }
-    if (record!==null || /^問/.test(row.label)) recordQuestion=splitAutoQuestionLabel(row.label).main;
+    if (record!==null || /^問/.test(row.label)) recordQuestion=row.label;
     if (!groups.includes(group)) groups.push(group);
     rows.push(row);
   }
+  if(completion)throw new Error('完答の組の最後に「完答終了」を書いてください。');
+  validateCompletionGroups(rows);
   if (!rows.length) throw new Error('1行に1問ずつ、模範解答を入力してください。');
   if (rows.length > 200) throw new Error('一度に読み取れるのは200問までです。用紙ごとに分けてください。');
   return rows;
@@ -5453,6 +5530,7 @@ function autoFitSummary(paper){
   return fit ? '大問間の空白'+fit.gapPercent+'％・欄幅'+fit.widthPercent+'％' : '';
 }
 function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
+  validateCompletionGroups(rows);
   const beforeUid = uid;
   const d = newDoc(subject);
   uid = beforeUid;
@@ -5470,7 +5548,7 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
   const capacity=message=>Object.assign(new Error(message),{autoCapacity:true});
   const used = new Set(headerLayout(d).reserved);
   const origin = contentOrigin(d);
-  let head = {...origin}, active = null, cur, minC, maxR, groupTop, questionMain='', questionFrame=null;
+  let head = {...origin}, active = null, cur, minC, maxR, groupTop, questionMain='', questionFrame=null, subMain='', subFrame=null;
   const clash = r => {
     if (r.c < 0 || r.r < 0 || r.c+r.w > d.grid.cols || r.r+r.h > d.grid.rows) return true;
     for (let c=r.c;c<r.c+r.w;c++) for (let y=r.r;y<r.r+r.h;y++) if (used.has(c+','+y)) return true;
@@ -5505,7 +5583,7 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       d.texts[hd.c+','+hd.r] = {t:row.group,size:Math.min(14,24/Math.max(1,autoLength(row.group))),bold:true,box:true};
       cur = vertical ? {c:head.c,r:head.r+1} : {c:head.c+1,r:head.r};
       groupTop = {...cur}; minC = hd.c; maxR = hd.r+hd.h; active = row.group;
-      questionMain=''; questionFrame=null;
+      questionMain=''; questionFrame=null;subMain='';subFrame=null;
     }
     const numbering=splitAutoQuestionLabel(row.label), hierarchical=!!(numbering.main && numbering.suffix);
     const type = ({kanbun:11,formula:6,sentence:6,working:6,mark:2,word:6,essay:6,chars:5,blank:6,graph:7,kanji:8,extract:3,customA:9,customB:10})[row.kind];
@@ -5520,14 +5598,17 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       const parentNeeded=hierarchical && (questionMain!==numbering.main || !questionFrame ||
         (vertical ? questionFrame.c!==cur.c : questionFrame.r!==cur.r));
       const parent=parentNeeded ? {c:cur.c,r:cur.r,w:1,h:vertical ? 1 : CHAR_ROWS} : null;
-      const labelAt=parent ? boxStart(d,cur) : cur;
+      const midNeeded=numbering.leaf && (parentNeeded || !subFrame || subMain!==numbering.main+numbering.suffix || (vertical ? subFrame.c!==cur.c : subFrame.r!==cur.r));
+      const middleAt=parent ? boxStart(d,cur) : cur;
+      const middle=midNeeded ? {c:middleAt.c,r:middleAt.r,w:1,h:vertical?1:CHAR_ROWS} : null;
+      const labelAt=middle ? boxStart(d,middleAt) : middleAt;
       const at = row.label ? boxStart(d,labelAt) : labelAt;
       const b = buildRects(d,type,at,opt);
       if (vertical && !b.error && cur.r>groupTop.r && Math.max(...b.rects.map(r=>r.c+r.w))-Math.min(...b.rects.map(r=>r.c))>1){
         cur={c:minC-1,r:groupTop.r}; minC=Math.min(minC,cur.c); continue;
       }
       const lab = row.label && !b.error ? (hierarchical ? {c:labelAt.c,r:labelAt.r,w:1,h:vertical ? 1 : CHAR_ROWS} : labelRect(d,labelAt,b.rects)) : null;
-      if (!b.error && !b.rects.some(clash) && (!lab || !clash(lab)) && (!parent || !clash(parent))){ got = {rects:b.rects,lab,parent}; break; }
+      if (!b.error && !b.rects.some(clash) && (!lab || !clash(lab)) && (!parent || !clash(parent)) && (!middle || !clash(middle))){ got = {rects:b.rects,lab,parent,middle}; break; }
       // 同じ大問内は次の列／行の先頭に折り返し、空き列・空き行は入れない。
       cur = vertical ? {c:minC-1,r:groupTop.r} : {c:groupTop.c,r:maxR};
       minC = Math.min(minC,cur.c); maxR = Math.max(maxR,cur.r+CHAR_ROWS);
@@ -5535,9 +5616,9 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
     }
     if (!got) throw capacity((i+1)+'問目（大問'+row.group+' '+row.label+'）がA4に入りません。');
     const id = 'f'+(i+1);
-    const {answer, warnings, questionId, ...spec} = row;
+    const {answer, warnings, questionId, subQuestionId, ...spec} = row;
     const f = {id,type,rects:got.rects,chars:fixed ? row.n : n,exact:!row.eight,
-      fixedChars:fixed,points:row.points,aspect:row.aspect,complete:row.complete,
+      fixedChars:fixed,points:row.points,aspect:row.aspect,complete:row.complete,...(row.completeGroup?{completeGroup:row.completeGroup}:{}),
       note:'',notePos:'end',...(row.appearance || {}),auto:{...spec,warnings:[...(warnings || [])]}};
     if(type===11){f.chars=opt.n;f.kanbunGiven=row.kanbunGiven || '';}
     if (got.parent){
@@ -5546,11 +5627,17 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,fit.width)};
       questionMain=numbering.main;
     }
+    if(got.middle){
+      subFrame={...got.middle,id:'sq'+(i+1),questionHeading:true,questionLevel:2,style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
+      d.decorations.push(subFrame);take(subFrame);subMain=numbering.main+numbering.suffix;
+      d.texts[subFrame.c+','+subFrame.r]={t:numbering.suffix,size:autoLabelPointSize(numbering.suffix,fit.width)};
+    }
+    if(numbering.leaf)f.auto.subQuestionId=subFrame.id;else {subMain='';subFrame=null;}
     if (hierarchical) f.auto.questionId=questionFrame.id;
     else { questionMain=''; questionFrame=null; }
     if (got.lab){
       f.label = got.lab; take(got.lab);
-      const label=hierarchical ? numbering.suffix : row.label;
+      const label=hierarchical ? numbering.leaf || numbering.suffix : row.label;
       d.texts[got.lab.c+','+got.lab.r] = {t:label,size:autoLabelPointSize(label,got.lab.w*fit.width)};
     }
     got.rects.forEach(take); d.fields.push(f);
@@ -5560,7 +5647,7 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
       d.answers[id] = row.answer;
       if(type===7 && looksLikeGraph(row.answer)) d.answerGraphs[id]=graphRange(row.graphRange);
     }
-    const rs = [...got.rects,...(got.lab ? [got.lab] : []),...(got.parent ? [got.parent] : [])];
+    const rs = [...got.rects,...(got.lab ? [got.lab] : []),...(got.parent ? [got.parent] : []),...(got.middle ? [got.middle] : [])];
     minC = Math.min(minC,...rs.map(r=>r.c));
     maxR = Math.max(maxR,...rs.map(r=>r.r+r.h));
     cur = vertical ? {c:cur.c,r:Math.max(...got.rects.map(r=>r.r+r.h))}
@@ -5601,15 +5688,17 @@ function currentAutoRows(){
   return doc.fields.map(f=>{
     const answer=doc.answers[f.id] || '', rect=f.rects[0], vertical=doc.paper.writing==='vertical';
     const parent=doc.decorations.find(v=>v.questionHeading && v.id===(f.auto || {}).questionId);
+    const subParent=doc.decorations.find(v=>v.id===(f.auto || {}).subQuestionId);
+    const subParentLabel=subParent ? (doc.texts[subParent.c+','+subParent.r] || {}).t || '' : '';
     const parentLabel=parent ? (doc.texts[parent.c+','+parent.r] || {}).t || '' : '';
     const head=heads.filter(h=>vertical ? h.c>=rect.c && h.r<=rect.r : h.r<=rect.r && h.c<=rect.c)
       .sort((a,b)=>vertical ? a.c-b.c : b.r-a.r)[0];
     const kind=({11:'kanbun',2:'mark',3:'extract',4:'chars',5:'chars',6:answer ? autoLength(answer)<=8?'word':'essay' : 'blank',7:'graph',8:'kanji',9:'customA',10:'customB'})[f.type] || 'blank';
     const fallback={group:head ? head.group : '一',kind,n:f.chars || Math.max(1,charCells(doc,f).length),
       w:f.type===6 ? rect.w : f.type===7 ? rect.w : 0,h:f.type===6 ? Math.ceil(rect.h/CHAR_ROWS) : f.type===7 ? rect.h/GRAPH_ROWS : 0,kindAuto:false};
-    return {...fallback,...(f.auto || {}),aspectDefault:!!(f.auto || {}).aspectDefault && f.aspect===(f.auto || {}).aspect,answer,kanbunGiven:f.kanbunGiven || '',graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
+    return {...fallback,...(f.auto || {}),completeGroup:f.completeGroup || '',aspectDefault:!!(f.auto || {}).aspectDefault && f.aspect===(f.auto || {}).aspect,answer,kanbunGiven:f.kanbunGiven || '',graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
       complete:!!f.complete,eight:f.type===5 && !f.exact,n:f.fixedChars === false ? (f.auto || {}).n || Math.max(1,autoLength(answer)) : f.chars || fallback.n,
-      label:parentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
+      label:parentLabel+subParentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
       ...(((f.auto || {}).kind || kind)==='blank' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
       warnings:((f.auto || {}).warnings || []).filter(w=>!(w.startsWith('配点') && f.points!==(f.auto || {}).points) && !(w.startsWith('観点') && f.aspect!==(f.auto || {}).aspect)),
       appearance:Object.fromEntries(['textPt','textScale','fill','line','note','notePos'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]]))};
@@ -5637,9 +5726,10 @@ function openAnswerGenerator(initialTitle=''){
     '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><section class="auto-scoring-setup" aria-labelledby="auto-scoring-title"><h4 id="auto-scoring-title">① 点数・観点を先に決める</h4><div class="auto-defaults"><label>基本点数（1問あたり）<input id="auto-base-points" type="number" min="0" max="1000" step="1" value="2"></label><label>基本の観点<select id="auto-base-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option><option value="">答えから推定</option></select></label></div><p class="desc">大問ごとに観点を変えるなら、範囲を追加。例：大問1〜3は知識、大問4〜5は思考。</p><div id="auto-aspect-ranges"></div><button class="tb" id="auto-range-add">＋ 大問の範囲を追加</button></section><h4>② 問題番号と答えを書く</h4><div class="guide-mini"><b>これだけでOK</b><span>大問は数字だけの行。各問は <code>1，ア</code> の形で書きます。</span></div><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+compactAnswerDiagram()+'<p class="desc">1行に1問。数字だけの行で大問を分けます。知＝知識・技能 ／ 思＝思考・判断・表現</p><textarea id="auto-source" rows="6" placeholder="1&#10;1，ア&#10;2，太陽&#10;2&#10;1，相手の気持ちを考えたから。"></textarea>'+
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">小問は①・A・（１）をそのまま書けます。例：「1，①，ア」の次は「②，イ」。「1，A，ア」の次は「B，イ」。「1，（１），ア」の次は「（２），イ」。親の問番号は引き継ぎます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数・観点を省略すると上の設定が入ります。個別に書いた点数・観点を優先します（例：1，ア，5，思）。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
+    completionAndDepthHelp()+
     kanbunHelp()+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">入りきらないときは、① 大問間の空白をそろえて狭める → ② 欄幅を少しずつ縮める（最大20％）の順に自動調整します。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">入りきらないときは、① 大問間の空白をそろえて狭める → ② 欄幅を少しずつ縮める（最大20％）の順に自動調整します。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
     (hadDoc?'<label class="auto-replace" hidden><input id="auto-replace" type="checkbox">現在の用紙を作り直す（手動の配置・描画も置き換えます。「戻す」で復元できます）</label>':'')+
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
@@ -5702,9 +5792,10 @@ function openAnswerGenerator(initialTitle=''){
       r.kind=inferAutoKind(r.answer,q('#auto-subject').value);
       r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
     }
+    if(r.completeGroup)r.aspectDefault=false;
     const defaultAspect=r.aspectDefault ? autoDefaultAspect(scoringSettings(),r.group) : '';
     if(defaultAspect){r.aspect=defaultAspect;r.warnings=r.warnings.filter(w=>!w.startsWith('観点'));}
-    else if (r.aspectAuto || r.warnings.includes('観点を推定')) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
+    else if (!r.completeGroup && (r.aspectAuto || r.warnings.includes('観点を推定'))) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
     if (r.kind==='blank' && !SUBJECT_LAYOUTS[q('#auto-subject').value]){ r.w=r.w || 1; r.h=r.h || 10; }
   };
   const syncControls=card=>{
@@ -5713,6 +5804,7 @@ function openAnswerGenerator(initialTitle=''){
     card.querySelector('[data-graph]').hidden=r.kind!=='graph';
     card.querySelector('[data-k="kind"]').value=r.kind;
     card.querySelector('[data-k="aspect"]').value=r.aspect;
+    card.querySelector('[data-k="complete"]').disabled=!!r.completeGroup;
     for (const key of ['n','w','h','eight']){
       const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','sentence','working','word','essay','blank','graph'].includes(r.kind);
       const node=card.querySelector('[data-k="'+key+'"]'); node.disabled=!enabled; node.closest('label').hidden=!enabled;
@@ -5729,20 +5821,22 @@ function openAnswerGenerator(initialTitle=''){
     q('#auto-rows').innerHTML=rows.map((r,i)=>{
       const numbering=splitAutoQuestionLabel(r.label);
       const labels=Array.from(new Set([numbering.main,'',...Array.from({length:Math.max(20,rows.filter(x=>x.group===r.group).length+Number(q('#auto-number-start').value || 1))},(_,j)=>autoNumberLabel(q('#auto-number-style').value,j+1))])).map(v=>[v,v || '番号なし']);
-      const subLabels=Array.from(new Set([numbering.suffix,'',...Array.from({length:50},(_,j)=>String.fromCodePoint(j<20?0x2460+j:j<35?0x3251+j-20:0x32b1+j-35)),...Array.from({length:26},(_,j)=>String.fromCharCode(65+j)),...Array.from({length:26},(_,j)=>String.fromCharCode(97+j)),...Array.from({length:20},(_,j)=>'('+(j+1)+')'),...Array.from({length:26},(_,j)=>'('+String.fromCharCode(65+j)+')')])).map(v=>[v,v || '小問なし']);
+      const subLabels=Array.from(new Set([numbering.suffix,numbering.leaf || '','',...Array.from({length:50},(_,j)=>String.fromCodePoint(j<20?0x2460+j:j<35?0x3251+j-20:0x32b1+j-35)),...Array.from({length:26},(_,j)=>String.fromCharCode(65+j)),...Array.from({length:26},(_,j)=>String.fromCharCode(97+j)),...Array.from({length:20},(_,j)=>'('+(j+1)+')'),...Array.from({length:26},(_,j)=>'('+String.fromCharCode(65+j)+')')])).map(v=>[v,v || '小問なし']);
       return '<fieldset class="auto-question" data-row="'+i+'"><legend>'+(i+1)+'問目 <label class="auto-selection"><input type="checkbox" data-check'+(selected.has(r)?' checked':'')+' aria-label="'+(i+1)+'問目をまとめて変更">配点・観点の変更対象</label></legend><div class="auto-grid">'+
       '<label>大問番号<select data-k="group" aria-label="大問番号">'+choices(groupChoices(r.group),r.group)+'</select></label>'+
       '<div><label>問番号<select data-k="label" aria-label="問番号">'+choices([...labels,['!custom','自由に指定…']],numbering.main)+'</select><span data-label-custom hidden>'+input('labelCustom',numbering.main,'text','問番号を自由に指定')+'</span></label>'+
-      '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label></div>'+
+      '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label>'+
+      '<label>小問内の番号<select data-k="leafLabel" aria-label="小問内の番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.leaf || '')+'</select><span data-leaf-label-custom hidden>'+input('leafLabelCustom',numbering.leaf || '','text','小問内の番号を自由に指定')+'</span></label></div>'+
+      (r.completeGroup?'<p class="auto-completion-note">'+xmlEsc('まとめて完答：'+rows.filter(x=>x.completeGroup===r.completeGroup).map(x=>x.label).join('・')+' の全てで '+r.points+'点')+'</p>':'')+
       '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KINDS.filter(([kind])=>SUBJECT_LAYOUTS[q('#auto-subject').value] || !['formula','sentence','working'].includes(kind) || kind===r.kind),r.kind)+'</select></label>'+
-      '<label>配点<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
+      '<label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices([['知技','知識・技能'],['思判表','思考・判断・表現']],r.aspect)+'</select></label></div>'+
       '<details class="auto-detail"><summary>細かな設定<span class="auto-size-summary"></span></summary><div class="auto-options"><label>字数'+input('n',r.n,'number','字数')+'</label><label>幅'+input('w',r.w,'number','幅')+'</label><label>高さ'+input('h',r.h,'number','高さ')+'</label>'+
       '<label><input data-k="eight" type="checkbox"'+(r.eight?' checked':'')+'>8割ライン</label><label><input data-k="complete" type="checkbox"'+(r.complete?' checked':'')+'>完答（太枠）</label>'+
       '<button class="tb" data-remove="'+i+'" aria-label="'+(i+1)+'問目を削除">削除</button></div><p class="auto-hint"></p></details></fieldset>';
     }).join('');
-    status.textContent=rows.length ? rows.length+'問・合計'+rows.reduce((s,r)=>s+r.points,0)+'点。よさそうなら、この内容で用紙を作りましょう。':'模範解答を入力し「読み取って一覧にする」を押してください。';
+    status.textContent=rows.length ? rows.length+'問・合計'+scoringItems(rows).reduce((s,r)=>s+r.points,0)+'点。よさそうなら、この内容で用紙を作りましょう。':'模範解答を入力し「読み取って一覧にする」を押してください。';
     q('#auto-apply').disabled=!rows.length; q('#auto-rows').querySelectorAll('[data-row]').forEach(syncControls);
     if (writeSource) syncSource();
   };
@@ -5772,11 +5866,30 @@ function openAnswerGenerator(initialTitle=''){
       const score=value===''?null:Number(value==='custom'?q('#auto-bulk-point-value').value:value);
       if (score!==null && (!Number.isInteger(score) || score<0 || score>1000)) throw new Error('配点は0〜1000の整数にしてください。');
       list.forEach(r=>{
+        if(r.completeGroup)linkedScore(rows,r,score===null?undefined:score,aspect || undefined);
         if (score!==null){ r.points=score; r.warnings=r.warnings.filter(w=>!w.startsWith('配点')); }
         if (aspect){ r.aspect=aspect; r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
       });
       drawRows(true); status.textContent=list.length+'問の'+(score!==null && aspect?'配点・観点':score!==null?'配点':'観点')+'を変更しました。';
     } catch(e){ status.textContent=e.message; }
+  };
+  q('#auto-completion-add').onclick=()=>{
+    try{
+      if(sourceDirty())throw new Error('先に「読み取って一覧にする」を押してください。');
+      const members=rows.filter(r=>selected.has(r));if(members.length<2)throw new Error('完答にする解答欄を2つ以上チェックしてください。');
+      const value=q('#auto-bulk-points').value,points=value==='custom'?Number(q('#auto-bulk-point-value').value):value===''?scoringSettings().points:Number(value);
+      validateAutoScoring({points});const aspect=q('#auto-bulk-aspect').value || members[0].aspect;
+      const previous=members.map(r=>({...r})),id='cg'+Date.now();
+      if(members.some(r=>r.completeGroup))throw new Error('すでに完答の組に含まれる欄があります。いったん組を解除してください。');
+      members.forEach(r=>{r.completeGroup=id;r.points=points;r.aspect=aspect;r.complete=true;r.aspectDefault=false;r.aspectAuto=false;r.pointsDefault=false;r.warnings=r.warnings.filter(w=>!w.startsWith('配点') && !w.startsWith('観点'));});
+      try{validateCompletionGroups(rows);}catch(e){members.forEach((r,i)=>{delete r.completeGroup;Object.assign(r,previous[i]);});throw e;}
+      drawRows(true);status.textContent=members.length+'欄をまとめて完答'+points+'点にしました。';
+    }catch(e){status.textContent=e.message;}
+  };
+  q('#auto-completion-remove').onclick=()=>{
+    if(sourceDirty())return void(status.textContent='先に「読み取って一覧にする」を押してください。');
+    const ids=new Set(rows.filter(r=>selected.has(r)).map(r=>r.completeGroup).filter(Boolean));
+    rows.forEach(r=>{if(ids.has(r.completeGroup)){delete r.completeGroup;r.complete=false;}});drawRows(true);status.textContent='選んだ欄の完答の組を解除しました。配点は各欄の点数として残るので見直してください。';
   };
   q('#auto-number-style').onchange=()=>drawRows();
   q('#auto-default-group').onchange=()=>groups.add(q('#auto-default-group').value);
@@ -5799,26 +5912,32 @@ function openAnswerGenerator(initialTitle=''){
     if (sourceDirty()){ status.textContent='入力を変更しています。先に「読み取って一覧にする」を押してください。'; drawRows(); return; }
     if (key==='label' && e.target.value==='!custom'){ const span=card.querySelector('[data-label-custom]'); span.hidden=false; span.querySelector('input').focus(); return; }
     if (key==='subLabel' && e.target.value==='!custom'){ const span=card.querySelector('[data-sub-label-custom]'); span.hidden=false; span.querySelector('input').focus(); return; }
+    if (key==='leafLabel' && e.target.value==='!custom'){const span=card.querySelector('[data-leaf-label-custom]');span.hidden=false;span.querySelector('input').focus();return;}
     if (key==='points' && e.target.value==='custom'){ const span=card.querySelector('[data-point-custom]'); span.hidden=false; span.querySelector('input').focus(); return; }
     if (key==='pointsCustom') key='points';
-    if (['label','labelCustom','subLabel','subLabelCustom'].includes(key)){
+    if (['label','labelCustom','subLabel','subLabelCustom','leafLabel','leafLabelCustom'].includes(key)){
       const main=card.querySelector('[data-k="label"]'), sub=card.querySelector('[data-k="subLabel"]');
       const number=main.value==='!custom' ? card.querySelector('[data-k="labelCustom"]').value : main.value;
       let suffix=(sub.value==='!custom' ? card.querySelector('[data-k="subLabelCustom"]').value : sub.value).trim();
       if (suffix && !isAutoSubLabel(suffix)){
         const inner=suffix.replace(/^[（(]+|[)）]+$/g,''); suffix=inner ? '('+inner+')' : '';
       }
-      r.label=number+suffix;
+      const leaf=card.querySelector('[data-k="leafLabel"]');
+      let tail=(leaf.value==='!custom'?card.querySelector('[data-k="leafLabelCustom"]').value:leaf.value).trim();
+      if(tail && !isAutoSubLabel(tail))tail='('+tail.replace(/^[（(]+|[)）]+$/g,'')+')';
+      r.label=number+suffix+tail;
       if (key==='label') card.querySelector('[data-label-custom]').hidden=true;
       if (key==='subLabel') card.querySelector('[data-sub-label-custom]').hidden=true;
+      if (key==='leafLabel')card.querySelector('[data-leaf-label-custom]').hidden=true;
     } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='n' && r.kindAuto && r.kind==='extract'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='aspect'){ r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
+    if(r.completeGroup && ['points','aspect'].includes(key)){linkedScore(rows,r,key==='points'?r.points:undefined,key==='aspect'?r.aspect:undefined);drawRows(true);return;}
     if (key==='points') r.warnings=r.warnings.filter(w=>!w.startsWith('配点'));
     if (key==='group') groups.add(r.group);
     if (['kind','answer','aspect'].includes(key)) infer(r);
-    syncControls(card); syncSource(); status.textContent=rows.length+'問・合計'+rows.reduce((s,r)=>s+r.points,0)+'点。';
+    syncControls(card); syncSource(); status.textContent=rows.length+'問・合計'+scoringItems(rows).reduce((s,r)=>s+r.points,0)+'点。';
   });
   q('#auto-rows').addEventListener('click',e=>{
     const kb=e.target.closest('[data-kanbun]');
@@ -5832,6 +5951,7 @@ function openAnswerGenerator(initialTitle=''){
     }
     const b=e.target.closest('[data-remove]'); if (!b) return;
     if (sourceDirty()) return void(status.textContent='先に「読み取って一覧にする」を押してください。');
+    if(rows[+b.dataset.remove].completeGroup)return void(status.textContent='先に「完答の組を解除」してから欄を削除してください。');
     selected.delete(rows[+b.dataset.remove]); rows.splice(+b.dataset.remove,1); drawRows(true);
   });
   source.addEventListener('input',()=>{ status.textContent='入力を変更しました。「読み取って一覧にする」を押してください。'; });
