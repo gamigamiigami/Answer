@@ -320,7 +320,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(A\)，ア/);
     await hierarchy.locator('[data-row="0"] [data-k="subLabel"]').selectOption('!custom');
     await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').fill('a');
-    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(a\)，ア/);
+    assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，a，ア/);
     await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').fill('');
     await hierarchy.locator('[data-row="0"] [data-k="subLabelCustom"]').pressSequentially('(21)');
     assert.match(await hierarchy.locator('#auto-source').inputValue(),/1，\(21\)，ア/);
