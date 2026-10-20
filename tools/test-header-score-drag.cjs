@@ -4,7 +4,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'answer-header-'));
  const server=http.createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(fs.readFileSync(path.join(__dirname,'../answer-sheet-maker.html')));});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
-  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:1000},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));
+  browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:1000},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.click('#btn-from-answers');await page.fill('#creation-title','第三学年　第一回定期テスト　解答用紙');await page.click('#creation-next');await page.fill('#auto-source','1\n1,ア,2,知\n2,イ,3,思');await page.click('#auto-parse');await page.click('#auto-apply');
   const header=await page.evaluate(()=>{const texts=headerLayout(doc).texts;return{title:texts.find(t=>t.c===doc.grid.cols-1),name:texts.find(t=>t.c===doc.grid.cols-2),nameLabel:doc.paper.nameLabel};});
   assert.equal(header.title.size,18);assert.equal(header.name.size,16);assert.match(header.nameLabel,/氏名（　{10}）/);assert.equal(header.title.stack,true);assert.equal(header.title.valign,'top');
@@ -31,7 +31,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});await mobile.goto('http://127.0.0.1:'+server.address().port);await mobile.evaluate(work=>loadWork(work),work);await mobile.locator('.score-box').scrollIntoViewIfNeeded();const mb=await mobile.locator('.score-box').boundingBox(),session=await mobile.context().newCDPSession(mobile),start={x:mb.x+mb.width*.5,y:mb.y+mb.height*.5};
   const touchBefore=await mobile.evaluate(()=>scoreBoxBounds(doc));await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[start]});for(let i=1;i<=5;i++)await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:start.x-25*i/5,y:start.y-25*i/5}]});await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.ok((await mobile.evaluate(()=>scoreBoxBounds(doc))).x<touchBefore.x);await mobile.screenshot({path:path.join(out,'mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from openpyxl import load_workbook
 from zipfile import ZipFile
 from xml.etree import ElementTree as E

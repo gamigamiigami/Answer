@@ -466,6 +466,11 @@ input[type=checkbox]{accent-color:var(--place)}
 
 .score-box{cursor:grab;touch-action:none;outline:none}.score-box:active{cursor:grabbing}
 .score-box-focus{opacity:0;pointer-events:none}.score-box:hover .score-box-focus,.score-box:focus .score-box-focus{opacity:1}
+
+#move-panel{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px}#move-panel h2{margin:0 0 8px}
+.move-actions{display:grid;gap:8px}.move-arrows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
+#move-panel .tb{white-space:normal}#move-panel details{margin-top:12px}#move-panel details .tb{margin-top:8px;width:100%}
+#move-mode[aria-pressed=true]{color:var(--place);border-color:var(--place);font-weight:700}.field-move-mode{cursor:move;touch-action:none}
 </style>
 </head>
 <body>
@@ -534,6 +539,7 @@ input[type=checkbox]{accent-color:var(--place)}
   <div id="main" role="tabpanel" aria-labelledby="tab-sheet">
     <div id="side">
       <div class="workspace-guide"><div class="companion-heading"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><b id="workspace-heading">いっしょに、形に。</b></div><p id="workspace-tip"></p></div>
+      <section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
         <div class="key-prompt"><b>数字キーを押すだけで、欄ができる！</b><br>① 用紙の空いた場所をクリック<br>② 下のボタンと同じ数字キーを押す<br><small>ボタンをクリックしても置けます。</small></div>
@@ -823,8 +829,9 @@ function headerLayout(d){
     const put=(col,str,size)=>{
       const room=(rows-2)*RH-1;
       const fitSize=Math.min(size,room/Math.max(1,Array.from(str).length)/ptmm(1)/1.12);
-      texts.push({c:col,r:1,t:str,size:Math.max(8,Math.floor(fitSize*2)/2),bold:col===cols-1,align:'center',mg:{w:1,h:rows-2},stack:true,valign:'top'});
-      mark(col,0,1,rows);
+      const actualSize=Math.max(8,Math.floor(fitSize*2)/2),fs=ptmm(actualSize),usedRows=Math.min(rows-1,Math.ceil((1.05+fs+fs*1.12*Math.max(0,Array.from(str).length-1))/RH));
+      texts.push({c:col,r:1,t:str,size:actualSize,bold:col===cols-1,align:'center',mg:{w:1,h:usedRows},stack:true,valign:'top'});
+      mark(col,0,1,usedRows+1);
     };
     put(cols-1,d.paper.title,d.paper.titlePt || 18);
     put(cols-2,d.paper.nameLabel,d.paper.namePt || 16);
@@ -1783,7 +1790,7 @@ const svg = $('#sheet');
 // 履歴はタブごと。解答用紙の「戻す」が模範解答や描画を巻き戻さないようにする。
 // 「選んでいた範囲」も一緒に残す。
 const TAB_KEYS = {
-  sheet:  ['fields','decorations','texts','paper','grid','colw'],
+  sheet:  ['fields','decorations','texts','paper','grid','colw','drawings'],
   answer: ['answers','answerGraphs','paper'],
   draw:   ['drawings','paper']
 };
@@ -1793,6 +1800,7 @@ function state(full=false){
   return JSON.stringify({ part, cur:ui.cur, sel:ui.sel, extra:ui.extra, full });
 }
 function restore(json){
+  ui.movePlan=null;
   const st = JSON.parse(json);
   if (st.full){
     doc = st.part; ui.targets = [];
@@ -1836,6 +1844,7 @@ const el = (n, a) => { const e = document.createElementNS(SVGNS,n); for(const k 
 let geo = null;   // {x0,y0,pw,ph} 用紙上のグリッド原点
 
 function render(){
+  if($('#move-panel')){$('#move-panel').hidden=ui.tab!=='sheet';$('#move-mode').setAttribute('aria-pressed',String(!!ui.moveMode));$('#move-mode').textContent=ui.moveMode?'移動モード：ON（Escで終了）':'選んだ欄をドラッグ';svg.classList.toggle('field-move-mode',!!ui.moveMode && ui.tab==='sheet');}
   const p = PAGE[doc.paper.orientation];
   const { cols, rows } = doc.grid;
   const gw = gridWmm(), gh = rows*RH;
@@ -2007,6 +2016,8 @@ function render(){
     line('困ったら上の「使い方」を開いてください', 10, 4.2);
     svg.appendChild(hint);
   }
+
+  renderFieldMovePreview();
 
   // カーソル
   const cu = el('rect',{x:X(ui.cur.c), y:y0+ui.cur.r*RH, width:W(ui.cur.c), height:RH, 'class':'guide',
@@ -2757,78 +2768,91 @@ async function setColWidth(){
   toast('列の幅を'+Math.round(f*100)+'％にしました');
 }
 
-/* セルの移動：切り取って、カーソルの位置へ動かす（Excel の切り取り→貼り付けと同じ） */
-let clip = null;
+/* 欄・番号・共有見出しをひとまとめに移動する。元の範囲との重なりは衝突に数えない。 */
+let clip=null,fieldMoveDrag=null;
+const rectHits=(a,b)=>a.c<b.c+b.w && b.c<a.c+a.w && a.r<b.r+b.h && b.r<a.r+a.h;
+function movePlanParts(plan){
+  const fields=doc.fields.filter(f=>plan.fieldIds.includes(f.id)),decos=doc.decorations.filter(d=>plan.decoIds.includes(d.id));
+  const clones=doc.decorations.filter(d=>plan.cloneParentIds.includes(d.id));
+  const texts=plan.textKeys.filter(k=>doc.texts[k]).map(k=>{const [c,r]=k.split(',').map(Number);return {key:k,value:doc.texts[k],rect:textRect(doc,c,r,doc.texts[k])};});
+  const drawings=plan.drawingIndices.filter(i=>doc.drawings[i]).map(i=>doc.drawings[i]);
+  const boxes=fields.flatMap(f=>[...f.rects,...(f.label?[f.label]:[])]).concat(decos,clones,texts.map(t=>t.rect));
+  const boundsBoxes=boxes.concat(drawings.map(g=>{const xs=g.k==='line'?[g.x1,g.x2]:[g.x],ys=g.k==='line'?[g.y1,g.y2]:[g.y];return {c:Math.floor(Math.min(...xs)),r:Math.floor(Math.min(...ys)),w:Math.max(1,Math.ceil(Math.max(...xs))-Math.floor(Math.min(...xs))),h:Math.max(1,Math.ceil(Math.max(...ys))-Math.floor(Math.min(...ys)))};}));
+  let bounds=null;if(boundsBoxes.length){const c=Math.min(...boundsBoxes.map(b=>b.c)),r=Math.min(...boundsBoxes.map(b=>b.r));bounds={c,r,w:Math.max(...boundsBoxes.map(b=>b.c+b.w))-c,h:Math.max(...boundsBoxes.map(b=>b.r+b.h))-r};}
+  return {fields,decos,clones,texts,drawings,boxes,bounds};
+}
+function collectMovePlan(all=false){
+  if(!all && ui.movePlan && movePlanParts(ui.movePlan).bounds)return ui.movePlan;
+  const cells=selectedCells(),picked=new Set(cells.map(p=>p.c+','+p.r));
+  const hits=b=>{if(all)return true;for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)if(picked.has(c+','+r))return true;return false;};
+  const fieldIds=new Set(doc.fields.filter(f=>all || [ ...f.rects,...(f.label?[f.label]:[]) ].some(hits) || ui.targets.some(t=>t.id===f.id)).map(f=>f.id));
+  const decoIds=new Set(doc.decorations.filter(hits).map(d=>d.id)),textKeys=new Set();
+  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(hits(textRect(doc,c,r,v))){textKeys.add(key);if(v.bold && v.box)doc.fields.filter(f=>f.auto && f.auto.group===v.t).forEach(f=>fieldIds.add(f.id));}}
+  for(const deco of doc.decorations.filter(d=>decoIds.has(d.id) && d.questionHeading))doc.fields.filter(f=>f.auto && [f.auto.questionId,f.auto.subQuestionId].includes(deco.id)).forEach(f=>fieldIds.add(f.id));
+  const cloneParentIds=new Set();
+  for(const f of doc.fields.filter(f=>fieldIds.has(f.id))){
+    for(const key of ['questionId','subQuestionId']){
+      const id=(f.auto || {})[key],parent=doc.decorations.find(d=>d.id===id);if(!parent)continue;
+      const children=doc.fields.filter(x=>x.auto && [x.auto.questionId,x.auto.subQuestionId].includes(id));
+      if(children.every(x=>fieldIds.has(x.id)))decoIds.add(id);else cloneParentIds.add(id);
+    }
+  }
+  const ownBoxes=doc.fields.filter(f=>fieldIds.has(f.id)).flatMap(f=>[...f.rects,...(f.label?[f.label]:[])]).concat(doc.decorations.filter(d=>decoIds.has(d.id)));
+  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(ownBoxes.some(b=>rectHits(b,textRect(doc,c,r,v))))textKeys.add(key);}
+  const drawingIndices=[];doc.drawings.forEach((g,i)=>{const pts=g.k==='line'?[{c:Math.floor(g.x1),r:Math.floor(g.y1)},{c:Math.floor(g.x2),r:Math.floor(g.y2)}]:[{c:Math.floor(g.x),r:Math.floor(g.y)}];if(all || pts.every(p=>picked.has(p.c+','+p.r)))drawingIndices.push(i);});
+  return {fieldIds:[...fieldIds],decoIds:[...decoIds],textKeys:[...textKeys],cloneParentIds:[...cloneParentIds].filter(id=>!decoIds.has(id)),drawingIndices};
+}
+function movementError(plan,dc,dr){
+  const p=movePlanParts(plan);if(!p.bounds)return '移動する欄を選んでください。';
+  const moved=p.boxes.map(b=>({...b,c:b.c+dc,r:b.r+dr}));
+  if(moved.some(b=>b.c<0 || b.r<0 || b.c+b.w>doc.grid.cols || b.r+b.h>doc.grid.rows))return '用紙からはみ出します。移動する量を小さくしてください。';
+  for(const g of p.drawings){const pts=g.k==='line'?[[g.x1,g.y1],[g.x2,g.y2]]:[[g.x,g.y]];if(pts.some(([x,y])=>x+dc<0 || y+dr<0 || x+dc>doc.grid.cols || y+dr>doc.grid.rows))return '一緒に動かす図が用紙からはみ出します。';}
+  const used=new Map();const mark=(b,reason)=>{for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)used.set(c+','+r,reason);};
+  const header=headerLayout(doc);header.reserved.forEach(k=>used.set(k,'タイトル・氏名欄または得点欄に重なります。空いている位置へ動かしてください。'));
+  const sb=scoreBoxBounds(doc);if(sb){const c=columnAtMM(doc,sb.x),last=columnAtMM(doc,sb.x+sb.w-.0001),r=Math.floor(sb.y/RH);mark({c,r,w:last-c+1,h:Math.ceil((sb.y+sb.h)/RH)-r},'得点欄に重なります。得点欄を先に別の場所へ移せます。');}
+  doc.fields.filter(f=>!plan.fieldIds.includes(f.id)).forEach(f=>[...f.rects,...(f.label?[f.label]:[])].forEach(b=>mark(b,'移動しない解答欄に重なります。「解答欄を全部選ぶ」で一緒に動かせます。')));
+  doc.decorations.filter(d=>!plan.decoIds.includes(d.id)).forEach(d=>mark(d,'移動しない枠・見出しに重なります。見出しも含めて選んでください。'));
+  for(const [key,v] of Object.entries(doc.texts)){if(plan.textKeys.includes(key))continue;const [c,r]=key.split(',').map(Number);mark(textRect(doc,c,r,v),'移動しない番号・文字に重なります。番号も含めて選んでください。');}
+  for(const b of moved)for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++){const error=used.get(c+','+r);if(error)return error;}
+  return '';
+}
+function shiftMovePlan(plan,dc,dr,{quiet=false}={}){
+  if(!dc && !dr)return false;const error=movementError(plan,dc,dr);if(error){if(!quiet)toast('⚠ '+error);return false;}
+  const p=movePlanParts(plan),entries=p.texts.map(t=>[t.key,t.value]),cloneMap=new Map(),cloneTexts=[];snapshot();
+  for(const parent of p.clones){const id='v'+uid++,copy={...parent,id,c:parent.c+dc,r:parent.r+dr};doc.decorations.push(copy);cloneMap.set(parent.id,id);const value=doc.texts[parent.c+','+parent.r];if(value)cloneTexts.push([(parent.c+dc)+','+(parent.r+dr),{...value}]);}
+  for(const f of p.fields){[...f.rects,...(f.label?[f.label]:[])].forEach(b=>{b.c+=dc;b.r+=dr;});if(f.auto)for(const key of ['questionId','subQuestionId'])if(cloneMap.has(f.auto[key]))f.auto[key]=cloneMap.get(f.auto[key]);}
+  p.decos.forEach(b=>{b.c+=dc;b.r+=dr;});
+  // 先に元のキーを全部消す。移動先が次の元キーでも、文字を上書き・消失させない。
+  entries.forEach(([key])=>delete doc.texts[key]);const movedKeys=[];
+  entries.forEach(([key,value])=>{const [c,r]=key.split(',').map(Number),next=(c+dc)+','+(r+dr);doc.texts[next]=value;movedKeys.push(next);});cloneTexts.forEach(([key,value])=>{doc.texts[key]=value;movedKeys.push(key);});
+  p.drawings.forEach(g=>{if(g.k==='line'){g.x1+=dc;g.x2+=dc;g.y1+=dr;g.y2+=dr;}else{g.x+=dc;g.y+=dr;}});
+  ui.movePlan={...plan,decoIds:[...plan.decoIds,...cloneMap.values()],cloneParentIds:[],textKeys:movedKeys};const next=movePlanParts(ui.movePlan);
+  ui.sel={...next.bounds};ui.cur={c:next.bounds.c,r:next.bounds.r};ui.extra=[];ui.targets=next.fields.map(f=>({k:'a',id:f.id,c:f.rects[0].c,r:f.rects[0].r}));ui.selAnchor=null;
+  render();if(!quiet)toast(next.fields.length+'個の解答欄をまとめて移動しました');return true;
+}
+function selectAllForMove(){
+  if(!needSheet('欄を動かせません'))return;ui.movePlan=collectMovePlan(true);const p=movePlanParts(ui.movePlan);if(!p.bounds)return toast('移動する解答欄がありません。');ui.sel={...p.bounds};ui.cur={c:p.bounds.c,r:p.bounds.r};ui.extra=[];ui.targets=p.fields.map(f=>({k:'a',id:f.id,c:f.rects[0].c,r:f.rects[0].r}));render();toast(p.fields.length+'個の欄と番号・見出しを選びました');
+}
+function nudgeFields(dc,dr,tight=false){
+  if(!needSheet('欄を動かせません'))return;const plan=collectMovePlan();if(tight){let n=0;while(n<Math.max(doc.grid.cols,doc.grid.rows) && !movementError(plan,dc*(n+1),dr*(n+1)))n++;if(!n)return toast('⚠ '+movementError(plan,dc,dr));dc*=n;dr*=n;}shiftMovePlan(plan,dc,dr);
+}
 function cutCells(){
-  if (!needSheet('切り取れません')) return;
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
-  const inside = o => o.c >= s.c && o.r >= s.r && o.c+o.w <= s.c+s.w && o.r+o.h <= s.r+s.h;
-  const fields = doc.fields.filter(f =>
-    f.rects.every(inside) && (!f.label || inside(f.label)));
-  const decos = doc.decorations.filter(inside);
-  const texts = [];
-  for (const k in doc.texts){
-    const [c,r] = k.split(',').map(Number);
-    if (inside(textRect(doc, c, r, doc.texts[k]))) texts.push(k);
-  }
-  if (!fields.length && !decos.length && !texts.length)
-    return toast('動かすものがありません（欄は全体を囲むように選んでください）');
-  clip = { rect:{c:s.c, r:s.r, w:s.w, h:s.h}, ids:fields.map(f=>f.id), decos, texts };
-  toast('切り取りました。動かす先にカーソルを置いて Ctrl+V');
+  if(!needSheet('切り取れません'))return;const plan=collectMovePlan();const p=movePlanParts(plan);if(!p.bounds)return toast('移動する欄を選んでください。欄の一部を選んでも、番号と一緒に動かせます。');clip={plan,origin:{...p.bounds}};ui.movePlan=plan;toast('欄と番号を選びました。移動先をクリックして Ctrl+V');
 }
-
 function pasteCells(){
-  if (!needSheet('貼り付けられません')) return;
-  if (!clip) return toast('先に範囲を選んで Ctrl+X（切り取り）を押してください');
-  const dc = ui.cur.c - clip.rect.c, dr = ui.cur.r - clip.rect.r;
-  if (!dc && !dr) return toast('同じ場所です（動かす先にカーソルを置いてください）');
-
-  const fields = doc.fields.filter(f => clip.ids.indexOf(f.id) >= 0);
-  const decos  = clip.decos.filter(v => doc.decorations.indexOf(v) >= 0);
-  const texts  = clip.texts.filter(k => doc.texts[k]);
-  if (!fields.length && !decos.length && !texts.length){ clip = null; return toast('切り取ったものが見つかりません'); }
-
-  // 動かすもの以外が使っているマス
-  const used = new Set(ui.reserved);
-  doc.fields.forEach(f => { if (fields.indexOf(f) < 0)
-    fieldFootprint(doc, f).forEach(([c,r]) => used.add(c+','+r)); });
-  doc.decorations.forEach(v => { if (decos.indexOf(v) < 0)
-    { for(let i=0;i<v.w;i++) for(let j=0;j<v.h;j++) used.add((v.c+i)+','+(v.r+j)); } });
-  for (const k in doc.texts){
-    if (texts.indexOf(k) >= 0) continue;
-    const [c,r] = k.split(',').map(Number);
-    const t = textRect(doc, c, r, doc.texts[k]);
-    for(let i=0;i<t.w;i++) for(let j=0;j<t.h;j++) used.add((t.c+i)+','+(t.r+j));
-  }
-  const free = o => {
-    const c = o.c+dc, r = o.r+dr;
-    if (c<0 || r<0 || c+o.w > doc.grid.cols || r+o.h > doc.grid.rows) return false;
-    for (let i=0;i<o.w;i++) for (let j=0;j<o.h;j++) if (used.has((c+i)+','+(r+j))) return false;
-    return true;
-  };
-  const moving = [];
-  fields.forEach(f => { f.rects.forEach(rc => moving.push(rc)); if (f.label) moving.push(f.label); });
-  decos.forEach(v => moving.push(v));
-  const textRects = texts.map(k => { const [c,r] = k.split(',').map(Number);
-    return textRect(doc, c, r, doc.texts[k]); });
-  if (![...moving, ...textRects].every(free))
-    return toast('⚠ その位置には動かせません（用紙の外か、ほかの欄があります）');
-
-  snapshot();
-  moving.forEach(o => { o.c += dc; o.r += dr; });
-  texts.forEach(k => {
-    const [c,r] = k.split(',').map(Number);
-    const v = doc.texts[k];
-    delete doc.texts[k];
-    doc.texts[(c+dc)+','+(r+dr)] = v;
-  });
-  ui.sel = { c:clip.rect.c+dc, r:clip.rect.r+dr, w:clip.rect.w, h:clip.rect.h };
-  ui.extra = [];
-  clip = null;
-  render();
-  toast('動かしました');
+  if(!needSheet('貼り付けられません'))return;if(!clip)return toast('先に欄を選んで Ctrl+X を押してください。');const dc=ui.cur.c-clip.origin.c,dr=ui.cur.r-clip.origin.r;if(!dc && !dr)return toast('移動先をクリックしてください。');if(shiftMovePlan(clip.plan,dc,dr))clip=null;
 }
-
+function placeScoreBelow(where){
+  if(!needSheet('得点欄を配置できません'))return;const sb=scoreBoxBounds(doc);if(!sb)return toast('設定で観点別得点枠を表示してください。');
+  let x,y;if(where==='name'){
+    if(doc.paper.writing!=='vertical')return toast('横書きでは「得点欄を欄の下へ」を使ってください。');const name=headerLayout(doc).texts.find(t=>t.c===doc.grid.cols-2);x=docColumnMM(doc,doc.grid.cols-1)-sb.w;y=(name.r+name.mg.h)*RH;
+  }else{const p=movePlanParts(collectMovePlan(true));if(!p.bounds)return toast('先に解答欄を作ってください。');x=docColumnMM(doc,p.bounds.c+p.bounds.w)-sb.w;y=(p.bounds.r+p.bounds.h)*RH+1;}
+  x=Math.max(0,Math.min(gridWmm()-sb.w,x));if(y+sb.h>doc.grid.rows*RH+.001)return toast('下の空きが足りません。解答欄を上へ動かすと置けます。');
+  const box={x,y,w:sb.w,h:sb.h},over=(a,b)=>a.x<b.x+b.w-.0001 && b.x<a.x+a.w-.0001 && a.y<b.y+b.h-.0001 && b.y<a.y+a.h-.0001;
+  const occupied=doc.fields.flatMap(f=>[...f.rects,...(f.label?[f.label]:[])]).concat(doc.decorations,headerLayout(doc).texts.map(t=>({c:t.c,r:t.r,w:(t.mg || {}).w || 1,h:(t.mg || {}).h || 1})));
+  if(occupied.some(r=>over(box,rectMM(doc,r))))return toast('この位置には欄か見出しがあります。先に解答欄を上・左へ動かすと置けます。');
+  snapshot();moveScoreBox(x,y);toast(where==='name'?'得点欄を氏名欄の下へ置きました':'得点欄を解答欄の下へ置きました');
+}
 /* 消す */
 function clearSelection(){
   if (ui.tab === 'draw') return toast('描画タブでは消しゴム（3）を使ってください');
@@ -3503,6 +3527,7 @@ document.addEventListener('keydown', ev => {
     if ((ev.code==='KeyZ' && ev.shiftKey) || ev.code==='KeyY'){ ev.preventDefault(); return redo(); }
     if (ev.code==='KeyA'){                                              // ぜんぶ選ぶ
       ev.preventDefault();
+      ui.movePlan=null;
       ui.sel = { c:0, r:0, w:doc.grid.cols, h:doc.grid.rows }; ui.extra = []; ui.selAnchor = null;
       buildTargets();
       render();
@@ -3519,6 +3544,8 @@ document.addEventListener('keydown', ev => {
   if (MOVE[ev.key]){
     ev.preventDefault();
     const [dc,dr] = MOVE[ev.key];
+    if(ui.moveMode && ui.tab==='sheet')return nudgeFields(dc*(ev.shiftKey?5:1),dr*(ev.shiftKey?5:1),ctrl);
+    ui.movePlan=null;
     const nc = ctrl ? (dc ? (dc>0 ? doc.grid.cols-1 : 0) : ui.cur.c)
                     : Math.min(doc.grid.cols-1, Math.max(0, ui.cur.c+dc));
     const nr = ctrl ? (dr ? (dr>0 ? doc.grid.rows-1 : 0) : ui.cur.r)
@@ -3545,9 +3572,10 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' || ev.key === 'F2'){ ev.preventDefault(); return enterInput(); }
   if (ev.key === 'Escape'){ ev.preventDefault();
     if (document.body.classList.contains('zen')) return toggleZen();
-    ui.sel=null; ui.extra=[]; ui.selAnchor=null; ui.targets=[]; render(); return; }
+    ui.moveMode=false;ui.movePlan=null;ui.sel=null; ui.extra=[]; ui.selAnchor=null; ui.targets=[]; render(); return; }
   if (ev.key === 'Delete' || ev.key === 'Backspace'){ ev.preventDefault(); return clearSelection(); }
-  if (ev.key === ' ' && ev.shiftKey){          // 離れたセルを選択に足す／外す
+  if (ev.key === ' ' && ev.shiftKey){
+    ui.movePlan=null;          // 離れたセルを選択に足す／外す
     ev.preventDefault();
     const i = ui.extra.findIndex(q => q.c===ui.cur.c && q.r===ui.cur.r);
     if (i>=0) ui.extra.splice(i,1); else ui.extra.push({c:ui.cur.c, r:ui.cur.r});
@@ -3645,9 +3673,39 @@ svg.addEventListener('keydown',ev=>{
 });
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape' && scoreDrag){ev.preventDefault();ev.stopImmediatePropagation();finishScoreDrag(true);}},true);
 
+function renderFieldMovePreview(){
+  if(!fieldMoveDrag || !fieldMoveDrag.current)return;
+  const {plan,current}=fieldMoveDrag,parts=movePlanParts(plan),color=current.error?'#b04632':'#236548';
+  const g=el('g',{'class':'guide field-move-preview','pointer-events':'none'});
+  parts.boxes.forEach(b=>{const c=b.c+current.dc,r=b.r+current.dr;if(c<0 || c+b.w>doc.grid.cols)return;g.appendChild(el('rect',{x:geo.x0+docColumnMM(doc,c),y:geo.y0+r*RH,width:docColumnMM(doc,c+b.w)-docColumnMM(doc,c),height:b.h*RH,fill:color,'fill-opacity':.1,stroke:color,'stroke-width':.5,'stroke-dasharray':'1 1'}));});svg.appendChild(g);
+}
+function movePointerGrid(ev){const p=scorePointerMM(ev);return {c:mmToGrid(p.x),r:p.y/RH};}
+svg.addEventListener('pointerdown',ev=>{
+  if(!ui.moveMode || ui.tab!=='sheet' || ev.button!==0 || ev.target.closest('.score-box'))return;
+  const at=pointToCell(ev);if(!at)return;let plan=collectMovePlan(),parts=movePlanParts(plan);
+  if(!parts.boxes.some(b=>at.c>=b.c && at.c<b.c+b.w && at.r>=b.r && at.r<b.r+b.h)){
+    const hit=fieldAt(at.c,at.r) || decorationAt(at.c,at.r);if(!hit)return;
+    ui.movePlan=null;ui.sel=null;ui.extra=[];ui.targets=[];ui.cur=at;plan=collectMovePlan();parts=movePlanParts(plan);
+  }
+  if(!parts.bounds)return;ev.preventDefault();ev.stopPropagation();dragging=false;
+  fieldMoveDrag={id:ev.pointerId,plan,start:movePointerGrid(ev),current:{dc:0,dr:0,error:''}};svg.setPointerCapture(ev.pointerId);
+});
+svg.addEventListener('pointermove',ev=>{
+  if(!fieldMoveDrag || fieldMoveDrag.id!==ev.pointerId)return;ev.preventDefault();const p=movePointerGrid(ev),dc=Math.round(p.c-fieldMoveDrag.start.c),dr=Math.round(p.r-fieldMoveDrag.start.r);
+  fieldMoveDrag.current={dc,dr,error:movementError(fieldMoveDrag.plan,dc,dr)};render();
+});
+function finishFieldMove(cancel=false){
+  if(!fieldMoveDrag)return;const {plan,current,id}=fieldMoveDrag;fieldMoveDrag=null;if(svg.hasPointerCapture(id))svg.releasePointerCapture(id);
+  if(cancel){render();return;}
+  if(current.dc || current.dr){if(!shiftMovePlan(plan,current.dc,current.dr))render();}else render();
+}
+svg.addEventListener('pointerup',ev=>{if(fieldMoveDrag && fieldMoveDrag.id===ev.pointerId){ev.preventDefault();finishFieldMove();}});
+svg.addEventListener('pointercancel',()=>finishFieldMove(true));
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape' && fieldMoveDrag){ev.preventDefault();ev.stopImmediatePropagation();finishFieldMove(true);}},true);
 /* クリック操作 */
 svg.addEventListener('mousedown', ev => {
-  if(ev.target.closest('.score-box'))return;
+  if(ev.target.closest('.score-box') || fieldMoveDrag)return;
+  ui.movePlan=null;
   if (ev.button !== 0) return;                 // 右クリックは contextmenu で受ける
   if (ui.mode==='input') commitInput();
   if (ui.tab === 'draw'){ drawStart(ev); dragging = true; return; }
@@ -3685,7 +3743,7 @@ document.addEventListener('mouseup', ()=>{
 });
 // 右クリック：囲っているところを強制的に☑にする
 svg.addEventListener('contextmenu', ev => {
-  ev.preventDefault();if(ev.target.closest('.score-box'))return;
+  ev.preventDefault();if(ev.target.closest('.score-box'))return;ui.movePlan=null;
   if (ui.tab === 'draw') return;
   if (ui.mode === 'input') commitInput();
   const p = pointToCell(ev); if (!p) return;
@@ -3693,7 +3751,7 @@ svg.addEventListener('contextmenu', ev => {
   forceTarget(p);
 });
 
-svg.addEventListener('dblclick', ev => { if(ev.target.closest('.score-box'))return;const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
+svg.addEventListener('dblclick', ev => { if(ui.moveMode || ev.target.closest('.score-box'))return;const p=pointToCell(ev); if(p){ ui.cur=p; enterInput(); } });
 
 $('#cell-input').addEventListener('blur', ()=>{ if (ui.mode==='input') commitInput(); });
 
@@ -4696,6 +4754,7 @@ function openHelp(initialTab='quick'){
       <p>「解答用紙」タブで使えます。左のボタンの数字が、そのままキーです。</p>
       <div class="guide-key-list">${ord.slice(0,6).map((t,i)=>'<span><b>'+keyOf(i)+'</b> '+fieldName(t)+'</span>').join('')}</div>
     </div>
+    <details><summary>解答欄をまとめて移動・右へ詰める</summary><p><b>「解答用紙」タブ → 左の「解答欄を全部選ぶ」→「右に詰める」</b>。番号・見出し・答えを保ってまとめて動かします。</p><p>一部だけなら、欄を囲んで選択 → 左右上下のボタン。「選んだ欄をドラッグ」をONにすると、つかんで移動できます。Escで終了します。</p><p>「得点欄を空いた場所へ」を開くと、名前の下／解答欄の下へ置けます。名前欄の文字が終わった下の空白も使えます。</p></details>
     <div class="guide-flow"><div class="guide-step"><span class="guide-symbol">✓</span><strong>用紙と答えを確認</strong><small>2つのタブで見比べる</small></div><span class="guide-arrow">→</span><div class="guide-step"><span class="guide-symbol">▤</span><strong>Excel出力</strong><small>印刷プレビューで確認</small></div><span class="guide-arrow">＋</span><div class="guide-step"><span class="guide-symbol">↧</span><strong>作業ファイルを保存</strong><small>次回も編集できる .json</small></div></div>
     </section>
     <section id="help-panel-format" role="tabpanel" aria-labelledby="help-tab-format" hidden>
@@ -5091,6 +5150,11 @@ function icon(type){
 }
 
 function buildTools(){
+  $('#move-all').onclick=selectAllForMove;
+  $('#move-mode').onclick=()=>{ui.moveMode=!ui.moveMode;render();toast(ui.moveMode?'欄をドラッグで移動できます。矢印キーでも動かせます。':'移動モードを終わりました');};
+  document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>nudgeFields(...b.dataset.move.split(',').map(Number)));
+  $('#move-tight-right').onclick=()=>nudgeFields(1,0,true);
+  $('#score-below-name').onclick=()=>placeScoreBelow('name');$('#score-below-fields').onclick=()=>placeScoreBelow('fields');
   const fw = $('#field-tools');
   fw.innerHTML = fieldOrder().map((k,i) =>
     '<button class="tool" data-field="'+k+'" aria-keyshortcuts="'+fieldKeyLabel(k)+'" title="'+FIELD_DEFS[k].hint+'（数字キー：'+fieldKeyLabel(k)+'）">'+icon(k)+
@@ -5204,6 +5268,7 @@ function buildTools(){
 // タブに合わせて道具の並びを入れ替える
 function showPanels(){
   const dr=ui.tab==='draw', answer=ui.tab==='answer';
+  $('#move-panel').hidden=ui.tab!=='sheet';
   $('#sheet-panels').hidden=dr || answer;
   $('#draw-panels').hidden=!dr;
   $('#input-panel').hidden=dr;
@@ -5252,6 +5317,7 @@ function updateInsertLabels(){
    22. 起動
    --------------------------------------------------------------- */
 function startApp(){
+  ui.movePlan=null;ui.moveMode=false;clip=null;
   applyUiSize();
   $('#start').style.display = 'none';
   $('#app').classList.add('on');

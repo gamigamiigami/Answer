@@ -431,7 +431,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     }
     await alignmentPage.close();
     pass('Free model answers begin at the top in Japanese and at the left in horizontal subjects, including Latin answers');
-    const excel=spawnSync('python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
+    const excel=spawnSync(process.env.TEST_PYTHON_PATH||'python3',[path.join(__dirname,'check-answer-generator-xlsx.py'),output],{encoding:'utf8'});
     if(excel.stdout) process.stdout.write(excel.stdout);
     if(excel.stderr) process.stderr.write(excel.stderr);
     assert.equal(excel.status,0,'Excel inspection failed');
