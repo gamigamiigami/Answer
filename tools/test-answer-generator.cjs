@@ -154,11 +154,12 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const defaultRect=await page.evaluate(rows=>buildAutoDocument(rows,'国語').fields[0].rects[0],defaultBlank);
     assert.equal(defaultRect.w,1); assert.equal(defaultRect.h,20);
     pass('Answer-only fields default to width 1 and height 10 while explicit dimensions take precedence');
-    for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','初終3字 あああ～いいいい','初終3字 あああ～','グラフ 40×40']){
+    for(const source of ['ア 0字','ア -1点','長い答え 2字','初終2字 あいうえ お','初終3字 あああ～いいいい','初終3字 あああ～']){
       const result=await page.evaluate(source=>{try{buildAutoDocument(parseAutoAnswers(source),'国語');return null;}catch(e){return e.message;}},source);
       assert.ok(result,source);
     }
-    pass('Invalid metadata, fixed-length overflow, asymmetric extract overflow and oversized graphs are rejected');
+    assert.ok(await page.evaluate(()=>{const d=buildAutoDocument(parseAutoAnswers('グラフ 40×40'),'国語');return d.fields.length===1 && countOutside(d,d.grid)===0;}));
+    pass('Invalid metadata and answer-size contradictions are rejected; oversized graphs generate in an expanded working area');
     await page.click('#btn-from-answers'); await page.fill('#creation-title','確認テスト'); await page.click('#creation-next');
     assert.equal(await page.locator('#auto-source').getAttribute('placeholder'),'1\n1，ア\n2，太陽\n2\n1，相手の気持ちを考えたから。');
     await page.fill('#auto-source',sample); await page.click('#auto-parse');
@@ -215,10 +216,14 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await page.click('#btn-answer-editor'); await page.click('#auto-tab-input'); await page.fill('#auto-source','大問一\n'+Array.from({length:200},(_,i)=>'('+ (i+1)+') ア 30字以内').join('\n')); await page.click('#auto-parse');
     await page.check('#auto-replace');
     const before=await page.evaluate(()=>JSON.stringify({doc,uid,history}));
-    await page.click('#auto-apply'); assert.match(await page.locator('#auto-status').innerText(),/A4/);
-    assert.equal(await page.evaluate(()=>JSON.stringify({doc,uid,history})),before);
-    pass('A page-capacity failure is atomic and never drops questions');
-    await page.click('#auto-cancel'); await page.click('#btn-answer-editor');
+    await page.click('#auto-apply');await page.locator('.auto-modal').waitFor({state:'detached'});
+    assert.equal(await page.evaluate(()=>doc.fields.length),200);
+    assert.equal(await page.evaluate(()=>outsideCount(doc)),0);
+    assert.ok(await page.evaluate(()=>contentScale(doc)<1));
+    await page.keyboard.press('Control+z');
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(JSON.stringify(doc))),JSON.parse(before).doc);
+    pass('Oversized sheets generate all 200 questions and undo restores the previous document');
+    await page.click('#btn-answer-editor');
     await page.click('#auto-tab-input'); await page.fill('#auto-source','大問一\n問一 太陽 3点 知識技能\n(1) This is a short English answer. 記述 3×2 5点 思考判断表現\n(2) アイウエ 4字 4点 知識技能\n大問二\n問一 初終2字 はじ～おわ 4点 思考判断表現\n(1) 解答欄のみ 4×2 3点 思考判断表現');
     await page.click('#auto-parse'); await page.selectOption('#auto-subject','数学');
     await page.check('#auto-replace'); await page.click('#auto-apply'); await page.locator('.auto-modal').waitFor({state:'detached'});

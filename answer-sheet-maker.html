@@ -467,6 +467,7 @@ input[type=checkbox]{accent-color:var(--place)}
 .score-box{cursor:grab;touch-action:none;outline:none}.score-box:active{cursor:grabbing}
 .score-box-focus{opacity:0;pointer-events:none}.score-box:hover .score-box-focus,.score-box:focus .score-box-focus{opacity:1}
 
+#paper-size-panel{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px}#paper-size-panel h2{margin:0 0 8px}#paper-size-panel label{display:block;margin:8px 0;font-size:13px}#paper-size-panel select,#content-scale{width:100%;min-width:0;box-sizing:border-box;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit}#content-scale-range{width:100%;margin:10px 0}.content-scale-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
 #move-panel{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px}#move-panel h2{margin:0 0 8px}
 .move-actions{display:grid;gap:8px}.move-arrows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
 #move-panel .tb{white-space:normal}#move-panel details{margin-top:12px}#move-panel details .tb{margin-top:8px;width:100%}
@@ -539,6 +540,7 @@ input[type=checkbox]{accent-color:var(--place)}
   <div id="main" role="tabpanel" aria-labelledby="tab-sheet">
     <div id="side">
       <div class="workspace-guide"><div class="companion-heading"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><b id="workspace-heading">いっしょに、形に。</b></div><p id="workspace-tip"></p></div>
+      <section id="paper-size-panel" class="tool-section"><h2>用紙と大きさ</h2><label>用紙の向き<select id="paper-orientation" aria-label="用紙の向き"><option value="portrait">A4 縦</option><option value="landscape">A4 横</option></select></label><label for="content-scale">用紙内の倍率（％）</label><div class="content-scale-row"><input id="content-scale" type="number" min="1" max="400" step="any" value="100"><button class="tb" id="content-fit">A4に合わせる</button></div><input id="content-scale-range" type="range" min="1" max="400" step="0.25" value="100" aria-label="用紙内の倍率"><p class="tip">文字・欄・得点欄を一緒に拡大縮小します。保存・印刷・Excelにも反映します。</p></section>
       <section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
@@ -691,7 +693,34 @@ const colWmm = c => CW * colFactor(c);              // 印刷後の列の幅（m
 function colXmm(c){ let x = 0; for (let i=0;i<c;i++) x += colWmm(i); return x; }
 function spanWmm(c, w){ let x = 0; for (let i=0;i<w;i++) x += colWmm(c+i); return x; }
 const gridWmm = () => colXmm(doc.grid.cols);
-const printableW = d => PAGE[d.paper.orientation].w - d.paper.marginX*2;
+// 作業領域とA4への出力倍率は別に保存する。画面ズームはどちらも変えない。
+const canvasFactor = paper => Math.max(1,Math.min(64,Number(paper.canvasFactor)||1));
+const contentScale = d => Math.max(.01,Math.min(4,Number(d.paper.contentScale)||1));
+const printableW = d => (PAGE[d.paper.orientation].w - d.paper.marginX*2)*canvasFactor(d.paper);
+function viewportPage(d){const p=PAGE[d.paper.orientation],scale=contentScale(d);return {w:p.w/scale,h:p.h/scale};}
+function fitContentScale(d){
+  const p=PAGE[d.paper.orientation],width=docColumnMM(d,d.grid.cols),height=d.grid.rows*RH;
+  return Math.max(.01,Math.min(4,(p.w-d.paper.marginX*2)/width,(p.h-d.paper.marginY*2)/height));
+}
+function setContentScale(value){
+  const scale=Number(value)/100;if(!Number.isFinite(scale) || scale<.01 || scale>4){syncPaperControls();return toast('倍率は1〜400％で指定してください。');}
+  if(Math.abs(contentScale(doc)-scale)<.000001)return;
+  snapshot();doc.paper.contentScale=scale;render();
+}
+function fitContentToA4(){snapshot();doc.paper.contentScale=fitContentScale(doc);render();toast('内容をA4に合わせました');}
+function setPaperOrientation(orientation){
+  if(!PAGE[orientation] || orientation===doc.paper.orientation)return;
+  snapshot();doc.paper.orientation=orientation;
+  // 配置を保持し、向きの変更で解答欄を消さない。
+  const p=PAGE[orientation];doc.paper.canvasFactor=Math.max(1,docColumnMM(doc,doc.grid.cols)/(p.w-doc.paper.marginX*2),doc.grid.rows*RH/(p.h-doc.paper.marginY*2));
+  doc.paper.contentScale=fitContentScale(doc);render();
+}
+function syncPaperControls(){
+  const select=$('#paper-orientation'),input=$('#content-scale'),range=$('#content-scale-range');if(!select)return;
+  select.value=doc.paper.orientation;const percent=Math.round(contentScale(doc)*10000)/100;
+  if(document.activeElement!==input)input.value=percent;
+  if(document.activeElement!==range)range.value=percent;
+}
 // マス目の座標（小数）↔ 用紙上の位置（グリッド左端からのmm）
 function gridToMM(v){
   const c = Math.max(0, Math.min(doc.grid.cols-1, Math.floor(v)));
@@ -715,18 +744,22 @@ function normalizeColw(d){
 }
 
 function computeGrid(paper){
-  const p = PAGE[paper.orientation];
-  const cols = Math.floor((p.w - paper.marginX*2 + 0.001) / CW);
-  let rows   = Math.floor((p.h - paper.marginY*2 + 0.001) / RH);
+  const p = PAGE[paper.orientation],factor=canvasFactor(paper);
+  const cols = Math.floor(((p.w - paper.marginX*2)*factor + 0.001) / CW);
+  let rows   = Math.floor(((p.h - paper.marginY*2)*factor + 0.001) / RH);
   if (rows % CHAR_ROWS) rows -= rows % CHAR_ROWS;   // 文字マスで割り切れるように
   return { cols, rows };
 }
 function gridWithColumnWidths(d,paper=d.paper){
   const grid=computeGrid(paper), cols=d.grid.cols, widths=d.colw;
+  // 拡大した作業領域や、向きを変えて保存した配置をそのまま復元する。
+  if(paper.contentScale!==undefined && Number.isInteger(cols) && cols>0 && cols<=4096 &&
+      Number.isInteger(d.grid.rows) && d.grid.rows>0 && d.grid.rows<=10000 && Array.isArray(widths) && widths.length===cols)
+    return {cols,rows:d.grid.rows};
   // 同じ用紙では細い列で増やした列数も保つ。標準列数に戻すと欄が失われる。
   if(paper.orientation===d.paper.orientation && paper.marginX===d.paper.marginX &&
       Number.isInteger(cols) && cols>0 && cols<=120 && Array.isArray(widths) && widths.length===cols &&
-      widths.every(v=>Number(v)>0.3 && Number(v)<4) && widths.reduce((sum,v)=>sum+Number(v)*CW,0)<=PAGE[paper.orientation].w-paper.marginX*2+0.001) grid.cols=cols;
+      widths.every(v=>Number(v)>0.3 && Number(v)<4) && widths.reduce((sum,v)=>sum+Number(v)*CW,0)<=(PAGE[paper.orientation].w-paper.marginX*2)*canvasFactor(paper)+0.001) grid.cols=cols;
   return grid;
 }
 
@@ -1845,7 +1878,8 @@ let geo = null;   // {x0,y0,pw,ph} 用紙上のグリッド原点
 
 function render(){
   if($('#move-panel')){$('#move-panel').hidden=ui.tab!=='sheet';$('#move-mode').setAttribute('aria-pressed',String(!!ui.moveMode));$('#move-mode').textContent=ui.moveMode?'移動モード：ON（Escで終了）':'選んだ欄をドラッグ';svg.classList.toggle('field-move-mode',!!ui.moveMode && ui.tab==='sheet');}
-  const p = PAGE[doc.paper.orientation];
+  syncPaperControls();
+  const p = viewportPage(doc);
   const { cols, rows } = doc.grid;
   const gw = gridWmm(), gh = rows*RH;
   const x0 = (p.w - gw)/2, y0 = (p.h - gh)/2;   // Excel の「中央に印刷」と同じ
@@ -1855,8 +1889,8 @@ function render(){
   svg.setAttribute('viewBox', '0 0 '+p.w+' '+p.h);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
   fitPreview(p);
-  document.documentElement.style.setProperty('--pw', p.w+'mm');
-  document.documentElement.style.setProperty('--ph', p.h+'mm');
+  document.documentElement.style.setProperty('--pw', PAGE[doc.paper.orientation].w+'mm');
+  document.documentElement.style.setProperty('--ph', PAGE[doc.paper.orientation].h+'mm');
   setPageRule(doc.paper.orientation);
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   svg.appendChild(el('rect',{x:0,y:0,width:p.w,height:p.h,fill:'#fff'}));
@@ -2046,6 +2080,7 @@ function drawStatus(){
   const mi = modeInfo();
   chip(mi.t, 'mode '+mi.cls);
   chip('用紙：A4 '+(doc.paper.orientation==='landscape'?'横':'縦')+' ／ '+doc.grid.cols+'列 × '+doc.grid.rows+'行 ／ 余白'+doc.paper.marginX+'mm・'+doc.paper.marginY+'mm');
+  chip('用紙内の倍率：'+(Math.round(contentScale(doc)*10000)/100)+'％');
   chip('カーソル：'+(ui.cur.c+1)+'列 '+(ui.cur.r+1)+'行');
   chip('欄：'+doc.fields.length+'個');
   if(doc.paper.showScoreBox)chip('得点欄：ドラッグで移動できます');
@@ -2060,7 +2095,8 @@ function drawStatus(){
   else chip('配点：合計'+t['合計']+'（100になっていません）','warn');
   const out = outsideCount(doc);
   if (out) chip('⚠ '+out+'か所が用紙の外にあります', 'bad');
-  else chip('1枚に収まっています');
+  else if(contentScale(doc)>fitContentScale(doc)+.00001)chip('A4の余白を超えています。「A4に合わせる」で縮小できます','warn');
+  else chip('A4・1枚に収まっています');
 }
 
 // 印刷時の用紙サイズを常に用紙の向きに合わせておく
@@ -2140,7 +2176,7 @@ function toast(msg){
 /* 画面座標 → セル */
 function pointToCell(ev){
   const r = svg.getBoundingClientRect();
-  const p = PAGE[doc.paper.orientation];
+  const p = viewportPage(doc);
   const mx = (ev.clientX - r.left) / r.width  * p.w;
   const my = (ev.clientY - r.top ) / r.height * p.h;
   const c = Math.floor(mmToGrid(mx - geo.x0)), rr = Math.floor((my - geo.y0)/RH);
@@ -3380,7 +3416,7 @@ function openInputBox(value, placeholder, avoid){
   inp.placeholder = placeholder || '';
   ui.mode = 'input';
   render();                                   // 先に描いてから位置を決める
-  const rect = svg.getBoundingClientRect(), p = PAGE[doc.paper.orientation];
+  const rect = svg.getBoundingClientRect(), p = viewportPage(doc);
   const sx = rect.width/p.w, sy = rect.height/p.h;
   const box = avoid || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
   const x0 = rect.left + window.scrollX + geo.x0*sx;
@@ -3507,6 +3543,7 @@ const CODE_STAMP = {KeyD:'D',KeyQ:'Q',KeyP:'P',KeyM:'M',KeyA:'A'};
 
 document.addEventListener('keydown', ev => {
   if (ev.defaultPrevented) return;
+  if (ev.target.closest('#paper-size-panel')) return;
   if (ev.target.closest('summary') && ['Enter',' '].includes(ev.key)) return;
   if ($('#start').style.display !== 'none') return;         // 起動画面では何もしない
   if (document.querySelector('.modal')) return;             // モーダルは各自で処理
@@ -3630,7 +3667,7 @@ document.addEventListener('keydown', ev => {
 // 得点欄はセルから独立した図形。用紙内で自由に移動し、履歴には1回だけ記録する。
 let scoreDrag=null;
 function scorePointerMM(ev){
-  const b=svg.getBoundingClientRect(),p=PAGE[doc.paper.orientation];
+  const b=svg.getBoundingClientRect(),p=viewportPage(doc);
   return {x:(ev.clientX-b.left)/b.width*p.w-geo.x0,y:(ev.clientY-b.top)/b.height*p.h-geo.y0};
 }
 function moveScoreBox(x,y){
@@ -3862,7 +3899,7 @@ const snap = v => Math.round(v / SNAP) * SNAP;
 // 画面の座標 → マス目の座標（小数）
 function pointToGrid(ev){
   const b = svg.getBoundingClientRect();
-  const p = PAGE[doc.paper.orientation];
+  const p = viewportPage(doc);
   const mx = (ev.clientX - b.left) / b.width  * p.w;
   const my = (ev.clientY - b.top ) / b.height * p.h;
   return { x: snap(mmToGrid(mx - geo.x0)), y: snap((my - geo.y0)/RH) };
@@ -4001,6 +4038,11 @@ function unionBorders(cells, c, r, w, h){
 }
 
 // 列の幅を Excel の <cols> に書き出す（同じ幅が続くところはまとめる）
+function excelColWidth(factor=1){
+  const scale=contentScale(doc),width=COL_W_EXCEL*factor;if(scale===1)return width;
+  const pixels=(Math.floor(width*7+.5)+5)*scale;
+  return pixels<=12 ? pixels/12 : (pixels-5)/7;
+}
 function colXml(cols){
   const out = [];
   let i = 0;
@@ -4009,14 +4051,14 @@ function colXml(cols){
     let j = i;
     while (j+1 < cols && colFactor(j+1) === f) j++;
     out.push('<col min="'+(i+1)+'" max="'+(j+1)+'" width="'+
-             (COL_W_EXCEL*f).toFixed(4)+'" customWidth="1"/>');
+             excelColWidth(f).toFixed(6)+'" customWidth="1"/>');
     i = j + 1;
   }
   return out.join('');
 }
 
 function vectorDrawingXml(v,id,bare=false){
-  const emu=value=>Math.round(value/SCALE*36000);
+  const emu=value=>Math.round(value/SCALE*contentScale(doc)*36000);
   let x,y,w,h,body;
   if(v.k==='rect'){
     x=emu(v.x);y=emu(v.y);w=emu(v.w);h=emu(v.h);
@@ -4029,13 +4071,13 @@ function vectorDrawingXml(v,id,bare=false){
     const width=Math.max(.8,mathTextWidth(v.text,v.size)+.6),height=ptmm(v.size)*1.4;
     x=emu(v.x-width/2);y=emu(v.y-height/2);w=emu(width);h=emu(height);
     body='<xdr:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>'+
-      '<xdr:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ja-JP" sz="'+Math.round(v.size*100)+'"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Yu Gothic"/><a:ea typeface="游ゴシック"/></a:rPr><a:t>'+xmlEsc(v.text)+'</a:t></a:r></a:p></xdr:txBody>';
+      '<xdr:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="ja-JP" sz="'+Math.round(v.size*contentScale(doc)*100)+'"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Yu Gothic"/><a:ea typeface="游ゴシック"/></a:rPr><a:t>'+xmlEsc(v.text)+'</a:t></a:r></a:p></xdr:txBody>';
   }
   const shape='<xdr:sp><xdr:nvSpPr><xdr:cNvPr id="'+id+'" name="math'+id+'"/><xdr:cNvSpPr/></xdr:nvSpPr>'+body+'</xdr:sp>';
   return bare?shape:'<xdr:absoluteAnchor><xdr:pos x="'+x+'" y="'+y+'"/><xdr:ext cx="'+w+'" cy="'+h+'"/>'+shape+'<xdr:clientData/></xdr:absoluteAnchor>';
 }
 function vectorGroupDrawingXml(d,group,nextId){
-  const r=group.rect,b=group.box || rectMM(d,r),emu=value=>Math.round(value/SCALE*36000),id=nextId++;
+  const r=group.rect,b=group.box || rectMM(d,r),emu=value=>Math.round(value/SCALE*contentScale(d)*36000),id=nextId++;
   const shapes=group.vectors.map(v=>{
     const local=v.k==='line'?{...v,x1:v.x1-b.x,y1:v.y1-b.y,x2:v.x2-b.x,y2:v.y2-b.y}:{...v,x:v.x-b.x,y:v.y-b.y};
     return vectorDrawingXml(local,nextId++,true);
@@ -4054,6 +4096,7 @@ function buildXlsx(){
   const fonts = [], borders = [], xfs = [];
   const fontKey = new Map(), borderKey = new Map(), xfKey = new Map();
   const addFont = (sz,bold) => {
+    sz*=contentScale(doc);
     const k = sz+'/'+bold;
     if (!fontKey.has(k)){ fontKey.set(k, fonts.length); fonts.push({sz,bold}); }
     return fontKey.get(k);
@@ -4083,10 +4126,10 @@ function buildXlsx(){
   const EMU = 36000;                         // 1mm
   const shapes = doc.drawings.map((d,i) => {
     // 図形の位置は縮小前のmmで置く（列幅が違っても画面と同じ場所に来るように）
-    const gx = v => Math.round(gridToMM(v) / SCALE * EMU), gy = v => Math.round(v * MM_ROW * EMU);
-    const lw = d.w==='medium' ? 19050 : 12700;
+    const gx = v => Math.round(gridToMM(v) / SCALE * contentScale(doc) * EMU), gy = v => Math.round(v * MM_ROW * contentScale(doc) * EMU);
+    const lw = Math.round((d.w==='medium' ? 19050 : 12700)*contentScale(doc));
     if (d.k==='dot'){
-      const rr = Math.round((d.w==='medium'?0.9:0.7) * EMU);
+      const rr = Math.round((d.w==='medium'?0.9:0.7) * contentScale(doc) * EMU);
       const x = gx(d.x)-rr, y = gy(d.y)-rr, sz = rr*2;
       return '<xdr:absoluteAnchor><xdr:pos x="'+x+'" y="'+y+'"/><xdr:ext cx="'+sz+'" cy="'+sz+'"/>'+
         '<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="'+(i+2)+'" name="dot'+(i+1)+'"/>'+
@@ -4142,7 +4185,7 @@ function buildXlsx(){
             xmlEsc(cellText(doc, x))+'</t></is></c>'
           : '<c r="'+ref+'" s="'+si+'"/>';
       }
-      body += '<row r="'+(r+1)+'" ht="'+ROW_H_PT+'" customHeight="1" spans="1:'+cols+'">'+rowXml+'</row>';
+      body += '<row r="'+(r+1)+'" ht="'+(ROW_H_PT*contentScale(doc))+'" customHeight="1" spans="1:'+cols+'">'+rowXml+'</row>';
     }
     const mx = (doc.paper.marginX/25.4).toFixed(6), my = (doc.paper.marginY/25.4).toFixed(6);
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -4150,7 +4193,7 @@ function buildXlsx(){
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
       '<dimension ref="A1:'+colName(cols-1)+rows+'"/>'+
       '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'+
-      '<sheetFormatPr defaultColWidth="'+COL_W_EXCEL+'" defaultRowHeight="'+ROW_H_PT+'" customHeight="1"/>'+
+      '<sheetFormatPr defaultColWidth="'+excelColWidth()+'" defaultRowHeight="'+(ROW_H_PT*contentScale(doc))+'" customHeight="1"/>'+
       '<cols>'+colXml(cols)+'</cols>'+
       '<sheetData>'+body+'</sheetData>'+
       (merges.length ? '<mergeCells count="'+merges.length+'">'+
@@ -4398,7 +4441,7 @@ function loadWork(text){
   doc = d;                                   // ここまで通ってから差し替える
   doc.grid = grid;                            // 余白と保存した列幅に合わせ直す
   normalizeColw(doc);
-  refitColumns();                               // 1枚に収まるように整える
+  if(doc.paper.contentScale===undefined)refitColumns(); // 従来ファイルのみ幅を補正する
   uid = 1;
   doc.fields.forEach(f => { const n = +String(f.id).replace('f',''); if (n>=uid) uid = n+1; });
   doc.decorations.forEach(v => { const n = +String(v.id).replace(/^v0?/,''); if (n>=uid) uid = n+1; });
@@ -4782,7 +4825,7 @@ ${guideToken('question','2')}，${guideToken('answer','太陽')}</pre><p>これ�
     kanbunHelp()+
     '<details><summary>小問の①・A・（１）を自動判別</summary><pre>1\n1，①，ア\n②，イ\n2，A，ウ\nB，エ\n3，（１），オ\n（２），カ</pre><p>最初は「問番号，小問番号，答え」。続く小問では問番号を省略できます。①・A・（１）の形を保ちます。「1①，ア」「問一A，ア」も使えます。大問を変えると親の問番号はリセットされます。数字が答えの場合は「1A，12」や「1，A，"12"」のように書くと確実です。</p></details>'+
     '<details><summary>国語の漢字・初終・完答</summary><pre>1,太陽,2,知,漢字2字\n2,はじめ～おわり,4,思\n3,ア・ウ,4,知,完答</pre><p>初終は書き抜きの初めと終わりを「～」で区切ります。完答は、複数の答えがすべて合っているときの配点です。</p></details>'+
-    '<details><summary>用紙に入りきらない・欄を調整したい</summary><p>問題が多い場合は大問間の余白、次に欄幅を自動調整します。それでも入らない場合は問題を減らすか、用紙を分けて作ってください。確認画面の各問の「細かな設定」では字数・幅・高さなどを変更できます。</p></details>'+
+    '<details><summary>用紙に入りきらない・欄を調整したい</summary><p>問題が多い場合も、作業領域を広げて全問を生成します。左の「用紙と大きさ」でA4縦・横と倍率を選べます。「A4に合わせる」で全体を用紙に収められます。確認画面の各問の「細かな設定」では字数・幅・高さなどを変更できます。</p></details>'+
     '<details><summary>手で欄を作る・キーボード操作一覧</summary>'+
     h2('① 欄を置く（数字キー・左のボタン）')+
     table(ord.map((t,i) => row(keyOf(i), fieldName(t)+
@@ -4941,19 +4984,8 @@ async function openSettings(){
   ]);
   if (!v) return;
   const layoutChanged=p.writing!==v.writing || p.orientation!==v.orientation;
-  // 用紙が小さくなる／向きが変わるとき、はみ出す欄がないか先に確かめる
-  const trial = Object.assign({}, p, { writing:v.writing, orientation:v.orientation,
-    marginX:+v.margin, marginY:(+v.margin===8) ? 9 : +v.margin });
-  const nextGrid=gridWithColumnWidths(doc,trial);
-  const ng = countOutside(doc, nextGrid);
-  if (ng){
-    const go = await ask('この設定にすると欄が用紙からはみ出します', [
-      {key:'ok', label:'', type:'none',
-       hint:ng+'か所が用紙の外に出ます。そのまま進めると印刷されなくなります。\n\n'+
-            '進めた場合も Ctrl+Z で元に戻せます。'}
-    ]);
-    if (!go) return;
-  }
+  const paperSizeChanged=layoutChanged || p.marginX!==Number(v.margin);
+  const nextGrid={...doc.grid};
   snapshot();
   p.grade = v.grade || '一'; p.term = v.term || ''; p.testName = v.testName || '';
   p.writing = v.writing; p.orientation = v.orientation; p.numberStyle = v.numberStyle;
@@ -4968,7 +5000,11 @@ async function openSettings(){
   if (autoName)  p.nameLabel = makeNameLabel(p);
   doc.grid = nextGrid;
   normalizeColw(doc);
-  refitColumns();                       // 列幅を変えていても1枚に収める
+  if(paperSizeChanged){
+    const sheet=PAGE[p.orientation];
+    p.canvasFactor=Math.max(1,gridWmm()/(sheet.w-p.marginX*2),doc.grid.rows*RH/(sheet.h-p.marginY*2));
+    p.contentScale=fitContentScale(doc);
+  }
   ui.cur = { c: Math.min(ui.cur.c, doc.grid.cols-1), r: Math.min(ui.cur.r, doc.grid.rows-1) };
   options.backupAnswers = !!v.backupAnswers; options.clearOnExit = !!v.clearOnExit;
   options.uiLarge = (v.uiLarge === 'lg');
@@ -5150,6 +5186,15 @@ function icon(type){
 }
 
 function buildTools(){
+  $('#paper-orientation').onchange=e=>setPaperOrientation(e.target.value);
+  $('#content-fit').onclick=fitContentToA4;
+  $('#content-scale').onchange=e=>setContentScale(e.target.value);
+  $('#content-scale').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+  const range=$('#content-scale-range');
+  let scaleRangeStart=null;
+  const beginScaleRange=()=>{if(scaleRangeStart===null)scaleRangeStart={value:doc.paper.contentScale};};
+  range.oninput=()=>{beginScaleRange();doc.paper.contentScale=Number(range.value)/100;render();};
+  range.onchange=()=>{const value=doc.paper.contentScale;if(scaleRangeStart!==null){if(scaleRangeStart.value===undefined)delete doc.paper.contentScale;else doc.paper.contentScale=scaleRangeStart.value;snapshot();doc.paper.contentScale=value;scaleRangeStart=null;}render();};
   $('#move-all').onclick=selectAllForMove;
   $('#move-mode').onclick=()=>{ui.moveMode=!ui.moveMode;render();toast(ui.moveMode?'欄をドラッグで移動できます。矢印キーでも動かせます。':'移動モードを終わりました');};
   document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>nudgeFields(...b.dataset.move.split(',').map(Number)));
@@ -5670,18 +5715,18 @@ function autoLabelPointSize(label,width){
 }
 function buildAutoDocument(rows, subject, currentPaper, initialTitle=''){
   rows.forEach((row,i)=>{ const error=autoRowError(row); if(error) throw new Error((i+1)+'問目：'+error); });
-  const hasGaps=new Set(rows.map(r=>r.group)).size>1;
-  const vertical=(currentPaper && currentPaper.subject===subject ? currentPaper.writing : SUBJECTS[subject].writing)==='vertical';
-  const gaps=hasGaps ? (vertical ? [1,0.8,0.6,0.4] : [1,0.5]) : [1];
-  const attempts=gaps.map(gap=>({gap,width:1}));
-  for(let percent=97.5;percent>=80;percent-=2.5) attempts.push({gap:gaps[gaps.length-1],width:percent/100});
-  let last;
-  for(const fit of attempts){
-    try { return buildAutoLayout(rows,subject,currentPaper,initialTitle,fit); }
-    catch(e){ if(!e.autoCapacity) throw e; last=e; }
+  const base=currentPaper && currentPaper.subject===subject ? canvasFactor(currentPaper) : 1;
+  let factor=base,last;
+  while(factor<=64){
+    try{
+      const d=buildAutoLayout(rows,subject,currentPaper,initialTitle,{gap:1,width:1,canvas:factor});
+      if(factor>1 || d.paper.contentScale!==undefined)d.paper.contentScale=Math.min(contentScale(d),fitContentScale(d));
+      return d;
+    }catch(e){if(!e.autoCapacity)throw e;last=e;factor=Math.min(65,factor*1.25);}
   }
-  throw new Error('大問間の空白を狭め、欄幅を80％まで調整してもA4・1枚に入りません。問題を別の用紙に分けるか、字数・幅・高さを見直してください。現在の用紙は変更しません。'+(last ? '（'+last.message+'）' : ''));
+  throw new Error('作業領域が大きすぎます。字数・幅・高さを確認してください。'+(last?last.message:''));
 }
+
 function autoFitSummary(paper){
   const fit=paper.autoFit;
   return fit ? '大問間の空白'+fit.gapPercent+'％・欄幅'+fit.widthPercent+'％' : '';
@@ -5691,7 +5736,9 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
   const beforeUid = uid;
   const d = newDoc(subject);
   uid = beforeUid;
-  if (currentPaper && currentPaper.subject === subject){ d.paper = {...currentPaper}; d.grid = computeGrid(d.paper); normalizeColw(d); }
+  if (currentPaper && currentPaper.subject === subject)d.paper={...currentPaper};
+  if(fit.canvas>1)d.paper.canvasFactor=fit.canvas;
+  d.grid=computeGrid(d.paper);normalizeColw(d);
   delete d.paper.autoFit;
   if (currentPaper) d.paper.title=currentPaper.title;
   else if (initialTitle) d.paper.title=initialTitle;
@@ -5886,7 +5933,7 @@ function openAnswerGenerator(initialTitle=''){
     completionAndDepthHelp()+
     kanbunHelp()+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">入りきらないときは、① 大問間の空白をそろえて狭める → ② 欄幅を少しずつ縮める（最大20％）の順に自動調整します。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙と大きさ」でA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],['知技','知識・技能'],['思判表','思考・判断・表現']],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
     (hadDoc?'<label class="auto-replace" hidden><input id="auto-replace" type="checkbox">現在の用紙を作り直す（手動の配置・描画も置き換えます。「戻す」で復元できます）</label>':'')+
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
