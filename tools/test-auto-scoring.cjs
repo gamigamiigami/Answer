@@ -5,7 +5,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
  const server=http.createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(fs.readFileSync(path.join(__dirname,'../answer-sheet-maker.html')));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
-  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium'});const context=await browser.newContext({viewport:{width:1366,height:950},acceptDownloads:true});
+  browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});const context=await browser.newContext({viewport:{width:1366,height:950},acceptDownloads:true});
   await context.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://127.0.0.1:'+server.address().port;await page.goto(url);
   const parsed=await page.evaluate(()=>{
@@ -15,7 +15,8 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   });
   assert.deepEqual(parsed.rows.map(r=>r.points),[3,3,0,3,8,3,3]);assert.deepEqual(parsed.rows.map(r=>r.aspect),['知技','思判表','思判表','知技','知技','思判表','知技']);
   assert.deepEqual(parsed.again.map(r=>[r.answer,r.points,r.aspect]),parsed.rows.map(r=>[r.answer,r.points,r.aspect]));
-  for(const defaults of [{points:-1},{points:1.5},{points:1001},{aspectRanges:[{from:3,to:2,aspect:'知技'}]},{aspectRanges:[{from:0,to:2,aspect:'知技'}]},{aspectRanges:[{from:1,to:3,aspect:'知技'},{from:3,to:4,aspect:'思判表'}]}])assert.equal(await page.evaluate(d=>{try{parseAutoAnswers('1,ア',d);return false;}catch{return true;}},defaults),true);
+  assert.equal(await page.evaluate(()=>parseAutoAnswers('1,ア',{points:1.5})[0].points),1.5);
+  for(const defaults of [{points:-1},{points:'abc'},{points:1001},{aspectRanges:[{from:3,to:2,aspect:'知技'}]},{aspectRanges:[{from:0,to:2,aspect:'知技'}]},{aspectRanges:[{from:1,to:3,aspect:'知技'},{from:3,to:4,aspect:'思判表'}]}])assert.equal(await page.evaluate(d=>{try{parseAutoAnswers('1,ア',d);return false;}catch{return true;}},defaults),true);
   console.log('PASS: range boundaries, explicit score/aspect overrides, zero points, compact round trip and invalid settings');
   await page.click('#btn-from-answers');await page.fill('#creation-title','基本点数のテスト');await page.click('#creation-next');
   await page.fill('#auto-base-points','3');await page.click('#auto-range-add');let range=page.locator('.auto-aspect-range').nth(0);await range.locator('[data-range="from"]').fill('1');await range.locator('[data-range="to"]').fill('3');await range.locator('[data-range="aspect"]').selectOption('知技');
@@ -28,7 +29,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.click('#auto-back');assert.equal(await page.locator('#auto-source').inputValue(),source);await page.fill('#auto-base-points','4');await page.click('#auto-tab-review');assert.deepEqual(await scores(),[4,4,4,4,4,7,4]);
   await page.click('#auto-apply');assert.deepEqual(await page.evaluate(()=>scoreTotals(doc)),{'知技':23,'思判表':8,'合計':31});
   await page.click('#btn-answer-editor');await page.click('#auto-back');assert.equal(await page.locator('#auto-base-points').inputValue(),'4');assert.equal(await page.locator('.auto-aspect-range').count(),2);
-  const compact=await page.locator('#auto-source').inputValue();assert.match(compact,/1，ア\n/);assert.ok(!compact.includes('1，ア，4'));
+  const compact=await page.locator('#auto-source').inputValue();assert.match(compact,/1￥ア\n/);assert.ok(!compact.includes('1￥ア￥4'));
   // Invalid overlapping rules preserve current sheet, and can be corrected without losing answers.
   await page.locator('.auto-aspect-range').nth(1).locator('[data-range="from"]').fill('3');await page.click('#auto-parse');assert.match(await page.locator('#auto-status').textContent(),/重複/);assert.equal(await page.evaluate(()=>scoreTotals(doc)['合計']),31);
   await page.locator('.auto-aspect-range').nth(1).locator('[data-range="from"]').fill('4');await page.click('#auto-parse');await page.check('#auto-replace');await page.click('#auto-apply');
@@ -39,7 +40,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   const fresh=await context.newPage();await fresh.goto(url);await fresh.click('#btn-from-answers');await fresh.fill('#creation-title','次のテスト');await fresh.click('#creation-next');assert.equal(await fresh.locator('#auto-base-points').inputValue(),'4');assert.equal(await fresh.locator('.auto-aspect-range').count(),2);
   await fresh.click('#auto-range-add');assert.equal(await fresh.locator('.auto-aspect-range').count(),3);await fresh.locator('.auto-aspect-range').last().locator('[data-range-remove]').click();assert.equal(await fresh.locator('.auto-aspect-range').count(),2);
   assert.deepEqual(errors,[]);
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from openpyxl import load_workbook
 from zipfile import ZipFile
 from xml.etree import ElementTree as E

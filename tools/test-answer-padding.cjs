@@ -38,7 +38,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.click('#tab-answer');
   await page.screenshot({path:path.join(output,'padding.png'),fullPage:true});
   const pending=page.waitForEvent('download');await page.click('#btn-xlsx');await(await pending).saveAs(path.join(output,'padding.xlsx'));
-  const py=spawnSync('python3',['-c',`
+  const py=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from openpyxl import load_workbook
 import sys
 b=load_workbook(sys.argv[1])
@@ -70,7 +70,7 @@ print('PASS: exported Excel has model-answer indentation without indenting blank
   assert.ok(vertical[1].topGap>1 && Math.abs(vertical[1].topGap-vertical[1].bottomGap)<.01);
   await page.click('#tab-answer');await page.screenshot({path:path.join(output,'vertical-padding.png'),fullPage:true});
   const jp=page.waitForEvent('download');await page.click('#btn-xlsx');await(await jp).saveAs(path.join(output,'vertical-padding.xlsx'));
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 import sys,json
 from openpyxl import load_workbook
 b=load_workbook(sys.argv[1]);fields=json.loads(sys.argv[2]);s=b['模範解答']

@@ -73,7 +73,7 @@ const {chromium}=require('playwright');
   assert.ok(await page.locator('.auto-modal .card').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
   await page.screenshot({path:path.join(output,'science-mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);pass('Subject editor fits a phone viewport with no JavaScript errors');
-  const py=spawnSync('python3',['-c',`
+  const py=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 import sys,warnings
 from pathlib import Path
 from openpyxl import load_workbook

@@ -5,7 +5,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
  const server=http.createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(fs.readFileSync(path.join(__dirname,'../answer-sheet-maker.html')));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
-  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:950},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:950},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));await page.goto('http://127.0.0.1:'+server.address().port);
   const parse=s=>page.evaluate(s=>parseAutoAnswers(s,{points:2,aspect:'知技'}),s);
   for(const [source,labels,answers] of [
@@ -34,7 +34,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   assert.deepEqual(await page.locator('[data-row] [data-k="subLabel"]').evaluateAll(ns=>ns.map(n=>n.value)),['①','②','A','B','（１）','（２）']);
   assert.deepEqual(await page.locator('[data-row] [data-k="label"]').evaluateAll(ns=>ns.map(n=>n.value)),['問一','問一','問二','問二','問三','問三']);
   // Dropdown edits retain shape, and source reparses as the same subquestion.
-  await page.locator('[data-row="0"] [data-k="subLabel"]').selectOption('③');assert.match(await page.locator('#auto-source').inputValue(),/1，③，ア/);
+  await page.locator('[data-row="0"] [data-k="subLabel"]').selectOption('③');assert.match(await page.locator('#auto-source').inputValue(),/1￥③￥ア/);
   await page.locator('[data-row="0"] [data-k="subLabel"]').selectOption('①');await page.click('#auto-back');await page.click('#auto-parse');
   await page.screenshot({path:path.join(output,'review.png'),fullPage:true});await page.click('#auto-apply');
   assert.equal(await page.evaluate(()=>doc.decorations.filter(d=>d.questionHeading).length),3);
@@ -49,7 +49,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(output,'horizontal.xlsx'));
   await page.click('#btn-answer-editor');await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('.auto-modal .card').evaluate(n=>n.scrollWidth<=n.clientWidth));await page.screenshot({path:path.join(output,'mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from openpyxl import load_workbook
 import sys
 for p in sys.argv[1:]:

@@ -4,7 +4,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'answer-completion-'));
  const server=http.createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(fs.readFileSync(path.join(__dirname,'../answer-sheet-maker.html')));});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
-  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:1000},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});const page=await browser.newPage({viewport:{width:1366,height:1000},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));await page.goto('http://127.0.0.1:'+server.address().port);
   const source='1\n完答開始，2，知\n問五①，ア\n②，イ\n完答終了\n問一（１）A，ウ\nB，エ\nC，オ';
   const result=await page.evaluate(source=>{const d={points:2,aspect:'知技'},rows=parseAutoAnswers(source,d),doc=buildAutoDocument(rows,'国語');return {rows,total:scoreTotals(doc),source:autoRowsSource(rows,d),again:parseAutoAnswers(autoRowsSource(rows,d),d)};},source);
@@ -41,7 +41,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.evaluate(source=>{doc=buildAutoDocument(parseAutoAnswers(source,{points:2,aspect:'知技',subject:'数学'}),'数学');startApp();},source);
   dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(out,'horizontal.xlsx'));await page.click('#btn-answer-editor');await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('.auto-modal .card').evaluate(n=>n.scrollWidth<=n.clientWidth));await page.screenshot({path:path.join(out,'mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from openpyxl import load_workbook
 from zipfile import ZipFile
 from xml.etree import ElementTree as E

@@ -58,7 +58,7 @@ const {chromium}=require('playwright');
     await page.fill('#graph-yMin','-1');await page.fill('#graph-yMax','8');
     assert.ok(await page.locator('#graph-preview line').count()>100);
     assert.equal((await page.locator('#graph-preview').textContent()).includes('/'),false);
-    assert.ok((await page.locator('#graph-preview').textContent()).includes('²'));
+    assert.ok(await page.locator('#graph-preview text').evaluateAll(nodes=>nodes.some(n=>n.textContent==='2' && +n.getAttribute('font-size')<2.5)));
     await page.screenshot({path:path.join(output,'graph-editor.png')});
     await page.click('#graph-save');await page.click('#auto-apply');
     assert.deepEqual(await page.evaluate(()=>doc.fields.map(f=>f.type)),[7,7,7,6]);
@@ -115,7 +115,7 @@ const {chromium}=require('playwright');
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
     pass('The graph editor works on a phone width and in dark mode, without JavaScript errors or network requests');
 
-    const check=spawnSync('python3',['-c',`
+    const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from zipfile import ZipFile
 from xml.etree import ElementTree as E
 from openpyxl import load_workbook
@@ -129,7 +129,7 @@ with ZipFile(p) as z:
  assert len(model.findall('.//xdr:sp',ns))>len(blank.findall('.//xdr:sp',ns))+500
  assert not any(n.text in ['²','1','2'] for n in blank.findall('.//a:t',ns) if n.text=='²')
  texts=[n.text for n in model.findall('.//a:t',ns)]
- assert '²' in texts and '/' not in texts
+ assert '2' in texts and '/' not in texts
  for drawing in [blank,model]:
   ids=[n.attrib['id'] for n in drawing.findall('.//xdr:cNvPr',ns)]
   assert len(ids)==len(set(ids))

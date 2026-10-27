@@ -5,7 +5,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
  const server=http.createServer((q,r)=>{r.setHeader('Content-Type','text/html; charset=utf-8');r.end(fs.readFileSync(path.join(__dirname,'../answer-sheet-maker.html')));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
-  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium'});
+  browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});
   const page=await browser.newPage({viewport:{width:1366,height:950},acceptDownloads:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>Object.defineProperty(window,'showSaveFilePicker',{value:undefined,configurable:true}));
   await page.goto('http://127.0.0.1:'+server.address().port);
@@ -38,7 +38,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   assert.equal(await page.evaluate(()=>fieldFromCode('Digit0')),10);
   assert.equal(await page.evaluate(()=>{try{parseKanbun('不/ズ/レ/一');return false;}catch{return true;}}),true);
   assert.deepEqual(errors,[]);
-  const check=spawnSync('python3',['-c',`
+  const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 from zipfile import ZipFile
 from xml.etree import ElementTree as E
 from openpyxl import load_workbook
