@@ -706,7 +706,7 @@ const layoutScale=p=>Math.max(1,Math.min(4,Number(p.layoutScale) || 1));
 const printableW = d => referenceWidth(d.paper)*canvasFactor(d.paper)/layoutScale(d.paper);
 function viewportPage(d){const p=PAGE[d.paper.orientation],scale=contentScale(d);return {w:p.w/scale,h:p.h/scale};}
 function fitContentScale(d){
-  const p=PAGE[d.paper.orientation],width=docColumnMM(d,d.grid.cols),height=d.grid.rows*RH;
+  const p=PAGE[d.paper.orientation],width=docColumnMM(d,d.grid.cols),height=docRowMM(d,d.grid.rows);
   return Math.max(.01,Math.min(4,(p.w-d.paper.marginX*2)/width,(p.h-d.paper.marginY*2)/height));
 }
 function setContentScale(value){
@@ -719,7 +719,7 @@ function setPaperOrientation(orientation){
   if(!PAGE[orientation] || orientation===doc.paper.orientation)return;
   snapshot();doc.paper.orientation=orientation;
   // 配置を保持し、向きの変更で解答欄を消さない。
-  const p=PAGE[orientation];doc.paper.canvasFactor=Math.max(1,docColumnMM(doc,doc.grid.cols)/(p.w-doc.paper.marginX*2),doc.grid.rows*RH/(p.h-doc.paper.marginY*2));
+  const p=PAGE[orientation];doc.paper.canvasFactor=Math.max(1,docColumnMM(doc,doc.grid.cols)/(p.w-doc.paper.marginX*2),docRowMM(doc,doc.grid.rows)/(p.h-doc.paper.marginY*2));
   doc.paper.contentScale=fitContentScale(doc);render();
 }
 function syncPaperControls(){
@@ -751,6 +751,20 @@ const referenceHeader=p=>p.writing==='vertical' && p.headerLayout!=='compact';
 const referenceWidth=p=>Math.min(PAGE[p.orientation].w-p.marginX*2,referenceHeader(p)?REFERENCE_HEADER.width:Infinity);
 const headerWidthExtra=p=>referenceHeader(p)?REFERENCE_HEADER.nameWidth+REFERENCE_HEADER.titleWidth-2*CW+(REFERENCE_HEADER.width-24*CW-REFERENCE_HEADER.nameWidth-REFERENCE_HEADER.titleWidth):0;
 const referenceFirstCol=()=>1+(REFERENCE_HEADER.width-24*CW-REFERENCE_HEADER.nameWidth-REFERENCE_HEADER.titleWidth)/CW;
+// Keep the reference's 12.95pt first row and 24pt bottom margin.
+// The last margin is split across rows 48/49 so existing field coordinates stay valid.
+const referenceRows=d=>referenceHeader(d.paper) && d.paper.orientation==='landscape' && d.grid.rows===49;
+function rowHeightPt(d,r){return referenceRows(d)?(r===0?12.95:r===48?10.5:ROW_H_PT):ROW_H_PT;}
+function docRowMM(d,r){
+  if(!referenceRows(d))return r*RH;
+  return r*RH+ptmm(12.95-ROW_H_PT)*Math.max(0,Math.min(1,r))+ptmm(10.5-ROW_H_PT)*Math.max(0,Math.min(1,r-48));
+}
+const rowSpanMM=(d,r,h)=>docRowMM(d,r+h)-docRowMM(d,r);
+function rowAtMM(d,y){
+  if(!referenceRows(d))return y/RH;
+  const first=docRowMM(d,1),last=docRowMM(d,48);
+  return y<first?y/first:y<last?1+(y-first)/RH:48+(y-last)/ptmm(10.5);
+}
 function normalizeColw(d){
   const n = d.grid.cols;
   const a = Array.isArray(d.colw) ? d.colw.slice(0, n) : [];
@@ -838,11 +852,11 @@ function columnAtMM(d,x){
 }
 function scoreBoxBounds(d){
   if(!d.paper.showScoreBox || d.paper.scoreMode==='none')return null;
-  const vertical=d.paper.writing==='vertical',gw=docColumnMM(d,d.grid.cols),gh=d.grid.rows*RH;
+  const vertical=d.paper.writing==='vertical',gw=docColumnMM(d,d.grid.cols),gh=docRowMM(d,d.grid.rows);
   const w=(vertical?V_SCORE_W:H_SCORE_W)*CW,h=(vertical?V_SCORE_H:H_SCORE_H)*RH;
   const position=d.paper.scoreBoxPosition;
   const x=position && Number.isFinite(position.x)?position.x:docColumnMM(d,d.grid.cols-(vertical?5:H_SCORE_W));
-  const y=position && Number.isFinite(position.y)?position.y:(d.grid.rows-(vertical?V_SCORE_TOP:H_SCORE_H))*RH;
+  const y=position && Number.isFinite(position.y)?position.y:docRowMM(d,d.grid.rows-(vertical?V_SCORE_TOP:H_SCORE_H));
   return {x:Math.max(0,Math.min(gw-w,x)),y:Math.max(0,Math.min(gh-h,y)),w,h};
 }
 function scoreBoxVectors(d){
@@ -879,12 +893,13 @@ function headerLayout(d){
     // The reference merges AA2:AA43 (center) and Z2:Z47 (bottom).
     const compact=d.paper.headerLayout==='compact';
     const put=(col,str,size,height,valign)=>{
-      const step=compact?1.12:1;
+      // Native Excel/Yu Gothic stacked text uses 30pt / 25.5pt line boxes.
+      const title=col===cols-1,step=compact?1.12:(title?30/18:25.5/16);
       const maxRows=compact?rows-2:Math.min(rows-2,height);
       const fitSize=Math.min(size,(maxRows*RH-1)/Math.max(1,Array.from(str).length)/ptmm(1)/step);
       const actualSize=Math.max(8,Math.floor(fitSize*2)/2),fs=ptmm(actualSize);
       const usedRows=compact?Math.min(rows-1,Math.ceil((1.05+fs+fs*step*Math.max(0,Array.from(str).length-1))/RH)):maxRows;
-      texts.push({c:col,r:1,t:str,size:actualSize,bold:true,align:'center',mg:{w:1,h:usedRows},stack:true,stackStep:step,valign:compact?'top':valign});
+      texts.push({c:col,r:1,t:str,size:actualSize,bold:true,align:'center',mg:{w:1,h:usedRows},stack:true,stackStep:step,referenceStack:!compact,baselinePt:compact?0:actualSize*(title?-.5/18:.5/16),valign:compact?'top':valign});
       mark(col,0,1,usedRows+1);
     };
     put(cols-1,d.paper.title,d.paper.titlePt || 18,REFERENCE_HEADER.titleRows,'center');
@@ -903,7 +918,7 @@ function headerLayout(d){
 
   }
   const sb=scoreBoxBounds(d);
-  if(sb){const c0=columnAtMM(d,sb.x),c1=columnAtMM(d,sb.x+sb.w-.0001);mark(c0,Math.floor(sb.y/RH),c1-c0+1,Math.ceil((sb.y+sb.h)/RH)-Math.floor(sb.y/RH));}
+  if(sb){const c0=columnAtMM(d,sb.x),c1=columnAtMM(d,sb.x+sb.w-.0001);mark(c0,Math.floor(rowAtMM(d,sb.y)),c1-c0+1,Math.ceil(rowAtMM(d,sb.y+sb.h))-Math.floor(rowAtMM(d,sb.y)));}
 
   return { texts, borders, reserved };
 }
@@ -1252,7 +1267,7 @@ function graphRange(value={}){
   return range;
 }
 function docColumnMM(d,c){let mm=0;for(let i=0;i<c;i++) mm+=CW*((d.colw || [])[i] || 1);return mm;}
-function rectMM(d,r){return {x:docColumnMM(d,r.c),y:r.r*RH,w:docColumnMM(d,r.c+r.w)-docColumnMM(d,r.c),h:r.h*RH};}
+function rectMM(d,r){return {x:docColumnMM(d,r.c),y:docRowMM(d,r.r),w:docColumnMM(d,r.c+r.w)-docColumnMM(d,r.c),h:rowSpanMM(d,r.r,r.h)};}
 function mathTokens(text){
   const source=String(text),power='(?:\\^(?:\\{[^{}\\n]+\\}|\\([^()\\n]+\\)|[+-]?(?:\\d+(?:\\.\\d+)?|[a-zA-Z])))?',atom='(?:\\([^()\\n]+\\)|\\d+(?:\\.\\d+)?|[abnxy])'+power;
   const re=new RegExp('('+atom+')\\s*\\/\\s*('+atom+')','g');
@@ -1512,10 +1527,10 @@ async function addImageFromFile(file){
   if(!file)return;if(!/^image\/(png|jpeg|webp)$/.test(file.type))return toast('PNG・JPEG・WebPの画像を選んでください。');if(file.size>12*1024*1024)return toast('画像は12MB以内で選んでください。');
   const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
   const img=new Image();img.src=data;await img.decode();const canvas=document.createElement('canvas'),factor=Math.min(1,2400/Math.max(img.width,img.height));canvas.width=Math.round(img.width*factor);canvas.height=Math.round(img.height*factor);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-  const w=Math.min(80,docColumnMM(doc,doc.grid.cols)-10,(doc.grid.rows*RH-30)*img.width/img.height),h=w*img.height/img.width;
+  const w=Math.min(80,docColumnMM(doc,doc.grid.cols)-10,(docRowMM(doc,doc.grid.rows)-30)*img.width/img.height),h=w*img.height/img.width;
   const y=Math.max(15,contentOrigin(doc).r*RH,...doc.fields.flatMap(f=>f.rects.map(r=>(r.r+r.h)*RH+3)));
   doc.images=doc.images || [];snapshot(['images','paper','grid','colw']);
-  if(y+h>doc.grid.rows*RH){doc.grid.rows=Math.ceil((y+h+2)/RH/CHAR_ROWS)*CHAR_ROWS;doc.paper.canvasFactor=Math.max(canvasFactor(doc.paper),doc.grid.rows*RH/(PAGE[doc.paper.orientation].h-2*doc.paper.marginY)*layoutScale(doc.paper));doc.paper.contentScale=Math.min(contentScale(doc),fitContentScale(doc));}
+  if(y+h>docRowMM(doc,doc.grid.rows)){doc.grid.rows=Math.ceil((y+h+2)/RH/CHAR_ROWS)*CHAR_ROWS;doc.paper.canvasFactor=Math.max(canvasFactor(doc.paper),docRowMM(doc,doc.grid.rows)/(PAGE[doc.paper.orientation].h-2*doc.paper.marginY)*layoutScale(doc.paper));doc.paper.contentScale=Math.min(contentScale(doc),fitContentScale(doc));}
   doc.images.push({id:'img'+Date.now(),name:file.name,data:canvas.toDataURL('image/png'),x:5,y,w,h,answerOnly:ui.tab==='answer'});render();editImages();
 }
 async function addGeometricFigure(){
@@ -1540,7 +1555,7 @@ async function editImages(){
     {key:'w',label:'幅（mm）',type:'number',min:1,value:item.w,hint:'高さは画像の縦横比を保って調整。数値は倍率100％時の作業領域内の寸法です。'},
     {key:'answerOnly',label:'模範解答だけに表示',type:'check',value:item.answerOnly},{key:'remove',label:'この画像を削除',type:'check',value:false}
   ]);if(!v)return;const x=+v.x,y=+v.y,w=+v.w,h=w*item.h/item.w;
-  if(!v.remove && (![x,y,w,h].every(Number.isFinite)||x<0||y<0||w<1||x+w>docColumnMM(doc,doc.grid.cols)||y+h>doc.grid.rows*RH))return toast('画像が作業領域に収まる位置・幅にしてください。');
+  if(!v.remove && (![x,y,w,h].every(Number.isFinite)||x<0||y<0||w<1||x+w>docColumnMM(doc,doc.grid.cols)||y+h>docRowMM(doc,doc.grid.rows)))return toast('画像が作業領域に収まる位置・幅にしてください。');
   snapshot(['images']);if(v.remove)doc.images=images.filter(i=>i!==item);else Object.assign(item,{x,y,w,h,answerOnly:!!v.answerOnly});render();
 }
 function imageDrawingXml(item,id,rel,d){
@@ -2103,7 +2118,7 @@ function buildCells(d, withAnswers){
   head.texts.forEach(t => {
     put(t.c,t.r,t.t,t.size,t.bold,t.align);
     if (t.mg) merge(t.c, t.r, t.mg.w, t.mg.h);
-    if(t.stack){get(t.c,t.r).stack=true;get(t.c,t.r).valign=t.valign || 'center';get(t.c,t.r).stackStep=t.stackStep || 1;}
+    if(t.stack){get(t.c,t.r).stack=true;get(t.c,t.r).valign=t.valign || 'center';get(t.c,t.r).stackStep=t.stackStep || 1;get(t.c,t.r).referenceStack=!!t.referenceStack;get(t.c,t.r).baselinePt=t.baselinePt || 0;}
   });
 
   // (2) 欄
@@ -2329,7 +2344,7 @@ function render(){
   syncPaperControls();
   const p = viewportPage(doc);
   const { cols, rows } = doc.grid;
-  const gw = gridWmm(), gh = rows*RH;
+  const gw = gridWmm(), gh = docRowMM(doc,rows);
   const x0 = (p.w - gw)/2, y0 = (p.h - gh)/2;   // Excel の「中央に印刷」と同じ
   geo = { x0, y0, pw:p.w, ph:p.h, gw };
   const X = c => x0 + colXmm(c);                // 列の左端（mm）
@@ -2353,30 +2368,30 @@ function render(){
   // 下地：うすいマス目（印刷されない案内線）
   const guide = el('g',{stroke:'#e3e8ee','stroke-width':0.08,'class':'guide'});
   for (let c=0;c<=cols;c++) guide.appendChild(el('line',{x1:X(c),y1:y0,x2:X(c),y2:y0+gh}));
-  for (let r=0;r<=rows;r+=CHAR_ROWS) guide.appendChild(el('line',{x1:x0,y1:y0+r*RH,x2:x0+gw,y2:y0+r*RH}));
+  for (let r=0;r<=rows;r+=CHAR_ROWS) guide.appendChild(el('line',{x1:x0,y1:y0+docRowMM(doc,r),x2:x0+gw,y2:y0+docRowMM(doc,r)}));
   svg.appendChild(guide);
 
   // 予約領域（ヘッダー）の淡い塗り
   const resg = el('g',{fill:'#f2f5f8','class':'guide'});
   ui.reserved.forEach(k=>{
     const [c,r] = k.split(',').map(Number);
-    resg.appendChild(el('rect',{x:X(c),y:y0+r*RH,width:W(c),height:RH}));
+    resg.appendChild(el('rect',{x:X(c),y:y0+docRowMM(doc,r),width:W(c),height:rowSpanMM(doc,r,1)}));
   });
   svg.appendChild(resg);
 
   // 塗りつぶし（印刷にも出る）
   const fillg = el('g',{});
   cells.forEach(x => { if (x.fill)
-    fillg.appendChild(el('rect',{x:X(x.c), y:y0+x.r*RH, width:W(x.c), height:RH, fill:'#'+x.fill})); });
+    fillg.appendChild(el('rect',{x:X(x.c), y:y0+docRowMM(doc,x.r), width:W(x.c), height:rowSpanMM(doc,x.r,1), fill:'#'+x.fill})); });
   svg.appendChild(fillg);
 
   // 選択範囲
   if (ui.sel){
-    svg.appendChild(el('rect',{x:X(ui.sel.c), y:y0+ui.sel.r*RH, 'class':'guide',
-      width:W(ui.sel.c, ui.sel.w), height:ui.sel.h*RH, fill:'#1a6fd4', 'fill-opacity':0.12}));
+    svg.appendChild(el('rect',{x:X(ui.sel.c), y:y0+docRowMM(doc,ui.sel.r), 'class':'guide',
+      width:W(ui.sel.c, ui.sel.w), height:rowSpanMM(doc,ui.sel.r,ui.sel.h), fill:'#1a6fd4', 'fill-opacity':0.12}));
   }
   ui.extra.forEach(p=>{
-    svg.appendChild(el('rect',{x:X(p.c), y:y0+p.r*RH, width:W(p.c), height:RH,
+    svg.appendChild(el('rect',{x:X(p.c), y:y0+docRowMM(doc,p.r), width:W(p.c), height:rowSpanMM(doc,p.r,1),
       'class':'guide', fill:'#1a6fd4','fill-opacity':0.18}));
   });
 
@@ -2384,16 +2399,16 @@ function render(){
   // 罫線
   const lines = el('g',{'stroke-linecap':'square'});
   cells.forEach(x=>{
-    const CX = X(x.c), CXW = W(x.c), Y = y0 + x.r*RH;
+    const CX = X(x.c), CXW = W(x.c), Y = y0 + docRowMM(doc,x.r);
     const seg = (side) => {
       const st = x.b[side]; if (!st) return;
       const v = BORDER_VIEW[st];
       const a = {stroke:'#000','stroke-width':v.w};
       if (v.dash) a['stroke-dasharray'] = v.dash;
       if (side==='top')    Object.assign(a,{x1:CX,y1:Y,x2:CX+CXW,y2:Y});
-      if (side==='bottom') Object.assign(a,{x1:CX,y1:Y+RH,x2:CX+CXW,y2:Y+RH});
-      if (side==='left')   Object.assign(a,{x1:CX,y1:Y,x2:CX,y2:Y+RH});
-      if (side==='right')  Object.assign(a,{x1:CX+CXW,y1:Y,x2:CX+CXW,y2:Y+RH});
+      if (side==='bottom') Object.assign(a,{x1:CX,y1:Y+rowSpanMM(doc,x.r,1),x2:CX+CXW,y2:Y+rowSpanMM(doc,x.r,1)});
+      if (side==='left')   Object.assign(a,{x1:CX,y1:Y,x2:CX,y2:Y+rowSpanMM(doc,x.r,1)});
+      if (side==='right')  Object.assign(a,{x1:CX+CXW,y1:Y,x2:CX+CXW,y2:Y+rowSpanMM(doc,x.r,1)});
       if (v.double){                                   // 二重線は2本引く
         const dx = (side==='left'||side==='right') ? 0.2 : 0;
         const dy = (side==='top'||side==='bottom') ? 0.2 : 0;
@@ -2416,21 +2431,24 @@ function render(){
     const fs = ptmm(x.size);
     const mw = x.mg ? x.mg.w : 1;
     const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
-    const a = { y: y0 + x.r*RH + mh*RH/2, 'font-size':fs, fill:'#000',
+    const a = { y: y0 + docRowMM(doc,x.r) + rowSpanMM(doc,x.r,mh)/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
-    if (x.valign==='top') a.y = y0 + x.r*RH + 0.55 + fs/2;
+    if (x.valign==='top') a.y = y0 + docRowMM(doc,x.r) + 0.55 + fs/2;
     if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
     else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
     else { a.x = X(x.c) + W(x.c, mw)/2; a['text-anchor']='middle'; }
     if (x.bold) a['font-weight']='bold';
     const t = el('text',a);
-    if(x.lines){const id='cell-clip-'+renderSerial+'-'+x.c+'-'+x.r,clip=el('clipPath',{id});clip.appendChild(el('rect',{x:X(x.c)+.35,y:y0+x.r*RH+.3,width:Math.max(.1,W(x.c,mw)-.7),height:Math.max(.1,mh*RH-.6)}));texts.appendChild(clip);t.setAttribute('clip-path','url(#'+id+')');}
+    if(x.lines){const id='cell-clip-'+renderSerial+'-'+x.c+'-'+x.r,clip=el('clipPath',{id});clip.appendChild(el('rect',{x:X(x.c)+.35,y:y0+docRowMM(doc,x.r)+.3,width:Math.max(.1,W(x.c,mw)-.7),height:Math.max(.1,rowSpanMM(doc,x.r,mh)-.6)}));texts.appendChild(clip);t.setAttribute('clip-path','url(#'+id+')');}
     if(x.lines){x.lines.forEach((line,i)=>{const span=el('tspan',{x:a.x,y:a.y+(i-(x.lines.length-1)/2)*fs*1.35});span.textContent=line;t.appendChild(span);});}
     else if (x.stack){
       const letters = Array.from(x.t), step = fs*(x.stackStep || 1.12);
-      if(x.valign==='bottom')a.y=y0+(x.r+mh)*RH-fs/2;
+      if(x.valign==='bottom')a.y=y0+docRowMM(doc,x.r+mh)-(x.referenceStack?fs:fs/2);
+      a.y+=ptmm(x.baselinePt || 0);
       letters.forEach((ch,i) => {
-        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step});
+        // Excel's vertical parentheses use a different origin from horizontal glyphs.
+        const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
+        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
     } else t.textContent = cellText(doc, x);
@@ -2443,7 +2461,7 @@ function render(){
 
   // 描画（直線・点）
   const dg = el('g',{fill:'none'});
-  const gx = v => x0 + gridToMM(v), gy = v => y0 + v*RH;
+  const gx = v => x0 + gridToMM(v), gy = v => y0 + docRowMM(doc,v);
   doc.drawings.filter(d=>!d.answerOnly || ui.tab==='answer' || ui.tab==='draw').forEach(d => {
     const wmm = d.w==='medium' ? 0.5 : 0.26;
     if (d.k==='line')
@@ -2476,7 +2494,7 @@ function render(){
       const sz = Math.min(SZ, cw - 0.4, RH - 0.3);
       if (sz < 0.8) return;
       const x = X(t.c) + Math.min(0.3, (cw - sz)/2);
-      const y = y0 + t.r*RH + (RH - sz)/2;
+      const y = y0 + docRowMM(doc,t.r) + (RH - sz)/2;
       cg.appendChild(el('rect',{x, y, width:sz, height:sz, rx:0.7,
         fill: checked ? '#3b86c4' : '#ffffff', 'fill-opacity': checked ? 0.95 : 0.9,
         stroke: checked ? '#2c6ea8' : '#8d9aa7', 'stroke-width':0.3}));
@@ -2506,7 +2524,7 @@ function render(){
   renderFieldMovePreview();
 
   // カーソル
-  const cu = el('rect',{x:X(ui.cur.c), y:y0+ui.cur.r*RH, width:W(ui.cur.c), height:RH, 'class':'guide',
+  const cu = el('rect',{x:X(ui.cur.c), y:y0+docRowMM(doc,ui.cur.r), width:W(ui.cur.c), height:rowSpanMM(doc,ui.cur.r,1), 'class':'guide',
     fill:'none', stroke: ui.mode==='input' ? '#12a05a' : '#1a6fd4', 'stroke-width':0.45});
   svg.appendChild(cu);
 
@@ -2617,7 +2635,7 @@ function countOutside(d, grid){
     const off = (x,y) => x < 0 || y < 0 || x > cols || y > rows;
     if (g.k === 'line' ? (off(g.x1,g.y1) || off(g.x2,g.y2)) : off(g.x,g.y)) n++;
   });
-  (d.images || []).forEach(im=>{if(im.x<0 || im.y<0 || im.x+im.w>docColumnMM(d,cols)+.01 || im.y+im.h>rows*RH+.01)n++;});
+  (d.images || []).forEach(im=>{if(im.x<0 || im.y<0 || im.x+im.w>docColumnMM(d,cols)+.01 || im.y+im.h>docRowMM(d,rows)+.01)n++;});
   return n;
 }
 
@@ -2633,7 +2651,7 @@ function pointToCell(ev){
   const p = viewportPage(doc);
   const mx = (ev.clientX - r.left) / r.width  * p.w;
   const my = (ev.clientY - r.top ) / r.height * p.h;
-  const c = Math.floor(mmToGrid(mx - geo.x0)), rr = Math.floor((my - geo.y0)/RH);
+  const c = Math.floor(mmToGrid(mx - geo.x0)), rr = Math.floor(rowAtMM(doc,my-geo.y0));
   if (c<0||rr<0||c>=doc.grid.cols||rr>=doc.grid.rows) return null;
   return {c, r:rr};
 }
@@ -3300,7 +3318,7 @@ function movementError(plan,dc,dr){
   for(const g of p.drawings){const pts=g.k==='line'?[[g.x1,g.y1],[g.x2,g.y2]]:[[g.x,g.y]];if(pts.some(([x,y])=>x+dc<0 || y+dr<0 || x+dc>doc.grid.cols || y+dr>doc.grid.rows))return '一緒に動かす図が用紙からはみ出します。';}
   const used=new Map();const mark=(b,reason)=>{for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)used.set(c+','+r,reason);};
   const header=headerLayout(doc);header.reserved.forEach(k=>used.set(k,'タイトル・氏名欄または得点欄に重なります。空いている位置へ動かしてください。'));
-  const sb=scoreBoxBounds(doc);if(sb){const c=columnAtMM(doc,sb.x),last=columnAtMM(doc,sb.x+sb.w-.0001),r=Math.floor(sb.y/RH);mark({c,r,w:last-c+1,h:Math.ceil((sb.y+sb.h)/RH)-r},'得点欄に重なります。得点欄を先に別の場所へ移せます。');}
+  const sb=scoreBoxBounds(doc);if(sb){const c=columnAtMM(doc,sb.x),last=columnAtMM(doc,sb.x+sb.w-.0001),r=Math.floor(rowAtMM(doc,sb.y));mark({c,r,w:last-c+1,h:Math.ceil(rowAtMM(doc,sb.y+sb.h))-r},'得点欄に重なります。得点欄を先に別の場所へ移せます。');}
   doc.fields.filter(f=>!plan.fieldIds.includes(f.id)).forEach(f=>[...f.rects,...(f.label?[f.label]:[])].forEach(b=>mark(b,'移動しない解答欄に重なります。「解答欄を全部選ぶ」で一緒に動かせます。')));
   doc.decorations.filter(d=>!plan.decoIds.includes(d.id)).forEach(d=>mark(d,'移動しない枠・見出しに重なります。見出しも含めて選んでください。'));
   for(const [key,v] of Object.entries(doc.texts)){if(plan.textKeys.includes(key))continue;const [c,r]=key.split(',').map(Number);mark(textRect(doc,c,r,v),'移動しない番号・文字に重なります。番号も含めて選んでください。');}
@@ -3336,9 +3354,9 @@ function pasteCells(){
 function placeScoreBelow(where){
   if(!needSheet('得点欄を配置できません'))return;const sb=scoreBoxBounds(doc);if(!sb)return toast('設定で観点別得点枠を表示してください。');
   let x,y;if(where==='name'){
-    if(doc.paper.writing!=='vertical')return toast('横書きでは「得点欄を欄の下へ」を使ってください。');const name=headerLayout(doc).texts.find(t=>t.c===doc.grid.cols-2);x=docColumnMM(doc,doc.grid.cols-1)-sb.w;y=(name.r+name.mg.h)*RH;
+    if(doc.paper.writing!=='vertical')return toast('横書きでは「得点欄を欄の下へ」を使ってください。');const name=headerLayout(doc).texts.find(t=>t.c===doc.grid.cols-2);x=docColumnMM(doc,doc.grid.cols-1)-sb.w;y=docRowMM(doc,name.r+name.mg.h);
   }else{const p=movePlanParts(collectMovePlan(true));if(!p.bounds)return toast('先に解答欄を作ってください。');x=docColumnMM(doc,p.bounds.c+p.bounds.w)-sb.w;y=(p.bounds.r+p.bounds.h)*RH+1;}
-  x=Math.max(0,Math.min(gridWmm()-sb.w,x));if(y+sb.h>doc.grid.rows*RH+.001)return toast('下の空きが足りません。解答欄を上へ動かすと置けます。');
+  x=Math.max(0,Math.min(gridWmm()-sb.w,x));if(y+sb.h>docRowMM(doc,doc.grid.rows)+.001)return toast('下の空きが足りません。解答欄を上へ動かすと置けます。');
   const box={x,y,w:sb.w,h:sb.h},over=(a,b)=>a.x<b.x+b.w-.0001 && b.x<a.x+a.w-.0001 && a.y<b.y+b.h-.0001 && b.y<a.y+a.h-.0001;
   const occupied=doc.fields.flatMap(f=>[...f.rects,...(f.label?[f.label]:[])]).concat(doc.decorations,headerLayout(doc).texts.map(t=>({c:t.c,r:t.r,w:(t.mg || {}).w || 1,h:(t.mg || {}).h || 1})));
   if(occupied.some(r=>over(box,rectMM(doc,r))))return toast('この位置には欄か見出しがあります。先に解答欄を上・左へ動かすと置けます。');
@@ -3885,13 +3903,13 @@ function openInputBox(value, placeholder, avoid){
   if (doc.paper.writing === 'vertical'){
     // 欄の左どなりに出す。左に入らなければ右どなり
     left = x0 + colXmm(box.c)*sx - bw - 8;
-    top  = y0 + (ui.cur.r*RH)*sy;
+    top  = y0 + docRowMM(doc,ui.cur.r)*sy;
     if (left < rect.left + 4) left = x0 + colXmm(box.c + box.w)*sx + 8;
   } else {
     // 欄の下に出す。下に入らなければ上
     left = x0 + colXmm(box.c)*sx;
-    top  = y0 + ((box.r + box.h)*RH)*sy + 6;
-    if (top + bh > window.innerHeight - 8) top = y0 + (box.r*RH)*sy - bh - 6;
+    top  = y0 + docRowMM(doc,box.r+box.h)*sy + 6;
+    if (top + bh > window.innerHeight - 8) top = y0 + docRowMM(doc,box.r)*sy - bh - 6;
   }
   inp.style.left = Math.max(4, Math.min(left, window.innerWidth - bw - 8)) + 'px';
   inp.style.top  = Math.max(4, top) + 'px';
@@ -4130,7 +4148,7 @@ function scorePointerMM(ev){
 }
 function moveScoreBox(x,y){
   const b=scoreBoxBounds(doc);if(!b)return;
-  doc.paper.scoreBoxPosition={x:Math.round(Math.max(0,Math.min(gridWmm()-b.w,x))*100)/100,y:Math.round(Math.max(0,Math.min(doc.grid.rows*RH-b.h,y))*100)/100};
+  doc.paper.scoreBoxPosition={x:Math.round(Math.max(0,Math.min(gridWmm()-b.w,x))*100)/100,y:Math.round(Math.max(0,Math.min(docRowMM(doc,doc.grid.rows)-b.h,y))*100)/100};
   render();
 }
 svg.addEventListener('pointerdown',ev=>{
@@ -4172,9 +4190,9 @@ function renderFieldMovePreview(){
   if(!fieldMoveDrag || !fieldMoveDrag.current)return;
   const {plan,current}=fieldMoveDrag,parts=movePlanParts(plan),color=current.error?'#b04632':'#236548';
   const g=el('g',{'class':'guide field-move-preview','pointer-events':'none'});
-  parts.boxes.forEach(b=>{const c=b.c+current.dc,r=b.r+current.dr;if(c<0 || c+b.w>doc.grid.cols)return;g.appendChild(el('rect',{x:geo.x0+docColumnMM(doc,c),y:geo.y0+r*RH,width:docColumnMM(doc,c+b.w)-docColumnMM(doc,c),height:b.h*RH,fill:color,'fill-opacity':.1,stroke:color,'stroke-width':.5,'stroke-dasharray':'1 1'}));});svg.appendChild(g);
+  parts.boxes.forEach(b=>{const c=b.c+current.dc,r=b.r+current.dr;if(c<0 || c+b.w>doc.grid.cols)return;g.appendChild(el('rect',{x:geo.x0+docColumnMM(doc,c),y:geo.y0+docRowMM(doc,r),width:docColumnMM(doc,c+b.w)-docColumnMM(doc,c),height:rowSpanMM(doc,r,b.h),fill:color,'fill-opacity':.1,stroke:color,'stroke-width':.5,'stroke-dasharray':'1 1'}));});svg.appendChild(g);
 }
-function movePointerGrid(ev){const p=scorePointerMM(ev);return {c:mmToGrid(p.x),r:p.y/RH};}
+function movePointerGrid(ev){const p=scorePointerMM(ev);return {c:mmToGrid(p.x),r:rowAtMM(doc,p.y)};}
 svg.addEventListener('pointerdown',ev=>{
   if(!ui.moveMode || ui.tab!=='sheet' || ev.button!==0 || ev.target.closest('.score-box'))return;
   const at=pointToCell(ev);if(!at)return;let plan=collectMovePlan(),parts=movePlanParts(plan);
@@ -4363,7 +4381,7 @@ function pointToGrid(ev){
   const p = viewportPage(doc);
   const mx = (ev.clientX - b.left) / b.width  * p.w;
   const my = (ev.clientY - b.top ) / b.height * p.h;
-  return { x: snap(mmToGrid(mx - geo.x0)), y: snap((my - geo.y0)/RH) };
+  return { x: snap(mmToGrid(mx - geo.x0)), y: snap(rowAtMM(doc,my-geo.y0)) };
 }
 
 function drawStart(ev){
@@ -4543,7 +4561,7 @@ function vectorGroupDrawingXml(d,group,nextId){
     const local=v.k==='line'?{...v,x1:v.x1-b.x,y1:v.y1-b.y,x2:v.x2-b.x,y2:v.y2-b.y}:{...v,x:v.x-b.x,y:v.y-b.y};
     return vectorDrawingXml(local,nextId++,true);
   }).join('');
-  const physicalMarker=(name,x,y)=>{const c=columnAtMM(d,x),row=Math.max(0,Math.min(d.grid.rows-1,Math.floor(y/RH)));return '<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>'+emu(x-docColumnMM(d,c))+'</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>'+emu(y-row*RH)+'</xdr:rowOff></xdr:'+name+'>';};
+  const physicalMarker=(name,x,y)=>{const c=columnAtMM(d,x),row=Math.max(0,Math.min(d.grid.rows-1,Math.floor(rowAtMM(d,y))));return '<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>'+emu(x-docColumnMM(d,c))+'</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>'+emu(y-docRowMM(d,row))+'</xdr:rowOff></xdr:'+name+'>';};
   const marker=(name,c,row)=>'<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+row+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:'+name+'>';
   return {nextId,xml:'<xdr:twoCellAnchor editAs="'+(group.box?'absolute':'twoCell')+'">'+(group.box?physicalMarker('from',b.x,b.y)+physicalMarker('to',b.x+b.w,b.y+b.h):marker('from',r.c,r.r)+marker('to',r.c+r.w,r.r+r.h))+
     '<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id="'+id+'" name="'+(group.name || 'answer'+id)+'"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr><a:xfrm><a:off x="'+emu(b.x)+'" y="'+emu(b.y)+'"/><a:ext cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/><a:chOff x="0" y="0"/><a:chExt cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/></a:xfrm></xdr:grpSpPr>'+shapes+'</xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>'};
@@ -4586,7 +4604,7 @@ function buildXlsx(){
   const EMU = 36000;                         // 1mm
   const drawingShapes = answer=>doc.drawings.filter(d=>!d.answerOnly || answer).map((d,i) => {
     // 図形の位置は縮小前のmmで置く（列幅が違っても画面と同じ場所に来るように）
-    const gx = v => Math.round(gridToMM(v) / SCALE * contentScale(doc) * EMU), gy = v => Math.round(v * MM_ROW * contentScale(doc) * EMU);
+    const gx = v => Math.round(gridToMM(v) / SCALE * contentScale(doc) * EMU), gy = v => Math.round(docRowMM(doc,v)/SCALE*contentScale(doc)*EMU);
     const lw = Math.round((d.w==='medium' ? 19050 : 12700)*contentScale(doc));
     if (d.k==='dot'){
       const rr = Math.round((d.w==='medium'?0.9:0.7) * contentScale(doc) * EMU);
@@ -4648,7 +4666,7 @@ function buildXlsx(){
             xmlEsc(cellText(doc, x))+'</t></is></c>'
           : '<c r="'+ref+'" s="'+si+'"/>';
       }
-      body += '<row r="'+(r+1)+'" ht="'+(ROW_H_PT*contentScale(doc))+'" customHeight="1" spans="1:'+cols+'">'+rowXml+'</row>';
+      body += '<row r="'+(r+1)+'" ht="'+(rowHeightPt(doc,r)*contentScale(doc))+'" customHeight="1" spans="1:'+cols+'">'+rowXml+'</row>';
     }
     const mx = (doc.paper.marginX/25.4).toFixed(6), my = (doc.paper.marginY/25.4).toFixed(6);
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -5450,7 +5468,7 @@ async function openSettings(){
     {key:'nameOrder',label:'氏名欄',type:'seg',value:p.nameOrder,options:[['full','○年○組○番'],['short','○組○番']]},
     {key:'margin',label:'余白',type:'seg',value:String(p.marginX),options:[['8','狭い 8mm'],['10','10mm'],['12','12mm']]},
     {key:'titlePt',label:'タイトルの文字（pt）',type:'number',value:p.titlePt || 18,min:8,max:32},
-    {key:'headerLayout',label:'縦書きの氏名欄・タイトル',type:'select',value:p.headerLayout || 'reference',options:[['reference','お手本の配置（氏名は下寄せ）'],['compact','上に詰める']]},
+    {key:'headerLayout',label:'縦書きの氏名欄・タイトル',type:'select',value:p.headerLayout || 'reference',options:[['reference','お手本と同じ配置'],['compact','上に詰める']]},
     {key:'namePt',label:'氏名欄の文字（pt）',type:'number',value:p.namePt || (p.writing==='vertical'?16:14),min:8,max:32},
     {key:'showScoreBox',label:'観点別得点枠',type:'check',value:p.showScoreBox},
     {key:'uiLarge',label:'画面の文字',type:'seg',value:options.uiLarge?'lg':'md',
@@ -5480,7 +5498,7 @@ async function openSettings(){
   normalizeColw(doc);
   if(paperSizeChanged){
     const sheet=PAGE[p.orientation];
-    p.canvasFactor=Math.max(1,gridWmm()/(sheet.w-p.marginX*2),doc.grid.rows*RH/(sheet.h-p.marginY*2));
+    p.canvasFactor=Math.max(1,gridWmm()/(sheet.w-p.marginX*2),docRowMM(doc,doc.grid.rows)/(sheet.h-p.marginY*2));
     p.contentScale=fitContentScale(doc);
   }
   ui.cur = { c: Math.min(ui.cur.c, doc.grid.cols-1), r: Math.min(ui.cur.r, doc.grid.rows-1) };
