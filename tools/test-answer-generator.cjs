@@ -424,7 +424,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
         startApp(); ui.tab='answer'; render();
         const cells=[...buildCells(doc,true).values()].filter(c=>c.t==='あいう'||c.t==='ABC');
         const r=doc.fields[0].rects[0], text=[...document.querySelectorAll('#sheet text')].find(n=>n.textContent==='あいう');
-        return {cells,top:doc.paper.marginY+r.r*RH,firstY:+(text.querySelector('tspan')||text).getAttribute('y'),anchor:text.getAttribute('text-anchor')};
+        return {cells,top:geo.y0+r.r*RH,firstY:+(text.querySelector('tspan')||text).getAttribute('y'),anchor:text.getAttribute('text-anchor')};
       },subject);
       assert.equal(positions.cells.length,2);
       for(const cell of positions.cells){
@@ -448,7 +448,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     const firstColumn=wrapping.fields[0].label.c;
     const wrapped=wrapping.fields.find(f=>f.label.c<firstColumn);
     assert.ok(wrapped); assert.equal(wrapped.label.r,wrapping.fields[0].label.r);
-    assert.equal(wrapped.auto.group,'一'); assert.equal(wrapped.auto.label,'(13)');
+    assert.equal(wrapped.auto.group,'一'); assert.equal(wrapped.auto.label,'(12)');
     const occupied=new Set();
     for(const f of wrapping.fields) for(const r of [...f.rects,f.label]){
       assert.ok(r.c>=0 && r.r>=0 && r.c+r.w<=wrapping.grid.cols && r.r+r.h<=wrapping.grid.rows);

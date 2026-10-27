@@ -23,7 +23,7 @@ def inspect(directory, name):
         if work['paper']['writing'] == 'vertical':
             cell = sheet.cell(2, work['grid']['cols'])
             assert cell.value == title, (name, 'title changed during export')
-            assert cell.alignment.textRotation == 255 and cell.alignment.vertical == 'top'
+            assert cell.alignment.textRotation == 255 and cell.alignment.vertical == ('top' if work['paper'].get('headerLayout') == 'compact' else 'center')
             assert cell.font.sz > 13
         else:
             assert sheet.cell(1, 1).value == title, (name, 'title changed during export')

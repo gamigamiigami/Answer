@@ -703,7 +703,7 @@ const gridWmm = () => colXmm(doc.grid.cols);
 const canvasFactor = paper => Math.max(1,Math.min(64,Number(paper.canvasFactor)||1));
 const contentScale = d => Math.max(.01,Math.min(4,Number(d.paper.contentScale)||1));
 const layoutScale=p=>Math.max(1,Math.min(4,Number(p.layoutScale) || 1));
-const printableW = d => (PAGE[d.paper.orientation].w - d.paper.marginX*2)*canvasFactor(d.paper)/layoutScale(d.paper);
+const printableW = d => referenceWidth(d.paper)*canvasFactor(d.paper)/layoutScale(d.paper);
 function viewportPage(d){const p=PAGE[d.paper.orientation],scale=contentScale(d);return {w:p.w/scale,h:p.h/scale};}
 function fitContentScale(d){
   const p=PAGE[d.paper.orientation],width=docColumnMM(d,d.grid.cols),height=d.grid.rows*RH;
@@ -745,18 +745,26 @@ function mmToGrid(x){
   return doc.grid.cols;
 }
 // 列の幅の配列を、列の数に合わせて整える
+// R6_kokugo_answer_sheet.xlsm: Z=45px, AA=68px at 80% printing.
+const REFERENCE_HEADER={nameWidth:9.525,titleWidth:14.393333333333333,width:267.5466666666667,nameRows:46,titleRows:42,nameSpaces:8};
+const referenceHeader=p=>p.writing==='vertical' && p.headerLayout!=='compact';
+const referenceWidth=p=>Math.min(PAGE[p.orientation].w-p.marginX*2,referenceHeader(p)?REFERENCE_HEADER.width:Infinity);
+const headerWidthExtra=p=>referenceHeader(p)?REFERENCE_HEADER.nameWidth+REFERENCE_HEADER.titleWidth-2*CW+(REFERENCE_HEADER.width-24*CW-REFERENCE_HEADER.nameWidth-REFERENCE_HEADER.titleWidth):0;
+const referenceFirstCol=()=>1+(REFERENCE_HEADER.width-24*CW-REFERENCE_HEADER.nameWidth-REFERENCE_HEADER.titleWidth)/CW;
 function normalizeColw(d){
   const n = d.grid.cols;
   const a = Array.isArray(d.colw) ? d.colw.slice(0, n) : [];
   while (a.length < n) a.push(1);
   d.colw = a.map(v => (Number(v) > 0.3 && Number(v) < 4) ? Number(v) : 1);
+  if(referenceHeader(d.paper) && n>=2){d.colw[n-2]=REFERENCE_HEADER.nameWidth/CW;d.colw[n-1]=REFERENCE_HEADER.titleWidth/CW;}
 }
 
 function computeGrid(paper){
   const p = PAGE[paper.orientation],factor=canvasFactor(paper)/layoutScale(paper);
-  const cols = Math.floor(((p.w - paper.marginX*2)*factor + 0.001) / CW);
-  let rows   = Math.floor(((p.h - paper.marginY*2)*factor + 0.001) / RH);
-  if (rows % CHAR_ROWS) rows -= rows % CHAR_ROWS;   // 文字マスで割り切れるように
+  const cols = Math.floor((referenceWidth(paper)*factor-headerWidthExtra(paper)+0.001)/CW);
+  const height=referenceHeader(paper) && paper.orientation==='landscape'?Math.min(p.h-paper.marginY*2,49*RH):p.h-paper.marginY*2;
+  let rows=Math.floor((height*factor+.001)/RH);
+  if (!referenceHeader(paper) && rows % CHAR_ROWS) rows -= rows % CHAR_ROWS;   // 文字マスで割り切れるように
   return { cols, rows };
 }
 function gridWithColumnWidths(d,paper=d.paper){
@@ -782,7 +790,7 @@ function makeTitle(p){
 function standardNameLabel(p,spaces){
   return (p.nameOrder==='short'?'　　組　　番　氏名（':p.grade+'年　　組　　番　氏名（')+'　'.repeat(spaces)+'）';
 }
-function makeNameLabel(p){return standardNameLabel(p,10);}
+function makeNameLabel(p){return standardNameLabel(p,REFERENCE_HEADER.nameSpaces);}
 
 function newDoc(subject){
   const s = SUBJECTS[subject] || SUBJECTS['その他'];
@@ -798,7 +806,7 @@ function newDoc(subject){
     version:4, paper, grid:computeGrid(paper), colw:[],
     fields:[], decorations:[], texts:{}, answers:{}, answerGraphs:{}, drawings:[], images:[]
   };
-  normalizeColw(d);
+  normalizeColw(d);if(referenceHeader(d.paper))d.colw[0]=referenceFirstCol();
   uid = 1;
   return d;
 }
@@ -868,18 +876,19 @@ function headerLayout(d){
   const mark = (c,r,w,h) => { for(let i=0;i<w;i++) for(let j=0;j<h;j++) reserved.add((c+i)+','+(r+j)); };
 
   if (vertical){
-    // 右端2列：タイトル・氏名欄。
-    // 大きな縦書き文字を結合セル内に配置し、文字サイズに合わせて間隔を取る。
-    const put=(col,str,size)=>{
-      const room=(rows-2)*RH-1;
-      const fitSize=Math.min(size,room/Math.max(1,Array.from(str).length)/ptmm(1)/1.12);
-      const actualSize=Math.max(8,Math.floor(fitSize*2)/2),fs=ptmm(actualSize),usedRows=Math.min(rows-1,Math.ceil((1.05+fs+fs*1.12*Math.max(0,Array.from(str).length-1))/RH));
-      texts.push({c:col,r:1,t:str,size:actualSize,bold:col===cols-1,align:'center',mg:{w:1,h:usedRows},stack:true,valign:'top'});
+    // The reference merges AA2:AA43 (center) and Z2:Z47 (bottom).
+    const compact=d.paper.headerLayout==='compact';
+    const put=(col,str,size,height,valign)=>{
+      const step=compact?1.12:1;
+      const maxRows=compact?rows-2:Math.min(rows-2,height);
+      const fitSize=Math.min(size,(maxRows*RH-1)/Math.max(1,Array.from(str).length)/ptmm(1)/step);
+      const actualSize=Math.max(8,Math.floor(fitSize*2)/2),fs=ptmm(actualSize);
+      const usedRows=compact?Math.min(rows-1,Math.ceil((1.05+fs+fs*step*Math.max(0,Array.from(str).length-1))/RH)):maxRows;
+      texts.push({c:col,r:1,t:str,size:actualSize,bold:true,align:'center',mg:{w:1,h:usedRows},stack:true,stackStep:step,valign:compact?'top':valign});
       mark(col,0,1,usedRows+1);
     };
-    put(cols-1,d.paper.title,d.paper.titlePt || 18);
-    put(cols-2,d.paper.nameLabel,d.paper.namePt || 16);
-
+    put(cols-1,d.paper.title,d.paper.titlePt || 18,REFERENCE_HEADER.titleRows,'center');
+    put(cols-2,d.paper.nameLabel,d.paper.namePt || 16,REFERENCE_HEADER.nameRows,'bottom');
 
   } else {
     // 横書き：タイトルは一番上。氏名欄と得点枠は一番下にまとめる
@@ -2094,7 +2103,7 @@ function buildCells(d, withAnswers){
   head.texts.forEach(t => {
     put(t.c,t.r,t.t,t.size,t.bold,t.align);
     if (t.mg) merge(t.c, t.r, t.mg.w, t.mg.h);
-    if(t.stack){get(t.c,t.r).stack=true;get(t.c,t.r).valign=t.valign || 'top';}
+    if(t.stack){get(t.c,t.r).stack=true;get(t.c,t.r).valign=t.valign || 'center';get(t.c,t.r).stackStep=t.stackStep || 1;}
   });
 
   // (2) 欄
@@ -2418,9 +2427,10 @@ function render(){
     if(x.lines){const id='cell-clip-'+renderSerial+'-'+x.c+'-'+x.r,clip=el('clipPath',{id});clip.appendChild(el('rect',{x:X(x.c)+.35,y:y0+x.r*RH+.3,width:Math.max(.1,W(x.c,mw)-.7),height:Math.max(.1,mh*RH-.6)}));texts.appendChild(clip);t.setAttribute('clip-path','url(#'+id+')');}
     if(x.lines){x.lines.forEach((line,i)=>{const span=el('tspan',{x:a.x,y:a.y+(i-(x.lines.length-1)/2)*fs*1.35});span.textContent=line;t.appendChild(span);});}
     else if (x.stack){
-      const letters = Array.from(x.t), step = fs*1.12;
+      const letters = Array.from(x.t), step = fs*(x.stackStep || 1.12);
+      if(x.valign==='bottom')a.y=y0+(x.r+mh)*RH-fs/2;
       letters.forEach((ch,i) => {
-        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top' ? i : i-(letters.length-1)/2)*step});
+        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step});
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
     } else t.textContent = cellText(doc, x);
@@ -4490,7 +4500,7 @@ function unionBorders(cells, c, r, w, h){
 
 // 列の幅を Excel の <cols> に書き出す（同じ幅が続くところはまとめる）
 function excelColWidth(factor=1){
-  const scale=contentScale(doc),width=COL_W_EXCEL*factor;if(scale===1)return width;
+  const scale=contentScale(doc),width=referenceHeader(doc.paper) && Math.abs(factor-REFERENCE_HEADER.nameWidth/CW)<1e-9?5.75:referenceHeader(doc.paper) && Math.abs(factor-REFERENCE_HEADER.titleWidth/CW)<1e-9?9:COL_W_EXCEL*factor;if(scale===1)return width;
   const pixels=(Math.floor(width*7+.5)+5)*scale;
   return pixels<=12 ? pixels/12 : (pixels-5)/7;
 }
@@ -4672,7 +4682,7 @@ function buildXlsx(){
   ).join('')+'</fills>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
     '<xf numFmtId="0" fontId="'+x.fi+'" fillId="'+x.pi+'" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyFill="1" applyAlignment="1">'+
-    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(x.valign==='top'?'top':'center')+'"'+(x.stack?' textRotation="255"':'')+(x.indent?' indent="'+x.indent+'"':'')+(x.wrap?' wrapText="1"':'')+'/></xf>'
+    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(['top','bottom'].includes(x.valign)?x.valign:'center')+'"'+(x.stack?' textRotation="255"':'')+(x.indent?' indent="'+x.indent+'"':'')+(x.wrap?' wrapText="1"':'')+'/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
@@ -4871,9 +4881,9 @@ function loadWork(text){
   // 足りない項目は既定値で補う。壊れたファイルで作業中のデータを巻き添えにしない
   const arr = v => Array.isArray(v) ? v : [];
   const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
-  if(d.paper.nameLabel===standardNameLabel(d.paper,7))d.paper.nameLabel=makeNameLabel(d.paper);
+  const restoreName=page=>{if([7,10].some(n=>page.paper.nameLabel===standardNameLabel(page.paper,n)))page.paper.nameLabel=makeNameLabel(page.paper);};restoreName(d);
   const cleanImages=page=>{if(!('images' in page))return;page.images=arr(page.images).filter(i=>i && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(i.data || '') && [i.x,i.y,i.w,i.h].every(Number.isFinite) && i.w>0 && i.h>0);};cleanImages(d);
-  if(Array.isArray(d.bookPages)){d.bookPages=d.bookPages.filter(p=>p && p.paper && p.grid && Array.isArray(p.fields) && Array.isArray(p.decorations) && Array.isArray(p.drawings));d.bookPages.forEach(cleanImages);d.pageIndex=Math.min(d.bookPages.length-1,Math.max(0,Math.floor(d.pageIndex || 0)));}
+  if(Array.isArray(d.bookPages)){d.bookPages=d.bookPages.filter(p=>p && p.paper && p.grid && Array.isArray(p.fields) && Array.isArray(p.decorations) && Array.isArray(p.drawings));d.bookPages.forEach(page=>{cleanImages(page);restoreName(page);});d.pageIndex=Math.min(d.bookPages.length-1,Math.max(0,Math.floor(d.pageIndex || 0)));}
   d.fields = arr(d.fields).filter(f => f && Array.isArray(f.rects) && f.rects.length);
   // 古いファイルは欄の番号が違うので読み替える
   const ver = Number(d.version) || 1;
@@ -5429,7 +5439,7 @@ function openButtonSetup(){
 async function openSettings(){
   const p = doc.paper;
   const autoTitle = (p.title === makeTitle(p));       // 手で直していなければ作り直す
-  const autoName  = (p.nameLabel === makeNameLabel(p) || p.nameLabel===standardNameLabel(p,7));
+  const autoName  = (p.nameLabel === makeNameLabel(p) || [7,10].some(n=>p.nameLabel===standardNameLabel(p,n)));
   const v = await ask('用紙と表示の設定', [
     {key:'grade',label:'学年',type:'text',value:p.grade,hint:'例：一／1'},
     {key:'term',label:'学期',type:'text',value:p.term,hint:'例：２学期中間（空欄でも可）'},
@@ -5440,6 +5450,7 @@ async function openSettings(){
     {key:'nameOrder',label:'氏名欄',type:'seg',value:p.nameOrder,options:[['full','○年○組○番'],['short','○組○番']]},
     {key:'margin',label:'余白',type:'seg',value:String(p.marginX),options:[['8','狭い 8mm'],['10','10mm'],['12','12mm']]},
     {key:'titlePt',label:'タイトルの文字（pt）',type:'number',value:p.titlePt || 18,min:8,max:32},
+    {key:'headerLayout',label:'縦書きの氏名欄・タイトル',type:'select',value:p.headerLayout || 'reference',options:[['reference','お手本の配置（氏名は下寄せ）'],['compact','上に詰める']]},
     {key:'namePt',label:'氏名欄の文字（pt）',type:'number',value:p.namePt || (p.writing==='vertical'?16:14),min:8,max:32},
     {key:'showScoreBox',label:'観点別得点枠',type:'check',value:p.showScoreBox},
     {key:'uiLarge',label:'画面の文字',type:'seg',value:options.uiLarge?'lg':'md',
@@ -5459,6 +5470,7 @@ async function openSettings(){
   if(p.titlePt!==undefined || titlePt!==18)p.titlePt=titlePt;
   if(p.namePt!==undefined || namePt!==(v.writing==='vertical'?16:14))p.namePt=namePt;
   if(layoutChanged)delete p.scoreBoxPosition;
+  p.headerLayout=v.headerLayout;
   p.nameOrder = v.nameOrder; p.showScoreBox = !!v.showScoreBox;
   p.marginX = +v.margin; p.marginY = (+v.margin===8) ? 9 : +v.margin;
   // 手で書き換えたタイトル・氏名欄は上書きしない
@@ -6235,8 +6247,8 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
   // 空白列を先に細くする。国語のタイトル・氏名・得点枠の幅は維持する。
   const headerCols=vertical ? (d.paper.showScoreBox ? 6 : 2) : 0;
   const gapCols=vertical ? gapCount : 0;
-  d.grid.cols=Math.floor((printableW(d)/CW-headerCols-gapCols*fit.gap+0.0001)/fit.width)+headerCols+gapCols;
-  d.colw=Array.from({length:d.grid.cols},(_,c)=>c<d.grid.cols-headerCols ? fit.width : 1);
+  d.grid.cols=Math.floor(((printableW(d)-headerWidthExtra(d.paper))/CW-headerCols-gapCols*fit.gap+0.0001)/fit.width)+headerCols+gapCols;
+  d.colw=Array.from({length:d.grid.cols},(_,c)=>c<d.grid.cols-headerCols ? fit.width : 1);normalizeColw(d);if(referenceHeader(d.paper))d.colw[0]=referenceFirstCol()*fit.width;
   const capacity=message=>Object.assign(new Error(message),{autoCapacity:true});
   const used = new Set(headerLayout(d).reserved);
   const origin = contentOrigin(d);
