@@ -120,10 +120,10 @@ const { chromium } = require('playwright');
     await page.keyboard.press('Home');
     assert.equal(await page.locator('#sheet-panels').isVisible(),true);
     assert.equal(await page.locator('#t-ins').isVisible(),false);
-    await page.locator('#edit-panel > summary').focus(); await page.keyboard.press('Enter');
+    await page.click('#side-tab-layout');await page.locator('#edit-panel > summary').focus(); await page.keyboard.press('Enter');
     assert.equal(await page.locator('#t-ins').isVisible(),true);
     assert.equal(await page.evaluate(()=>JSON.stringify(doc)),docBefore);
-    await page.click('#edit-panel > summary');
+    await page.click('#side-tab-layout');await page.click('#edit-panel > summary');
     pass('Keyboard tabs and disclosures work without moving cells or altering the document; tools follow the current task');
 
     await page.click('#more-menu > summary');

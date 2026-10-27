@@ -476,6 +476,24 @@ input[type=checkbox]{accent-color:var(--place)}
 .table-modal{z-index:90}.table-modal .card{width:min(950px,96vw);max-width:950px}.table-toolbar,.table-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;align-items:end}.table-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:13px}.table-toolbar input{width:85px;box-sizing:border-box}.table-toolbar input,.table-toolbar select{font:inherit;padding:7px;border:1px solid var(--line);border-radius:7px;background:var(--field);color:var(--ink)}.table-scroll{max-height:45vh;overflow:auto;margin:12px 0;border:1px solid var(--line)}#table-grid{border-collapse:collapse;width:max-content;min-width:100%}#table-grid th{padding:5px;background:var(--panel);font-size:12px}#table-grid td{padding:0;border:1px solid var(--line);min-width:100px}#table-grid td.selected{outline:2px solid var(--place);outline-offset:-2px}#table-grid td.given{background:var(--place-bg)}#table-grid input{display:block;width:100%;min-width:100px;box-sizing:border-box;background:transparent;color:var(--ink);border:0;padding:10px 6px;font:inherit}#table-status{color:#ae3f2b;min-height:1.5em}#table-selection{font-weight:600;font-size:13px}
 #answer-input-grid textarea,#answer-input-grid select{width:100%;min-width:80px;box-sizing:border-box;font:inherit}#answer-input-grid td:nth-child(3){min-width:220px}.table-scroll textarea{width:100%;min-width:110px;box-sizing:border-box;font:inherit;resize:vertical}.auto-preserve{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.table-toolbar{flex-wrap:wrap}
 #page-controls{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}#page-controls label{width:100%}#page-controls select{padding:6px;font:inherit}#print-book{display:none}@media print{body.printing-book #app{display:none!important}body.printing-book #print-book{display:block!important}#print-book .print-page{margin:0;padding:0;overflow:hidden}#page-controls{display:none!important}}
+
+/* 操作は目的ごとに分け、欄の追加を最初に表示する。 */
+#side-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;position:sticky;top:-16px;z-index:2;background:var(--panel);padding:8px 0 12px;margin-top:-8px}
+#side-tabs button{min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--sub);padding:9px 4px;font:inherit;font-size:13px;cursor:pointer}
+#side-tabs button[aria-selected=true]{background:var(--place-bg);border-color:var(--place);color:var(--place);font-weight:700}
+#side-tabs button:focus-visible{outline:2px solid var(--place);outline-offset:2px}
+#side .workspace-guide{padding:10px 12px;margin:0 0 12px;border-radius:12px}
+#side .companion-heading .buddy{display:none}#side .workspace-guide p:empty{display:none}
+#side .key-prompt{font-size:12px;padding:9px;line-height:1.6}
+#side-panel-layout>#move-panel,#side-panel-paper>#paper-size-panel{margin-top:0}
+#page-controls h2{width:100%}#save-status{border-top:1px solid var(--line);padding-top:10px}
+@media(max-width:900px){#side-tabs{grid-template-columns:repeat(4,minmax(0,1fr));top:-12px;padding-top:6px;padding-bottom:8px;margin-top:-6px}#side-tabs button{font-size:12px;padding:8px 2px}#side .workspace-guide{display:none}#side .key-prompt{margin-bottom:8px}}
+
+#side #field-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
+#field-tools .tool{box-sizing:border-box;min-height:44px}
+#field-tools .tool[data-field]{position:relative;min-height:58px;padding:7px 3px;gap:3px;justify-content:center}
+#field-tools .tool[data-field] .k{position:absolute;top:3px;right:4px;font-size:10px;line-height:1.2;padding:1px 3px;border-bottom-width:2px}
+#field-tools .tool .nm{font-size:12px}
 </style>
 </head>
 <body>
@@ -543,13 +561,20 @@ input[type=checkbox]{accent-color:var(--place)}
   </div>
   <div id="main" role="tabpanel" aria-labelledby="tab-sheet">
     <div id="side">
+      <div id="side-tabs" role="tablist" aria-label="操作の種類">
+        <button id="side-tab-tools" type="button" role="tab" aria-controls="side-panel-tools" aria-selected="true" data-side-tab="tools">解答欄</button>
+        <button id="side-tab-layout" type="button" role="tab" aria-controls="side-panel-layout" aria-selected="false" tabindex="-1" data-side-tab="layout">配置</button>
+        <button id="side-tab-paper" type="button" role="tab" aria-controls="side-panel-paper" aria-selected="false" tabindex="-1" data-side-tab="paper">用紙・設定</button>
+        <button id="side-tab-pages" type="button" role="tab" aria-controls="side-panel-pages" aria-selected="false" tabindex="-1" data-side-tab="pages">ページ・画像</button>
+      </div>
+      <section id="side-panel-tools" role="tabpanel" aria-labelledby="side-tab-tools">
       <div class="workspace-guide"><div class="companion-heading"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><b id="workspace-heading">いっしょに、形に。</b></div><p id="workspace-tip"></p></div>
-      <section id="page-controls"><label>ページ<select id="page-select" aria-label="編集中のページ"></select></label><button class="tb" id="page-add">＋ ページ追加</button><button class="tb" id="page-remove">ページ削除</button><button class="tb" id="page-split">読みやすい大きさで分割</button><button class="tb" id="image-add">画像を追加</button><button class="tb" id="image-edit">画像の位置・大きさ</button><p id="save-status" role="status" class="tip"></p></section>
-      <section id="paper-size-panel" class="tool-section"><h2>用紙と大きさ</h2><label>用紙の向き<select id="paper-orientation" aria-label="用紙の向き"><option value="portrait">A4 縦</option><option value="landscape">A4 横</option></select></label><label for="content-scale">用紙内の倍率（％）</label><div class="content-scale-row"><input id="content-scale" type="number" min="1" max="400" step="any" value="100"><button class="tb" id="content-fit">A4に合わせる</button></div><input id="content-scale-range" type="range" min="1" max="400" step="0.25" value="100" aria-label="用紙内の倍率"><p class="tip">文字・欄・得点欄を一緒に拡大縮小します。保存・印刷・Excelにも反映します。</p><p class="tip" id="readability-hint" role="status"></p><button class="tb" id="score-settings">満点・採点の設定</button></section>
-      <section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>
+
+
+
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
-        <div class="key-prompt"><b>数字キーを押すだけで、欄ができる！</b><br>① 用紙の空いた場所をクリック<br>② 下のボタンと同じ数字キーを押す<br><small>ボタンをクリックしても置けます。</small></div>
+        <div class="key-prompt"><b>用紙の位置を選び、欄の種類を押します。</b><br><small>数字キーでも追加できます。</small></div>
         <div class="grid3" id="field-tools"></div>
         <details class="tool-section"><summary>番号を振る</summary><p class="tip">用紙上で番号を入れるマスを選んでから押します。</p><div class="grid5" id="stamp-tools"></div></details>
       </div>
@@ -561,9 +586,20 @@ input[type=checkbox]{accent-color:var(--place)}
       <details id="format-panel" class="tool-section"><summary>文字・欄の見た目</summary><div class="grid4" id="format-tools"></div>
         <h2>線の種類</h2><div class="grid6" id="basic-tools"></div>
       </details>
-      <details id="edit-panel" class="tool-section"><summary>配置を直す・削除する</summary><div class="grid4" id="edit-tools"></div></details>
-      <details id="misc-panel" class="tool-section"><summary>点検・道具の設定</summary><div class="grid2" id="misc-tools"></div></details>
-      <p class="tip">迷ったときは、上の「使い方」へ。キーボード操作も確認できます。</p>
+
+
+
+      </section>
+      <section id="side-panel-layout" role="tabpanel" aria-labelledby="side-tab-layout" hidden>
+      <section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>      <details id="edit-panel" class="tool-section"><summary>配置を直す・削除する</summary><div class="grid4" id="edit-tools"></div></details>
+      </section>
+      <section id="side-panel-paper" role="tabpanel" aria-labelledby="side-tab-paper" hidden>
+      <section id="paper-size-panel" class="tool-section"><h2>用紙と大きさ</h2><label>用紙の向き<select id="paper-orientation" aria-label="用紙の向き"><option value="portrait">A4 縦</option><option value="landscape">A4 横</option></select></label><label for="content-scale">用紙内の倍率（％）</label><div class="content-scale-row"><input id="content-scale" type="number" min="1" max="400" step="any" value="100"><button class="tb" id="content-fit">A4に合わせる</button></div><input id="content-scale-range" type="range" min="1" max="400" step="0.25" value="100" aria-label="用紙内の倍率"><p class="tip">文字・欄・得点欄を一緒に拡大縮小します。保存・印刷・Excelにも反映します。</p><p class="tip" id="readability-hint" role="status"></p><button class="tb" id="score-settings">満点・採点の設定</button></section>      <details id="misc-panel" class="tool-section"><summary>点検・道具の設定</summary><div class="grid2" id="misc-tools"></div></details>
+      </section>
+      <section id="side-panel-pages" role="tabpanel" aria-labelledby="side-tab-pages" hidden>
+      <section id="page-controls"><h2>ページと画像</h2><label>ページ<select id="page-select" aria-label="編集中のページ"></select></label><button class="tb" id="page-add">＋ ページ追加</button><button class="tb" id="page-remove">ページ削除</button><button class="tb" id="page-split">読みやすい大きさで分割</button><button class="tb" id="image-add">画像を追加</button><button class="tb" id="image-edit">画像の位置・大きさ</button></section>
+      </section>
+      <p id="save-status" role="status" class="tip"></p>
     </div>
     <div id="preview">
       <div id="paper"><svg id="sheet" role="img" aria-label="編集中の解答用紙。問題一覧は上の模範解答の編集から開けます。" xmlns="http://www.w3.org/2000/svg"></svg></div>
@@ -5319,7 +5355,7 @@ ${guideToken('question','2')}￥${guideToken('answer','太陽')}</pre><p>これ�
     '<details><summary>￥区切り・指数・組み合わせ・ふりがな</summary><pre>1￥答え、続きの文章￥2￥知\n2￥x^{n+1} + 3C1￥3￥知￥数式\n3￥漢字《かんじ》￥2￥知</pre><p>￥（半角¥・バックスラッシュも可）のある行では「、」やカンマは答えの一部です。数字だけの答えを貼るときは「答えだけを1行ずつ入力」にチェックするか「入力表」を使います。</p></details>'+
     '<details><summary>ページを増やす・画像を置く・満点を変える</summary><p>左のページ欄で追加・切り替え・削除。「読みやすい大きさで分割」は倍率を指定して現在のページを分けます。保存・Excel・PDFは全ページが対象です。「画像を追加」からPNG/JPEG/WebPを選び、位置と大きさを調整します。「模範解答だけに表示」も選べます。「満点・採点の設定」では20点満点・配点なし・観点なしを設定できます。</p></details>'+
     '<details><summary>表を作る・行や列を追加する</summary><p>欄の種類で「表」を選び、「表の行・列・文字を編集」を開きます。入力例は <code>1￥￥4￥知￥表￥3×4</code>（3列×4行）。作成後は表をダブルクリックするか「表の行・列を編集」から編集できます。選んだセルの上下に行、左右に列を追加・削除できます。見出しは「解答用紙にも印刷」を選びます。</p></details>'+
-    '<details><summary>用紙に入りきらない・欄を調整したい</summary><p>問題が多い場合も、作業領域を広げて全問を生成します。左の「用紙と大きさ」でA4縦・横と倍率を選べます。「A4に合わせる」で全体を用紙に収められます。確認画面の各問の「細かな設定」では字数・幅・高さなどを変更できます。</p></details>'+
+    '<details><summary>用紙に入りきらない・欄を調整したい</summary><p>問題が多い場合も、作業領域を広げて全問を生成します。左の「用紙・設定」タブでA4縦・横と倍率を選べます。「A4に合わせる」で全体を用紙に収められます。確認画面の各問の「細かな設定」では字数・幅・高さなどを変更できます。</p></details>'+
     '<details><summary>手で欄を作る・キーボード操作一覧</summary>'+
     h2('① 欄を置く（数字キー・左のボタン）')+
     table(ord.map((t,i) => row(keyOf(i), fieldName(t)+
@@ -5681,7 +5717,21 @@ function icon(type){
   }
 }
 
+function selectSideTab(key,focus=false){
+  const button=$('#side-tab-'+key);if(!button || button.hidden)key='tools';
+  if(key!=='layout' && ui.moveMode){ui.moveMode=false;if(doc)render();}
+  document.querySelectorAll('[data-side-tab]').forEach(b=>{const active=b.dataset.sideTab===key;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;$('#side-panel-'+b.dataset.sideTab).hidden=!active;});
+  $('#side').scrollTop=0;
+  if(focus)$('#side-tab-'+key).focus({preventScroll:true});
+}
+function setupSideTabs(){
+  document.querySelectorAll('[data-side-tab]').forEach(b=>{
+    b.onclick=()=>selectSideTab(b.dataset.sideTab);
+    b.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();e.stopPropagation();const tabs=[...document.querySelectorAll('[data-side-tab]')].filter(t=>!t.hidden),i=tabs.indexOf(b);const j=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(['ArrowLeft','ArrowUp'].includes(e.key)?-1:1)+tabs.length)%tabs.length;selectSideTab(tabs[j].dataset.sideTab,true);};
+  });
+}
 function buildTools(){
+  setupSideTabs();
   $('#paper-orientation').onchange=e=>setPaperOrientation(e.target.value);
   $('#content-fit').onclick=fitContentToA4;
   $('#page-select').onchange=e=>switchPage(+e.target.value);$('#page-add').onclick=addPage;$('#page-remove').onclick=removePage;$('#page-split').onclick=splitCurrentPage;$('#image-add').onclick=()=>$('#image-file').click();$('#image-file').onchange=e=>{addImageFromFile(e.target.files[0]).catch(err=>toast('画像を開けませんでした：'+err.message));e.target.value='';};$('#image-edit').onclick=editImages;$('#figure-add').onclick=addGeometricFigure;$('#field-guides').onclick=editFieldGuides;
@@ -5835,8 +5885,12 @@ function showPanels(){
   $('#t-width').hidden=answer || dr;
   $('#t-prop').hidden=answer || dr;
   $('#t-setup2').hidden=answer || dr;
-  $('#workspace-heading').textContent=dr?'図をひと添え。':answer?'答えも、ひとつずつ。':'いっしょに、形に。';
-  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'直したい欄を選んで「文字」から入力できます。まとめて直すときは、上の「模範解答の編集」へ。':'欄を足したいときは、用紙の位置を選んで下のボタンへ。迷ったら「模範解答の編集」から一緒に整えましょう。';
+  $('#workspace-heading').textContent=dr?'図を描く':answer?'答えを入力する':'解答欄をつくる';
+  $('#side-tab-tools').textContent=dr?'描画':answer?'答え':'解答欄';
+  $('#side-panel-tools .workspace-guide').hidden=!dr && !answer;
+  $('#side-tab-layout').hidden=dr;
+  selectSideTab('tools');
+  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'直したい欄を選んで「文字」から入力できます。まとめて直すときは、上の「模範解答の編集」へ。':'';
   document.querySelectorAll('#tabs .tab').forEach(t=>{
     const active=t.dataset.tab===ui.tab;
     t.setAttribute('aria-selected',String(active)); t.tabIndex=active?0:-1;
@@ -6452,7 +6506,7 @@ function openAnswerGenerator(initialTitle=''){
     completionAndDepthHelp()+
     kanbunHelp()+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙と大きさ」でA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
     (hadDoc?'<div class="auto-preserve"><button class="tb primary" id="auto-update">配置を保って答え・配点を更新</button><button class="tb" id="auto-update-selected">チェックした問題だけ更新</button></div><label class="auto-replace" hidden><input id="auto-replace" type="checkbox">現在の用紙を作り直す（手動の配置・描画も置き換えます。「戻す」で復元できます）</label>':'')+
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';

@@ -30,13 +30,13 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.click('#btn-answer-editor');await page.click('#auto-tab-input');
   await page.fill('#auto-source','1\n'+Array.from({length:120},(_,i)=>(i+1)+',ア,2,知,30字以内').join('\n'));await page.click('#auto-parse');await page.check('#auto-replace');await page.click('#auto-apply');await page.locator('.auto-modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>doc.fields.length),120);
   const original=await page.evaluate(()=>({fields:JSON.stringify(doc.fields),answers:JSON.stringify(doc.answers),zoom:ui.zoom,scale:contentScale(doc)}));
-  await page.fill('#content-scale','25');await page.locator('#content-scale').press('Tab');assert.equal(await page.evaluate(()=>contentScale(doc)),.25);
+  await page.click('#side-tab-paper');await page.fill('#content-scale','25');await page.locator('#content-scale').press('Tab');assert.equal(await page.evaluate(()=>contentScale(doc)),.25);
   const changed=await page.evaluate(()=>({fields:JSON.stringify(doc.fields),answers:JSON.stringify(doc.answers),zoom:ui.zoom}));assert.equal(changed.fields,original.fields);assert.equal(changed.answers,original.answers);assert.equal(changed.zoom,original.zoom);
   await page.click('#btn-undo');assert.equal(await page.evaluate(()=>contentScale(doc)),original.scale);await page.click('#btn-redo');assert.equal(await page.evaluate(()=>contentScale(doc)),.25);
   // A slider drag must be a single undoable change.
   await page.locator('#content-scale-range').evaluate(el=>{el.value='30';el.dispatchEvent(new Event('input',{bubbles:true}));el.value='35';el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});assert.equal(await page.evaluate(()=>contentScale(doc)),.35);await page.click('#btn-undo');assert.equal(await page.evaluate(()=>contentScale(doc)),.25);
-  await page.selectOption('#paper-orientation','landscape');assert.equal(await page.evaluate(()=>doc.paper.orientation),'landscape');assert.equal(await page.evaluate(()=>JSON.stringify(doc.fields)),original.fields);await page.selectOption('#paper-orientation','portrait');
-  await page.fill('#content-scale','100');await page.locator('#content-scale').press('Tab');assert.match(await page.locator('#status').innerText(),/A4の余白を超え/);await page.click('#content-fit');assert.ok(await page.evaluate(()=>Math.abs(contentScale(doc)-fitContentScale(doc))<1e-10));
+  await page.click('#side-tab-paper');await page.selectOption('#paper-orientation','landscape');assert.equal(await page.evaluate(()=>doc.paper.orientation),'landscape');assert.equal(await page.evaluate(()=>JSON.stringify(doc.fields)),original.fields);await page.click('#side-tab-paper');await page.selectOption('#paper-orientation','portrait');
+  await page.click('#side-tab-paper');await page.fill('#content-scale','100');await page.locator('#content-scale').press('Tab');assert.match(await page.locator('#status').innerText(),/A4の余白を超え/);await page.click('#side-tab-paper');await page.click('#content-fit');assert.ok(await page.evaluate(()=>Math.abs(contentScale(doc)-fitContentScale(doc))<1e-10));
   console.log('PASS: real generation flow, size controls, single-step undo, orientations, overflow guidance and fit-to-A4');
   // At a non-default scale the native mouse coordinates must still hit the intended cell.
   await page.evaluate(()=>{doc=newDoc('国語');startApp();});const legacy=await page.evaluate(()=>docJson(false));
@@ -51,7 +51,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   const saved=await page.evaluate(()=>docJson(false));await page.evaluate(s=>loadWork(s),saved);assert.equal(await page.evaluate(()=>docJson(false)),saved);fs.writeFileSync(path.join(out,'scaled.json'),saved);
   const download=page.waitForEvent('download');await page.click('#btn-xlsx');await(await download).saveAs(path.join(out,'scaled.xlsx'));
   await page.emulateMedia({media:'print'});await page.pdf({path:path.join(out,'scaled.pdf'),preferCSSPageSize:true,printBackground:true});await page.emulateMedia({media:'screen'});
-  await page.selectOption('#paper-orientation','landscape');await page.emulateMedia({media:'print'});await page.pdf({path:path.join(out,'landscape.pdf'),preferCSSPageSize:true,printBackground:true});await page.emulateMedia({media:'screen'});
+  await page.click('#side-tab-paper');await page.selectOption('#paper-orientation','landscape');await page.emulateMedia({media:'print'});await page.pdf({path:path.join(out,'landscape.pdf'),preferCSSPageSize:true,printBackground:true});await page.emulateMedia({media:'screen'});
   await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('#paper-size-panel').evaluate(el=>el.scrollWidth<=el.clientWidth));await page.screenshot({path:path.join(out,'mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
   const check=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
