@@ -205,16 +205,13 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await other.click('#auto-cancel'); await other.close();
     await page.click('#btn-answer-editor');
     await page.locator('[data-row="0"] [data-k="answer"]').fill('イ');
-    await page.click('#auto-apply'); assert.ok(await page.locator('#auto-replace').isVisible());
-    assert.equal(await page.evaluate(()=>doc.answers.f1),'ア');
-    await page.check('#auto-replace'); await page.click('#auto-apply');
+    await page.click('#auto-apply');
     assert.equal(await page.evaluate(()=>doc.answers.f1),'イ');
     await page.keyboard.press('Control+z');
     assert.deepEqual(await page.evaluate(()=>JSON.parse(JSON.stringify(doc))),generated);
     await page.keyboard.press('Control+y'); assert.equal(await page.evaluate(()=>doc.answers.f1),'イ');
-    pass('Regeneration is explicit and restores the entire document through undo/redo');
+    pass('The single update action changes answers and restores the document through undo/redo');
     await page.click('#btn-answer-editor'); await page.click('#auto-tab-input'); await page.fill('#auto-source','大問一\n'+Array.from({length:200},(_,i)=>'('+ (i+1)+') ア 30字以内').join('\n')); await page.click('#auto-parse');
-    await page.check('#auto-replace');
     const before=await page.evaluate(()=>JSON.stringify({doc,uid,history}));
     await page.click('#auto-apply');await page.locator('.auto-modal').waitFor({state:'detached'});
     assert.equal(await page.evaluate(()=>doc.fields.length),200);
@@ -226,7 +223,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await page.click('#btn-answer-editor');
     await page.click('#auto-tab-input'); await page.fill('#auto-source','大問一\n問一 太陽 3点 知識技能\n(1) This is a short English answer. 記述 3×2 5点 思考判断表現\n(2) アイウエ 4字 4点 知識技能\n大問二\n問一 初終2字 はじ～おわ 4点 思考判断表現\n(1) 解答欄のみ 4×2 3点 思考判断表現');
     await page.click('#auto-parse'); await page.selectOption('#auto-subject','数学');
-    await page.check('#auto-replace'); await page.click('#auto-apply'); await page.locator('.auto-modal').waitFor({state:'detached'});
+    await page.click('#auto-apply'); await page.locator('.auto-modal').waitFor({state:'detached'});
     await download('#btn-xlsx','horizontal.xlsx'); await download('#btn-save','horizontal.json');
     const plans=await page.evaluate(()=>doc.fields.filter(f=>doc.answers[f.id]).map(f=>({fixed:f.fixedChars,answer:doc.answers[f.id],plan:answerPlan(doc,f,doc.answers[f.id])})));
     for(const p of plans) assert.ok(p.plan.need<=p.plan.room);
@@ -238,7 +235,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await page.click('#auto-add'); assert.equal(await page.locator('[data-row]').count(),6);
     await page.locator('[data-row="5"] [data-k="answer"]').fill('ウ');
     await page.locator('[data-row="5"] [data-k="group"]').selectOption('三');
-    await page.check('#auto-replace'); await page.click('#auto-apply');
+    await page.click('#auto-apply');
     assert.equal(await page.evaluate(()=>doc.fields.length),6);
     pass('Questions can be added after generation');
     await page.click('#btn-answer-editor'); await page.setViewportSize({width:390,height:844});
@@ -309,7 +306,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await kokugo.click('[data-tab="sheet"]'); await kokugo.click('#btn-answer-editor');
     assert.equal(await kokugo.locator('[data-row="0"] [data-k="points"]').inputValue(),'4');
     assert.equal(await kokugo.locator('[data-row="0"] [data-k="answer"]').inputValue(),'イ');
-    await kokugo.check('#auto-replace'); await kokugo.click('#auto-apply');
+    await kokugo.click('#auto-apply');
     await kokugo.keyboard.press('Control+z');
     assert.deepEqual(await kokugo.evaluate(()=>JSON.parse(JSON.stringify(doc))),edited);
     pass('Generated fields use existing scoring, answer entry and drawing tools; replacement undo restores all edits');
@@ -364,7 +361,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     assert.equal(await loaded.locator('[data-row="0"] [data-k="label"]').inputValue(),'問三');
     assert.equal(await loaded.locator('[data-row="1"] [data-k="label"]').inputValue(),'問三');
     assert.equal(await loaded.locator('[data-row="1"] [data-k="subLabel"]').inputValue(),'(2)');
-    await loaded.check('#auto-replace'); await loaded.click('#auto-apply');
+    await loaded.click('#auto-apply');
     assert.deepEqual(await loaded.evaluate(()=>doc.fields.slice(0,2).map(f=>f.auto.label)),['問三(1)','問三(2)']);
     pass('Editing the shared parent cell updates both siblings when reopening and regenerating');
     const blanks=await context.newPage(); await blanks.goto(url); await blanks.click('#btn-from-answers'); await blanks.fill('#creation-title','確認テスト'); await blanks.click('#creation-next');
@@ -412,7 +409,7 @@ const sample = '大問一\n問一 ア ２点 知識技能\n(1) 光合成 3点 �
     await waveCard.locator('[data-k="kind"]').selectOption('word');
     await waveCard.locator('[data-k="answer"]').fill('うう～ええ');
     assert.equal(await waveCard.locator('[data-k="kind"]').inputValue(),'word');
-    await waveEditor.check('#auto-replace'); await waveEditor.click('#auto-apply');
+    await waveEditor.click('#auto-apply');
     assert.equal(await waveEditor.evaluate(()=>doc.fields[0].type),6);
     assert.equal(await waveEditor.evaluate(()=>doc.answers.f1),'うう～ええ');
     pass('Wave markers infer the extract dropdown and character count during editing and survive generation/reopening; manual type overrides remain respected');

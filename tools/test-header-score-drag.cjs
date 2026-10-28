@@ -19,7 +19,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   const current=await bounds();await page.evaluate(()=>{doc.fields[0].points=5;render();});assert.deepEqual(await bounds(),current);assert.match(await page.locator('#sheet .score-box').textContent(),/８/);
   await page.screenshot({path:path.join(out,'moved.png'),fullPage:true});
   const work=await page.evaluate(()=>docJson());await page.evaluate(text=>loadWork(text),work);assert.deepEqual(await bounds(),current);
-  await page.click('#btn-answer-editor');await page.check('#auto-replace');await page.click('#auto-apply');assert.deepEqual(await bounds(),current);
+  await page.click('#btn-answer-editor');await page.click('#auto-apply');assert.deepEqual(await bounds(),current);
   // Dragging remains within the printable area; preserve a fractional position for export.
   await drag(-3000,-3000);assert.equal((await bounds()).x,0);assert.equal((await bounds()).y,0);await page.keyboard.press('Control+z');assert.deepEqual(await bounds(),current);
   await page.evaluate(()=>{moveScoreBox(117.31,65.47);});const exported=await bounds();

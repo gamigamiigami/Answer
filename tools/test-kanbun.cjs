@@ -27,7 +27,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.fill('[data-i="1"][data-j="0"]','習');await page.click('#kanbun-save');assert.match(await page.evaluate(()=>doc.answers.f1),/習/);
   await page.keyboard.press('Control+z');assert.match(await page.evaluate(()=>doc.answers.f1),/学/);await page.keyboard.press('Control+y');
   await page.evaluate(()=>{loadWork(docJson());});assert.match(await page.evaluate(()=>doc.answers.f1),/習/);assert.match(await page.evaluate(()=>doc.fields[0].kanbunGiven),/レ/);
-  await page.click('#btn-answer-editor');await page.check('#auto-replace');await page.click('#auto-apply');
+  await page.click('#btn-answer-editor');await page.click('#auto-apply');
   assert.match(await page.evaluate(()=>doc.fields[0].kanbunGiven),/レ/);
   const dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(out,'kanbun.xlsx'));
   await page.click('#tab-answer');await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{ui.cur={...doc.fields[0].rects[0]};ui.targets=[];render();});await page.click('#t-kanbun');

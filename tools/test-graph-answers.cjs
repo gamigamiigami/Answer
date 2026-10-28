@@ -97,7 +97,7 @@ const {chromium}=require('playwright');
     await page.evaluate(saved=>loadWork(saved),saved);assert.equal(await page.evaluate(()=>docJson(false)),saved);
     await page.click('#btn-answer-editor');
     await page.click('[data-row="0"] [data-graph]');assert.equal(await page.locator('#graph-yMin').inputValue(),'-0.5');await page.click('#graph-cancel');
-    await page.check('#auto-replace');await page.click('#auto-apply');
+    await page.click('#auto-apply');
     assert.equal(await page.evaluate(()=>doc.answerGraphs.f1.yMin),-.5);
     await page.click('#tab-answer');
     const backup=await page.evaluate(()=>{options.backupAnswers=false;return JSON.parse(docJson(true));});

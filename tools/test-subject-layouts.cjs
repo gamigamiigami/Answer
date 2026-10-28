@@ -37,7 +37,7 @@ const {chromium}=require('playwright');
    const saved=await page.evaluate(()=>docJson(false));
    await page.evaluate(s=>loadWork(s),saved);assert.equal(await page.evaluate(()=>docJson(false)),saved);
    const before=await page.evaluate(()=>({answers:doc.answers,fields:doc.fields.map(f=>({kind:f.auto.kind,rects:f.rects}))}));
-   await page.click('#btn-answer-editor');await page.check('#auto-replace');await page.click('#auto-apply');
+   await page.click('#btn-answer-editor');await page.click('#auto-apply');
    assert.deepEqual(await page.evaluate(()=>({answers:doc.answers,fields:doc.fields.map(f=>({kind:f.auto.kind,rects:f.rects}))})),before);
    await page.click('#tab-answer');
    await page.screenshot({path:path.join(output,subject+'.png'),fullPage:true});

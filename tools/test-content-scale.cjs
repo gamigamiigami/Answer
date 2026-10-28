@@ -28,7 +28,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.emulateMedia({media:'print'});await page.pdf({path:path.join(out,'large.pdf'),preferCSSPageSize:true,printBackground:true});await page.emulateMedia({media:'screen'});
   // Exercise the actual creation dialog, not only layout helpers.
   await page.click('#btn-answer-editor');await page.click('#auto-tab-input');
-  await page.fill('#auto-source','1\n'+Array.from({length:120},(_,i)=>(i+1)+',ア,2,知,30字以内').join('\n'));await page.click('#auto-parse');await page.check('#auto-replace');await page.click('#auto-apply');await page.locator('.auto-modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>doc.fields.length),120);
+  await page.fill('#auto-source','1\n'+Array.from({length:120},(_,i)=>(i+1)+',ア,2,知,30字以内').join('\n'));await page.click('#auto-parse');await page.click('#auto-apply');await page.locator('.auto-modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>doc.fields.length),120);
   const original=await page.evaluate(()=>({fields:JSON.stringify(doc.fields),answers:JSON.stringify(doc.answers),zoom:ui.zoom,scale:contentScale(doc)}));
   await page.click('#side-tab-paper');await page.fill('#content-scale','25');await page.locator('#content-scale').press('Tab');assert.equal(await page.evaluate(()=>contentScale(doc)),.25);
   const changed=await page.evaluate(()=>({fields:JSON.stringify(doc.fields),answers:JSON.stringify(doc.answers),zoom:ui.zoom}));assert.equal(changed.fields,original.fields);assert.equal(changed.answers,original.answers);assert.equal(changed.zoom,original.zoom);

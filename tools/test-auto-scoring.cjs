@@ -32,7 +32,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   const compact=await page.locator('#auto-source').inputValue();assert.match(compact,/1￥ア\n/);assert.ok(!compact.includes('1￥ア￥4'));
   // Invalid overlapping rules preserve current sheet, and can be corrected without losing answers.
   await page.locator('.auto-aspect-range').nth(1).locator('[data-range="from"]').fill('3');await page.click('#auto-parse');assert.match(await page.locator('#auto-status').textContent(),/重複/);assert.equal(await page.evaluate(()=>scoreTotals(doc)['合計']),31);
-  await page.locator('.auto-aspect-range').nth(1).locator('[data-range="from"]').fill('4');await page.click('#auto-parse');await page.check('#auto-replace');await page.click('#auto-apply');
+  await page.locator('.auto-aspect-range').nth(1).locator('[data-range="from"]').fill('4');await page.click('#auto-parse');await page.click('#auto-apply');
   await page.evaluate(()=>loadWork(docJson()));assert.equal(await page.evaluate(()=>doc.paper.autoScoring.points),4);assert.equal(await page.evaluate(()=>scoreTotals(doc)['合計']),31);
   const dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(output,'scoring.xlsx'));
   await page.click('#btn-answer-editor');await page.click('#auto-back');await page.setViewportSize({width:390,height:844});

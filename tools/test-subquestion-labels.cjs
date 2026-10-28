@@ -43,7 +43,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.click('#tab-answer');await page.screenshot({path:path.join(output,'sheet.png'),fullPage:true});
   let dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(output,'vertical.xlsx'));
   await page.evaluate(()=>loadWork(docJson()));await page.click('#btn-answer-editor');assert.deepEqual(await page.locator('[data-row] [data-k="subLabel"]').evaluateAll(ns=>ns.map(n=>n.value)),actual);
-  await page.check('#auto-replace');await page.click('#auto-apply');assert.deepEqual(await page.evaluate(()=>doc.fields.map(f=>doc.texts[f.label.c+','+f.label.r].t)),actual);
+  await page.click('#auto-apply');assert.deepEqual(await page.evaluate(()=>doc.fields.map(f=>doc.texts[f.label.c+','+f.label.r].t)),actual);
   // Horizontal subjects use the same hierarchy and labels.
   await page.evaluate(source=>{doc=buildAutoDocument(parseAutoAnswers(source,{subject:'数学',points:2,aspect:'知技'}),'数学');startApp();},source);
   dl=page.waitForEvent('download');await page.click('#btn-xlsx');await(await dl).saveAs(path.join(output,'horizontal.xlsx'));

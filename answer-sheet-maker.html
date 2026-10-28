@@ -187,7 +187,7 @@ button{font:inherit;color:inherit}
 .auto-options input[type=number]{display:inline-block;width:62px;margin-left:5px}
 .auto-hint{font-size:11px;color:var(--sub);margin:8px 0 0}
 #auto-status{color:var(--warn);font-weight:600;line-height:1.7}
-.auto-replace{display:block;font-size:13px;line-height:1.8}
+
 .auto-modal .modal-actions{position:sticky;bottom:-22px;background:var(--panel);padding:14px 0;margin-top:6px}
 .auto-modal button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:1000px){.auto-grid,.auto-defaults{grid-template-columns:repeat(2,minmax(0,1fr))}.auto-answer{grid-column:1/-1}}
@@ -264,7 +264,7 @@ body.zen #zen-out{display:block}
 #auto-batch:not([open]) ~ #auto-rows .auto-selection{display:none}
 .auto-footer{position:sticky;bottom:-24px;background:var(--panel);border-top:1px solid var(--line);padding:10px 0;margin-top:16px}
 .auto-footer #auto-status{margin:0 0 8px;font-size:12px}
-.auto-footer .auto-replace{margin-bottom:8px}
+
 .auto-modal .modal-actions{position:static;padding:0;margin:0;flex-wrap:wrap}
 #auto-subject{flex:none;width:160px}
 body.zen #workbar{display:none}
@@ -474,7 +474,7 @@ input[type=checkbox]{accent-color:var(--place)}
 #move-mode[aria-pressed=true]{color:var(--place);border-color:var(--place);font-weight:700}.field-move-mode{cursor:move;touch-action:none}
 
 .table-modal{z-index:90}.table-modal .card{width:min(950px,96vw);max-width:950px}.table-toolbar,.table-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;align-items:end}.table-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:13px}.table-toolbar input{width:85px;box-sizing:border-box}.table-toolbar input,.table-toolbar select{font:inherit;padding:7px;border:1px solid var(--line);border-radius:7px;background:var(--field);color:var(--ink)}.table-scroll{max-height:45vh;overflow:auto;margin:12px 0;border:1px solid var(--line)}#table-grid{border-collapse:collapse;width:max-content;min-width:100%}#table-grid th{padding:5px;background:var(--panel);font-size:12px}#table-grid td{padding:0;border:1px solid var(--line);min-width:100px}#table-grid td.selected{outline:2px solid var(--place);outline-offset:-2px}#table-grid td.given{background:var(--place-bg)}#table-grid input{display:block;width:100%;min-width:100px;box-sizing:border-box;background:transparent;color:var(--ink);border:0;padding:10px 6px;font:inherit}#table-status{color:#ae3f2b;min-height:1.5em}#table-selection{font-weight:600;font-size:13px}
-#answer-input-grid textarea,#answer-input-grid select{width:100%;min-width:80px;box-sizing:border-box;font:inherit}#answer-input-grid td:nth-child(3){min-width:220px}.table-scroll textarea{width:100%;min-width:110px;box-sizing:border-box;font:inherit;resize:vertical}.auto-preserve{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.table-toolbar{flex-wrap:wrap}
+#answer-input-grid textarea,#answer-input-grid select{width:100%;min-width:80px;box-sizing:border-box;font:inherit}#answer-input-grid td:nth-child(3){min-width:220px}.table-scroll textarea{width:100%;min-width:110px;box-sizing:border-box;font:inherit;resize:vertical}.table-toolbar{flex-wrap:wrap}
 #page-controls{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}#page-controls label{width:100%}#page-controls select{padding:6px;font:inherit}#print-book{display:none}@media print{body.printing-book #app{display:none!important}body.printing-book #print-book{display:block!important}#print-book .print-page{margin:0;padding:0;overflow:hidden}#page-controls{display:none!important}}
 
 /* 操作は目的ごとに分け、欄の追加を最初に表示する。 */
@@ -494,6 +494,9 @@ input[type=checkbox]{accent-color:var(--place)}
 #field-tools .tool[data-field]{position:relative;min-height:58px;padding:7px 3px;gap:3px;justify-content:center}
 #field-tools .tool[data-field] .k{position:absolute;top:3px;right:4px;font-size:10px;line-height:1.2;padding:1px 3px;border-bottom-width:2px}
 #field-tools .tool .nm{font-size:12px}
+
+#auto-bulk-groups{width:100%;min-width:0;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
+.auto-batch small{font-size:11px;line-height:1.5;color:var(--sub)}
 </style>
 </head>
 <body>
@@ -576,6 +579,7 @@ input[type=checkbox]{accent-color:var(--place)}
         <h2>解答欄を追加</h2>
         <div class="key-prompt"><b>用紙の位置を選び、欄の種類を押します。</b><br><small>数字キーでも追加できます。</small></div>
         <div class="grid3" id="field-tools"></div>
+        <button class="tb" id="field-note" style="width:100%;margin-top:8px">欄に文字を添える（から。など）</button>
         <details class="tool-section"><summary>番号を振る</summary><p class="tip">用紙上で番号を入れるマスを選んでから押します。</p><div class="grid5" id="stamp-tools"></div></details>
       </div>
       <div id="draw-panels" hidden>
@@ -789,7 +793,7 @@ const headerWidthExtra=p=>referenceHeader(p)?REFERENCE_HEADER.nameWidth+REFERENC
 const referenceFirstCol=()=>1+(REFERENCE_HEADER.width-24*CW-REFERENCE_HEADER.nameWidth-REFERENCE_HEADER.titleWidth)/CW;
 // Keep the reference's 12.95pt first row and 24pt bottom margin.
 // The last margin is split across rows 48/49 so existing field coordinates stay valid.
-const referenceRows=d=>referenceHeader(d.paper) && d.paper.orientation==='landscape' && d.grid.rows===49;
+const referenceRows=d=>!!(d.paper && d.grid && referenceHeader(d.paper) && d.paper.orientation==='landscape' && d.grid.rows===49);
 function rowHeightPt(d,r){return referenceRows(d)?(r===0?12.95:r===48?10.5:ROW_H_PT):ROW_H_PT;}
 function docRowMM(d,r){
   if(!referenceRows(d))return r*RH;
@@ -1226,7 +1230,7 @@ function noteSlots(d, rects){
 }
 // 先頭・中央・お尻に寄せて置く。欄にも、シンプル枠にも使う
 function placeNote(d, obj){
-  const t = obj.note || '';
+  const t = Array.from(obj.note || '');
   if (!t) return [];
   const list = (MARK_TYPES.indexOf(obj.type) >= 0 || obj.type===EXTRACT_TYPE)
     ? charCells(d, obj).map(p => ({c:p.c, r:p.r}))
@@ -1678,7 +1682,7 @@ async function editScoringSettings(){
   ]);if(!v)return;if(!Number.isFinite(+v.maxScore) || +v.maxScore<0 || +v.maxScore>100000)return toast('満点は0〜100000で指定してください。');
   bookSnapshot();for(const page of [doc,...(doc.bookPages || [])]){page.paper.maxScore=+v.maxScore;page.paper.scoreMode=v.scoreMode;page.paper.showScoreBox=v.scoreMode!=='none';}render();
 }
-function updateAnswersInPlace(rows,ids){
+function prepareAnswersInPlace(rows,ids){
   const before=currentAutoRows(),old=new Map(before.map(r=>[r.fieldId,r])),next=JSON.parse(JSON.stringify(doc));
   const list=ids?rows.filter(r=>ids.has(r.fieldId)):rows;
   if(!list.length)throw new Error('更新する問題を選んでください。');
@@ -1689,13 +1693,20 @@ function updateAnswersInPlace(rows,ids){
     if(shape.some(k=>r[k]!==original[k]) || r.w!==original.w || r.h!==original.h)throw new Error(r.label+'：番号・種類・寸法を変える場合は用紙を作り直してください。');
     const error=autoRowError(r);if(error)throw new Error(error);
     next.answers[f.id]=r.answer;f.points=r.points;f.aspect=r.aspect;f.complete=!!r.complete;
+    if(f.auto){for(const key of ['group','label','kind','n','w','h','kindAuto','aspectAuto','aspectDefault','pointsDefault','points','aspect','complete','eight'])if(r[key]!==undefined)f.auto[key]=r[key];f.auto.warnings=[...(r.warnings || [])];}
     if(r.kind==='table'){const t=tableSpec(r.table,r.w,r.h);if(tableSize(t).w!==f.rects[0].w || tableSize(t).h!==f.rects[0].h)throw new Error('表の寸法を変える場合は表の専用編集画面を使ってください。');f.table=t;}
     if(r.kind==='kanbun')f.kanbunGiven=r.kanbunGiven || '';
     if(r.graphRange)next.answerGraphs[f.id]=r.graphRange;
     const plan=answerPlan(next,f,r.answer);if(plan.need>plan.room)throw new Error(r.label+'：今の欄に答えが入りません。欄を広げるか用紙を作り直してください。');
   }
   validateCompletionGroups(next.fields);
-  snapshot(['fields','answers','answerGraphs']);doc.fields=next.fields;doc.answers=next.answers;doc.answerGraphs=next.answerGraphs;render();return list.length;
+  return {next,count:list.length};
+}
+function updateAnswersInPlace(rows,ids,scoring,prepared=prepareAnswersInPlace(rows,ids)){
+  const {next,count}=prepared;
+  snapshot(['fields','answers','answerGraphs',...(scoring?['paper']:[])]);doc.fields=next.fields;doc.answers=next.answers;doc.answerGraphs=next.answerGraphs;
+  if(scoring)doc.paper.autoScoring=scoring;
+  render();return count;
 }
 
 function tableSpec(meta={},cols=meta.cols || 3,rows=meta.rows || 3){
@@ -2234,7 +2245,7 @@ function buildCells(d, withAnswers){
       }
     }
     // 欄に入れる文字（先頭・中央・お尻）。詰めて入れるので1マス1字にはしない
-    if (f.note) placeNote(d, f).forEach((p,i) => put(p.c, p.r, f.note[i], 11*textScaleOf(f)));
+    if (f.note) placeNote(d, f).forEach((p,i) => put(p.c, p.r, Array.from(f.note)[i], 11*textScaleOf(f)));
   }
 
   completionOutlines(d).forEach(r=>box(r.c,r.r,r.w,r.h,'medium'));
@@ -2244,7 +2255,7 @@ function buildCells(d, withAnswers){
     const vc = fillOf(v);
     if (vc) paint(v.c, v.r, v.w, v.h, vc);
     box(v.c, v.r, v.w, v.h, v.style || 'medium');
-    if (v.note) placeNote(d, v).forEach((p,i) => put(p.c, p.r, v.note[i], 11*textScaleOf(v)));
+    if (v.note) placeNote(d, v).forEach((p,i) => put(p.c, p.r, Array.from(v.note)[i], 11*textScaleOf(v)));
   });
 
   // (4) 入力した文字・振った番号
@@ -3822,6 +3833,7 @@ async function enterInput(){
   // ☑を付けた対象があれば、そこを順に回って入力する
   if (ui.targets.length) return startSeq(ui.targets);
 
+  if(ui.tab==='sheet' && many.length>1){const hit=fieldsInArea();if(hit.length===1 && hit[0].type!==12 && many.every(p=>hit[0].rects.some(r=>p.c>=r.c && p.c<r.c+r.w && p.r>=r.r && p.r<r.r+r.h)))return editSelectedNote();}
   // 解答用紙タブで欄やシンプル枠の上にいるなら、文字を位置つきで入れる
   if (ui.tab==='sheet' && many.length===1){
     const f = fieldAt(ui.cur.c, ui.cur.r);
@@ -3953,14 +3965,25 @@ function openInputBox(value, placeholder, avoid){
   setModeBar();
 }
 
+function editSelectedNote(){
+  const candidates=fieldsInArea(),f=fieldAt(ui.cur.c,ui.cur.r);
+  if(candidates.length>1)return toast('文字を添える欄を1つだけ選んでください。');
+  const target=candidates.length===1?candidates[0]:(f || decorationAt(ui.cur.c,ui.cur.r));
+  if(!target || target.questionHeading)return toast('文字を添えたい解答欄を選んでください。');
+  if(target.type===12)return toast('表の文字は、表の編集から入力してください。');
+  if(target.type===11)return editKanbunField(target);
+  return editNote(target.deco || target,'解答欄');
+}
 // 欄・シンプル枠に入れる文字（位置つき）
 async function editNote(target, what){
-  const v = await ask(what+'に文字を入れる', [
-    {key:'note',label:'文字',type:'text',value:target.note||'',hint:'例：から。　x＝　cm²'},
+  const v = await ask(what+'に文字を添える', [
+    {key:'note',label:'まとめて入力する文字',type:'text',value:target.note||'',hint:'例：から。／ので。／cm²。配布する解答用紙にも印刷されます。'},
     {key:'pos',label:'位置',type:'seg',value:target.notePos||'end',
-     options:[['start','先頭'],['center','中央'],['end','お尻']]}
+     options:[['start','先頭（上・左）'],['center','中央'],['end','末尾（下・右）']]}
   ]);
   if (!v) return;
+  const slots=(MARK_TYPES.includes(target.type) || target.type===EXTRACT_TYPE)?charCells(doc,target):noteSlots(doc,target.rects || [target]);
+  if(Array.from(v.note || '').length>slots.length)return toast('文字が欄に入りきりません。欄を広げるか、短くしてください。');
   snapshot();
   target.note = v.note || ''; target.notePos = v.pos || 'end';
   render();
@@ -4367,7 +4390,7 @@ async function openFieldPopup(){
              hint:'pt（Excelと同じ）。11がふつうです。入りきらないときは自動で小さくなります'});
   rows.push({key:'note',label:'欄に入れる文字',type:'text',value:f.note||'',hint:'例：から。　x＝　cm²'});
   rows.push({key:'notePos',label:'その位置',type:'seg',value:f.notePos||'end',
-             options:[['start','先頭'],['center','中央'],['end','お尻']]});
+             options:[['start','先頭（上・左）'],['center','中央'],['end','末尾（下・右）']]});
   const v = await ask(FIELD_DEFS[f.type].name+'の設定', rows);
   if (!v) return;
   snapshot();
@@ -4393,7 +4416,7 @@ async function openFramePopup(v0){
      hint:'pt（Excelと同じ）。11がふつうです'},
     {key:'note',label:'枠に入れる文字',type:'text',value:v0.note||'',hint:'例：証明　求め方'},
     {key:'notePos',label:'その位置',type:'seg',value:v0.notePos||'end',
-     options:[['start','先頭'],['center','中央'],['end','お尻']]}
+     options:[['start','先頭（上・左）'],['center','中央'],['end','末尾（下・右）']]}
   ]);
   if (!v) return;
   snapshot();
@@ -5284,7 +5307,7 @@ function completionAndDepthHelp(){
     ['child','① ／ ②','小問番号。問5の中の①と②です。'],
     ['answer','ア ／ イ','それぞれの模範解答です。']
   ];
-  return '<details class="auto-common completion-depth-help"><summary>①②をまとめて完答／（１）の中のA・B・C</summary><h4>①②が両方正解で2点（思考・判断・表現）</h4><p class="guide-caption">同じ文字色の部分と説明を見比べてください。</p><div class="completion-guide-grid"><div><p><b>この4行を入力します</b></p><pre class="completion-example" data-completion-example>'+completionGuideExample()+'</pre><p>①はア、②はイ。<b>両方正解なら、合わせて2点。</b></p><p class="desc">1行目：点数・観点の設定<br>2・3行目：小問ごとの答え<br>4行目：完答の組の終わり</p></div><dl class="completion-guide-key">'+definitions.map(([kind,text,description])=>'<div><dt>'+guideToken(kind,text)+'</dt><dd>'+description+'</dd></div>').join('')+'</dl></div><p><b>「②￥イ」の行は「問5」を省略しています。</b>「5￥②￥イ」と書いても同じです。観点を省略すると、その大問の設定が入ります。</p><hr><h4>問一 →（１）→ A・B・C</h4><pre>問一（１）A￥ア\nB￥イ\nC￥ウ</pre><p>A〜Cは同じ（１）に入ります。<code>1￥（１）￥A￥ア</code> と分けてもOK。</p><p>確認画面では「小問内の番号」を直せます。入力済みの欄を完答にするなら「配点・観点をまとめて変更」を開き、連続する欄にチェック → 組全体の点数を選ぶ →「チェックした欄をまとめて完答」。</p></details>';
+  return '<details class="auto-common completion-depth-help"><summary>①②をまとめて完答／（１）の中のA・B・C</summary><h4>①②が両方正解で2点（思考・判断・表現）</h4><p class="guide-caption">同じ文字色の部分と説明を見比べてください。</p><div class="completion-guide-grid"><div><p><b>この4行を入力します</b></p><pre class="completion-example" data-completion-example>'+completionGuideExample()+'</pre><p>①はア、②はイ。<b>両方正解なら、合わせて2点。</b></p><p class="desc">1行目：点数・観点の設定<br>2・3行目：小問ごとの答え<br>4行目：完答の組の終わり</p></div><dl class="completion-guide-key">'+definitions.map(([kind,text,description])=>'<div><dt>'+guideToken(kind,text)+'</dt><dd>'+description+'</dd></div>').join('')+'</dl></div><p><b>「②￥イ」の行は「問5」を省略しています。</b>「5￥②￥イ」と書いても同じです。観点を省略すると、その大問の設定が入ります。</p><hr><h4>問一 →（１）→ A・B・C</h4><pre>問一（１）A￥ア\nB￥イ\nC￥ウ</pre><p>A〜Cは同じ（１）に入ります。<code>1￥（１）￥A￥ア</code> と分けてもOK。</p><p>確認画面では「小問内の番号」を直せます。入力済みの欄を完答にするなら「形式・配点・観点をまとめて変更」を開き、連続する欄にチェック → 組全体の点数を選ぶ →「チェックした欄をまとめて完答」。</p></details>';
 }
 function compactAnswerDiagram(){
   return '<div class="guide-group-explain guide-group"><b>'+guideToken('group','1')+' ← 大問番号</b><small>数字だけを1行に書くと、その大問の始まりです。</small></div><div class="guide-chunks" style="grid-template-columns:1fr auto 1fr" aria-label="入力例：問題番号1、答えア"><div class="guide-chunk guide-question"><small>緑：問題番号</small><b>1</b></div><span>￥</span><div class="guide-chunk guide-answer"><small>茶：答え</small><b>ア</b></div></div><p class="desc">点数・観点は上の設定から入るので省略OK。違う問題だけ <code>1￥ア￥5￥思</code> のように追加できます。</p>';
@@ -5343,7 +5366,7 @@ ${guideToken('question','2')}￥${guideToken('answer','太陽')}</pre><p>これ�
     <details><summary>答えだけで、まず試したい</summary><pre>ア
 太陽
 相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数・観点は入力画面の基本設定と大問の範囲に従います。数字だけの答えは「1,12」の形で書きます。</p></details>
-    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「模範解答の編集」へ。作り直すと手動の配置・描画も置き換わります。</span></div>
+    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「模範解答の編集」で直し、「この内容で用紙を更新」を押します。答え・配点だけなら配置はそのままです。</span></div>
     <button class="tb" data-help-go="advanced">小問・字数指定などは「詳しい機能」へ →</button></section>`+
     '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
     '<h4>必要になったときだけ使う入力</h4>'+
@@ -5732,6 +5755,7 @@ function setupSideTabs(){
 }
 function buildTools(){
   setupSideTabs();
+  $('#field-note').onclick=editSelectedNote;
   $('#paper-orientation').onchange=e=>setPaperOrientation(e.target.value);
   $('#content-fit').onclick=fitContentToA4;
   $('#page-select').onchange=e=>switchPage(+e.target.value);$('#page-add').onclick=addPage;$('#page-remove').onclick=removePage;$('#page-split').onclick=splitCurrentPage;$('#image-add').onclick=()=>$('#image-file').click();$('#image-file').onchange=e=>{addImageFromFile(e.target.files[0]).catch(err=>toast('画像を開けませんでした：'+err.message));e.target.value='';};$('#image-edit').onclick=editImages;$('#figure-add').onclick=addGeometricFigure;$('#field-guides').onclick=editFieldGuides;
@@ -6155,6 +6179,20 @@ function validateAutoScoring(settings={}){
   }
   return {points,aspect,aspectRanges:aspectRanges.map(r=>({...r}))};
 }
+// Resolve numbers against real section labels (1 and 一 identify the same section).
+function autoBulkGroupLabels(text,rows){
+  const input=String(text).normalize('NFKC').trim().replace(/[～〜~−–—]/g,'-');
+  if(!input)throw new Error('大問を入力してください。例：1～5、1，3，5');
+  const found=new Set(),available=new Set(rows.map(r=>r.group));
+  const add=n=>{const matches=[...available].filter(g=>autoNumberIndex(g)===n);if(!matches.length)throw new Error('大問'+n+'は一覧にありません。');matches.forEach(g=>found.add(g));};
+  for(const token of input.split(/[,、\s]+/).filter(Boolean)){
+    if(available.has(token)){found.add(token);continue;}
+    const parts=token.split('-'),numbers=parts.map(autoNumberIndex);
+    if(parts.length>2 || numbers.some(n=>!Number.isInteger(n) || n<1 || n>200) || (numbers.length===2 && numbers[0]>numbers[1]))throw new Error('大問の指定を確認してください。例：1～5、1，3，5（範囲は小さい番号から）');
+    for(let n=numbers[0];n<=(numbers[1] ?? numbers[0]);n++)add(n);
+  }
+  return found;
+}
 function autoDefaultAspect(settings,group){
   const n=autoNumberIndex(group),range=(settings.aspectRanges || []).find(r=>n>=r.from && n<=r.to);
   return range ? range.aspect : settings.aspect || '';
@@ -6506,10 +6544,9 @@ function openAnswerGenerator(initialTitle=''){
     completionAndDepthHelp()+
     kanbunHelp()+
     '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>配点・観点をまとめて変更</summary><p class="desc">問題にチェックすると、その問題だけの配点・観点をまとめて変更できます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">配点・観点を変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>形式・配点・観点をまとめて変更</summary><p class="desc">大問を入力して、形式・配点・観点をまとめて変更できます。全問やチェックした問題も選べます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>大問を入力<input id="auto-bulk-groups" type="text" placeholder="例：1～5 ／ 1，3，5" aria-label="まとめて変更する大問" autocomplete="off"><small>範囲と列挙を組み合わせられます。</small></label><label>解答形式<select id="auto-bulk-kind">'+choices([['','形式は変更しない'],...AUTO_KINDS],'')+'</select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">選んだ内容をまとめて変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
-    (hadDoc?'<div class="auto-preserve"><button class="tb primary" id="auto-update">配置を保って答え・配点を更新</button><button class="tb" id="auto-update-selected">チェックした問題だけ更新</button></div><label class="auto-replace" hidden><input id="auto-replace" type="checkbox">現在の用紙を作り直す（手動の配置・描画も置き換えます。「戻す」で復元できます）</label>':'')+
-    '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>この内容で用紙を作る</button></div></div></div>';
+    '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
   const addRange=(range={from:1,to:3,aspect:'知技'})=>{
@@ -6532,7 +6569,6 @@ function openAnswerGenerator(initialTitle=''){
     const review=step==='review';
     q('#auto-input-panel').hidden=review; q('#auto-review-panel').hidden=!review;
     q('#auto-apply').hidden=!review; q('#auto-back').hidden=!review;
-    if(hadDoc) q('.auto-replace').hidden=!review;
     wrap.querySelectorAll('[data-step]').forEach(b=>{
       const active=b.dataset.step===step;
       b.setAttribute('aria-selected',String(active)); b.tabIndex=active?0:-1;
@@ -6554,7 +6590,7 @@ function openAnswerGenerator(initialTitle=''){
   const updateGroups=value=>{
     const scope=q('#auto-bulk-scope').value || 'all';
     q('#auto-default-group').innerHTML=choices(groupChoices(value),value);
-    q('#auto-bulk-scope').innerHTML=choices([['all','全問'],['selected','チェックした問題'],...Array.from(new Set(rows.map(r=>r.group))).map(g=>['group:'+g,'大問 '+g+'のみ'])],scope);
+    q('#auto-bulk-scope').innerHTML=choices([['all','全問'],['selected','チェックした問題'],['groups','入力した大問'],...Array.from(new Set(rows.map(r=>r.group))).map(g=>['group:'+g,'大問 '+g+'のみ'])],scope);
   };
   updateGroups(initialGroup);
   const getDefaults=()=>{
@@ -6603,7 +6639,7 @@ function openAnswerGenerator(initialTitle=''){
       const numbering=splitAutoQuestionLabel(r.label);
       const labels=Array.from(new Set([numbering.main,'',...Array.from({length:Math.max(20,rows.filter(x=>x.group===r.group).length+Number(q('#auto-number-start').value || 1))},(_,j)=>autoNumberLabel(q('#auto-number-style').value,j+1))])).map(v=>[v,v || '番号なし']);
       const subLabels=Array.from(new Set([numbering.suffix,numbering.leaf || '','',...Array.from({length:50},(_,j)=>String.fromCodePoint(j<20?0x2460+j:j<35?0x3251+j-20:0x32b1+j-35)),...Array.from({length:26},(_,j)=>String.fromCharCode(65+j)),...Array.from({length:26},(_,j)=>String.fromCharCode(97+j)),...Array.from({length:20},(_,j)=>'('+(j+1)+')'),...Array.from({length:26},(_,j)=>'('+String.fromCharCode(65+j)+')')])).map(v=>[v,v || '小問なし']);
-      return '<fieldset class="auto-question" data-row="'+i+'"><legend>'+(i+1)+'問目 <label class="auto-selection"><input type="checkbox" data-check'+(selected.has(r)?' checked':'')+' aria-label="'+(i+1)+'問目をまとめて変更">配点・観点の変更対象</label></legend><div class="auto-grid">'+
+      return '<fieldset class="auto-question" data-row="'+i+'"><legend>'+(i+1)+'問目 <label class="auto-selection"><input type="checkbox" data-check'+(selected.has(r)?' checked':'')+' aria-label="'+(i+1)+'問目をまとめて変更">変更の対象</label></legend><div class="auto-grid">'+
       '<label>大問番号<select data-k="group" aria-label="大問番号">'+choices(groupChoices(r.group),r.group)+'</select></label>'+
       '<div><label>問番号<select data-k="label" aria-label="問番号">'+choices([...labels,['!custom','自由に指定…']],numbering.main)+'</select><span data-label-custom hidden>'+input('labelCustom',numbering.main,'text','問番号を自由に指定')+'</span></label>'+
       '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label>'+
@@ -6618,7 +6654,7 @@ function openAnswerGenerator(initialTitle=''){
       '<label><input data-k="eight" type="checkbox"'+(r.eight?' checked':'')+'>8割ライン</label><label><input data-k="complete" type="checkbox"'+(r.complete?' checked':'')+'>完答（太枠）</label>'+
       '<button class="tb" data-remove="'+i+'" aria-label="'+(i+1)+'問目を削除">削除</button></div><p class="auto-hint"></p></details></fieldset>';
     }).join('');
-    status.textContent=rows.length ? rows.length+'問・合計'+scoringItems(rows).reduce((s,r)=>s+r.points,0)+'点。よさそうなら、この内容で用紙を作りましょう。':'模範解答を入力し「読み取って一覧にする」を押してください。';
+    status.textContent=rows.length ? rows.length+'問・合計'+scoringItems(rows).reduce((s,r)=>s+r.points,0)+'点。確認したら、下のボタンで反映してください。':'模範解答を入力し「読み取って一覧にする」を押してください。';
     q('#auto-apply').disabled=!rows.length; q('#auto-rows').querySelectorAll('[data-row]').forEach(syncControls);
     if (writeSource) syncSource();
   };
@@ -6639,22 +6675,30 @@ function openAnswerGenerator(initialTitle=''){
   q('#auto-parse').onclick=parse;
   q('#auto-answers-only').onchange=()=>{scoringDirty=true;};
   q('#auto-input-table').onclick=()=>openAnswerInputTable(rows,getDefaults(),next=>{q('#auto-answers-only').checked=false;source.value=autoRowsSource(next,{separator:'￥'});parse();});
+  q('#auto-bulk-groups').oninput=()=>{q('#auto-bulk-scope').value='groups';};
+  q('#auto-bulk-scope').onchange=()=>{if(q('#auto-bulk-scope').value==='groups')q('#auto-bulk-groups').focus();};
   q('#auto-bulk-points').onchange=()=>{ q('#auto-bulk-point-custom').hidden=q('#auto-bulk-points').value!=='custom'; };
   q('#auto-bulk-apply').onclick=()=>{
     try {
       if (sourceDirty()) throw new Error('入力を変更しています。先に「読み取って一覧にする」を押してください。');
-      const scope=q('#auto-bulk-scope').value, list=scope==='selected'?rows.filter(r=>selected.has(r)):scope.startsWith('group:')?rows.filter(r=>r.group===scope.slice(6)):rows;
+      const scope=q('#auto-bulk-scope').value, chosen=scope==='groups'?autoBulkGroupLabels(q('#auto-bulk-groups').value,rows):null;
+      const list=chosen?rows.filter(r=>chosen.has(r.group)):scope==='selected'?rows.filter(r=>selected.has(r)):scope.startsWith('group:')?rows.filter(r=>r.group===scope.slice(6)):rows;
       if (!list.length) throw new Error('変更する問題をチェックするか、範囲を選んでください。');
-      const value=q('#auto-bulk-points').value, aspect=q('#auto-bulk-aspect').value;
-      if (!value && !aspect) throw new Error('変更する配点または観点を選んでください。');
+      const value=q('#auto-bulk-points').value, aspect=q('#auto-bulk-aspect').value,kind=q('#auto-bulk-kind').value;
+      if (!value && !aspect && !kind) throw new Error('変更する形式・配点・観点のいずれかを選んでください。');
       const score=value===''?null:Number(value==='custom'?q('#auto-bulk-point-value').value:value);
       if (score!==null && (!Number.isFinite(score) || score<0 || score>1000)) throw new Error('配点は0〜1000の数値にしてください。');
       list.forEach(r=>{
+        if(kind){
+          if(kind!==r.kind){r.n=kind==='extract'?Math.max(1,...splitExtract(r.answer).map(autoLength)):Math.max(1,autoLength(r.answer));r.w=0;r.h=0;r.eight=false;}
+          r.kind=kind;r.kindAuto=false;r.aspectAuto=false;
+          r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類') && w!=='観点を推定');
+        }
         if(r.completeGroup)linkedScore(rows,r,score===null?undefined:score,aspect || undefined);
         if (score!==null){ r.points=score; r.warnings=r.warnings.filter(w=>!w.startsWith('配点')); }
         if (aspect){ r.aspect=aspect; r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
       });
-      drawRows(true); status.textContent=list.length+'問の'+(score!==null && aspect?'配点・観点':score!==null?'配点':'観点')+'を変更しました。';
+      drawRows(true);status.textContent=list.length+'問の'+[kind?'解答形式':'',score!==null?'配点':'',aspect?'観点':''].filter(Boolean).join('・')+'を変更しました。';
     } catch(e){ status.textContent=e.message; }
   };
   q('#auto-completion-add').onclick=()=>{
@@ -6741,12 +6785,13 @@ function openAnswerGenerator(initialTitle=''){
     selected.delete(rows[+b.dataset.remove]); rows.splice(+b.dataset.remove,1); drawRows(true);
   });
   source.addEventListener('input',()=>{ status.textContent='入力を変更しました。「読み取って一覧にする」を押してください。'; });
-  if(hadDoc)for(const [id,partial] of [['#auto-update',false],['#auto-update-selected',true]])q(id).onclick=()=>{try{if(sourceDirty())throw new Error('先に入力を読み取って一覧にしてください。');const n=updateAnswersInPlace(rows,partial?new Set([...selected].map(r=>r.fieldId)):null);close();toast(n+'問の答え・配点を更新しました。配置は保っています。');}catch(e){status.textContent=e.message;}};
   q('#auto-apply').onclick=()=>{
     if (sourceDirty()) return void(status.textContent='入力が変わっています。先に「読み取って一覧にする」を押してください。');
     if (!rows.length) return;
-    if (hadDoc && !q('#auto-replace').checked) return void(status.textContent='「現在の用紙を作り直す」にチェックしてください。');
     try {
+      const scoring=scoringSettings();let prepared=null;
+      if(hadDoc && q('#auto-subject').value===doc.paper.subject){try{prepared=prepareAnswersInPlace(rows,null);}catch(e){/* Structural edits and answers needing more space are regenerated below. */}}
+      if(prepared){const n=updateAnswersInPlace(rows,null,scoring,prepared);options.autoScoring=scoring;saveOptions();close();toast(n+'問を更新しました。欄の配置はそのままです。');return;}
       const next=buildAutoDocument(rows,q('#auto-subject').value,doc && doc.paper,initialTitle);
       next.paper.autoScoring=scoringSettings();options.autoScoring=scoringSettings();saveOptions();
       if (hadDoc){ ui.tab='sheet'; const h=history.sheet; h.undo.push(state(true)); if (h.undo.length>120) h.undo.shift(); h.redo=[]; }

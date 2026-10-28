@@ -147,8 +147,8 @@ const { chromium } = require('playwright');
 
     await page.click('#btn-answer-editor');
     assert.equal(await page.locator('#auto-review-panel').isVisible(),true);
-    await page.click('#auto-apply');
-    assert.match(await page.locator('#auto-status').innerText(),/チェック/);
+    assert.equal(await page.locator('#auto-replace').count(),0);
+    assert.match(await page.locator('#auto-apply').textContent(),/更新/);
     for(const width of [390,768,1024]){
       await page.setViewportSize({width,height:844});
       assert.ok(await page.locator('.auto-modal .card').evaluate(n=>n.scrollWidth<=n.clientWidth));
