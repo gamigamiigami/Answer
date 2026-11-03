@@ -32,8 +32,8 @@ const {chromium}=require('playwright');
    assert.equal(result.subject,subject);assert.equal(result.outside,0);assert.equal(result.overlaps,0);assert.equal(result.complete,true);
    if(subject==='数学')assert.deepEqual(result.dims[0],['formula',4,4]);
    if(subject==='英語')assert.deepEqual(result.dims[1],['word',6,4]);
-   if(subject==='理科'){assert.deepEqual(result.dims[0],['word',4,2]);assert.deepEqual(result.dims[5],['blank',6,4]);}
-   if(subject==='社会'){assert.deepEqual(result.dims[1],['word',4,2]);assert.equal(result.dims[3][0],'essay');assert.equal(result.dims[3][2],6);}
+   if(subject==='理科'){assert.deepEqual(result.dims[0],['word',4,4]);assert.deepEqual(result.dims[5],['blank',6,4]);}
+   if(subject==='社会'){assert.deepEqual(result.dims[1],['word',4,3]);assert.equal(result.dims[3][0],'essay');assert.equal(result.dims[3][2],4);}
    const saved=await page.evaluate(()=>docJson(false));
    await page.evaluate(s=>loadWork(s),saved);assert.equal(await page.evaluate(()=>docJson(false)),saved);
    const before=await page.evaluate(()=>({answers:doc.answers,fields:doc.fields.map(f=>({kind:f.auto.kind,rects:f.rects}))}));

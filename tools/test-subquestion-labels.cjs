@@ -56,7 +56,8 @@ for p in sys.argv[1:]:
  b=load_workbook(p)
  for s in b:
   values=[str(c.value) for row in s for c in row if c.value is not None]
-  for t in ['①','②','A','B','（１）','（２）','問一','問二','問三']:assert values.count(t)==1,(p,s.title,t)
+  parents=['問1','問2','問3'] if p.endswith('horizontal.xlsx') else ['問一','問二','問三']
+  for t in ['①','②','A','B','（１）','（２）']+parents:assert values.count(t)==1,(p,s.title,t)
   ranges=list(s.merged_cells.ranges)
   for i,r in enumerate(ranges):
    for t in ranges[i+1:]:assert r.max_col<t.min_col or t.max_col<r.min_col or r.max_row<t.min_row or t.max_row<r.min_row
