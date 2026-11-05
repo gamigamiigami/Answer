@@ -43,7 +43,7 @@ const {chromium}=require('playwright');
   assert.deepEqual([result[0].group,result[0].label,result[0].points,result[0].aspect],['1','問1',2,'知技']);
   console.log('PASS: blank first row uses defaults; invalid scores remain editable');
   await page.click('#btn-from-answers');await page.fill('#creation-title','入力省略');await page.click('#creation-next');
-  await page.selectOption('#auto-subject','数学');await page.click('#auto-input-table');await cell(0,2).fill('太陽');
+  await page.selectOption('#auto-subject','数学');await page.click('#auto-method-table');await cell(0,2).fill('太陽');
   await page.click('#answer-input-add');await cell(1,2).fill('月');await page.click('#answer-input-save');
   assert.equal(await page.locator('[data-row]').count(),2);await page.click('#auto-apply');
   assert.deepEqual(await page.evaluate(()=>Object.values(doc.answers)),['太陽','月']);
