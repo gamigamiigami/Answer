@@ -692,8 +692,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const APP_RELEASES = [
+  ['2.5.1','長い模範解答も枠内に収まる最大文字サイズへ'],
   ['2.5.0','全問編集・余分なページ削除・用紙名修正'],
   ['2.4.1','問番号なしの（1）→①の階層に対応'],
   ['2.4.0','自由欄の寸法一括指定・漢字を大きく普通罫線に'],
@@ -2198,13 +2199,16 @@ function flowingAnswerPlan(d, f, text){
     return {out,room:Math.max(room,index),need:chars.length,used:index};
   };
   const top = f.type===8 ? Math.min(96,Math.max(.5,...regions.map(p=>(vertical?width(p.c,p.mw)-1.6:p.mh*RH-1.6)/ptmm(1)/1.15))) : Math.min(40,textPtOf(f));
-  let plan;
-  for (let size=top;size>=Math.min(f.type===8?.5:6,top);size-=0.5){
-    plan = trySize(size);
-    if (plan.used >= chars.length) return plan;
+  const largest=trySize(top);
+  if(largest.used>=chars.length)return largest;
+  // 一定刻みの縮小と最小6ptでは、固定枠の長い答えが欠ける。
+  // 全文が収まる最大サイズを探し、画面・Excelで同じ値を使う。
+  let lo=.01,hi=top,plan=trySize(lo);
+  if(plan.used<chars.length){plan.room=plan.used;return plan;}
+  for(let i=0;i<20;i++){
+    const size=(lo+hi)/2,trial=trySize(size);
+    if(trial.used>=chars.length){lo=size;plan=trial;}else hi=size;
   }
-  // 入りきらない答えはデータを残し、既存の「点検」で不足を知らせる。
-  if (plan.used < chars.length) plan.room = plan.used;
   return plan;
 }
 
