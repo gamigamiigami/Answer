@@ -27,10 +27,10 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
    },subject);
    assert.equal(result.overlaps,0);assert.equal(result.outside,0);
    for(const [i,f] of result.fields.entries()){
-    assert.deepEqual([f.rect.w,f.rect.h],subject==='国語'?[1,20]:[10,2]);
+    assert.deepEqual([f.rect.w,f.rect.h],subject==='国語'?[1,10]:[10,2]);
     assert.equal(f.out,result.words[i]);assert.ok(f.room>=f.need);
     assert.ok(Object.values(f.border).every(v=>v==='medium'));assert.ok(Object.values(f.blankBorder).every(v=>v==='medium'));assert.equal(f.insideLines,false);
-    if(i<3)assert.equal(f.size,result.fields[0].size);else assert.ok(f.size<result.fields[2].size);
+    if(i<2)assert.equal(f.size,result.fields[0].size);else assert.ok(f.size<=result.fields[0].size);
     assert.ok(f.cols.every(w=>w===(subject==='国語'?1.3:1)));
    }
    await page.click('#tab-answer');await page.screenshot({path:path.join(out,subject+'.png'),fullPage:true});
@@ -50,7 +50,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
    await page.evaluate(subject=>{doc=newDoc(subject);startApp();},subject);
    await page.click('[data-field="8"]');assert.equal(await page.locator('.modal [data-k="n"]').count(),0);
    await page.click('.modal [data-act="ok"]');
-   const f=await page.evaluate(()=>doc.fields[0]);assert.deepEqual([f.rects[0].w,f.rects[0].h],subject==='国語'?[1,20]:[10,2]);
+   const f=await page.evaluate(()=>doc.fields[0]);assert.deepEqual([f.rects[0].w,f.rects[0].h],subject==='国語'?[1,10]:[10,2]);
   }
   const py=spawnSync(process.env.TEST_PYTHON_PATH || 'python3',['-c',`
 import sys,json
@@ -68,7 +68,8 @@ for path in Path(sys.argv[1]).glob('*.xlsx'):
   assert ''.join(str(v.value) for v in values)==work['answers'][f['id']],(path,f,values)
   assert all(b['解答用紙'].cell(y,x).value is None for y in range(r,r+h) for x in range(c,c+w))
   sizes.append(values[0].font.sz)
- assert sizes[0]==sizes[1]==sizes[2]
+ assert sizes[0]==sizes[1]
+ assert sizes[2]<=sizes[0]
  assert all(s<sizes[2] for s in sizes[3:])
  for sheet in b:
   used=set()

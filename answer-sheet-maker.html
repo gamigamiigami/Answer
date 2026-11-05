@@ -692,8 +692,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const APP_RELEASES = [
+  ['2.2.0','カスタム名とセル数の設定・漢字10セルに修正'],
   ['2.1.0','漢字10マス・自由欄5×1・入力省略と解答保存'],
   ['2.0.1','横書きの高さ・縦書きの句読点位置を修正'],
   ['2.0.0','自動選択・漢文・表・作成手順を改善'],
@@ -1142,9 +1143,10 @@ const MARK_TYPES   = [2,9,10];       // 1マスに1文字だけ入れる欄（�
 const ALL_FIELDS   = [1,2,3,4,5,6,7,8,9,10];
 // カスタム欄に登録したセルの数
 const customCells = i => Math.max(1, Math.min(40, Number((options.custom||[])[i]) || DEFAULT_CUSTOM[i]));
+const customName = i => String((options.customNames||[])[i] || ('カスタム'+(i?'B':'A')));
 // ボタンの名前（カスタム欄は「3マス」のように数で出す）
 const fieldName = t => (FIELD_DEFS[t].custom !== undefined)
-  ? customCells(FIELD_DEFS[t].custom)+'マス' : FIELD_DEFS[t].name;
+  ? customName(FIELD_DEFS[t].custom) : FIELD_DEFS[t].name;
 // ボタンの並び（左上から。この順がそのままショートカットキーになる）
 function fieldOrder(){
   const saved = (options.fieldOrder || []).filter(x => ALL_FIELDS.indexOf(x) >= 0);
@@ -1219,7 +1221,7 @@ function buildRects(d, type, at, opt){
   else if (MARK_TYPES.indexOf(type) >= 0){
     // 記号用・カスタム：セル○つぶんの大きさの1マス
     const cells = (type===2) ? (vertical ? MARK_ROWS : CHAR_ROWS) : customCells(FIELD_DEFS[type].custom);
-    rects.push({ c: at.c, r: at.r, w:!vertical && type===2 ? 2 : 1, h: cells });
+    rects.push({ c: at.c, r: at.r, w:vertical ? 1 : type===2 ? 2 : cells, h: vertical ? cells : CHAR_ROWS });
   }
   else if (type===EXTRACT_TYPE){
     // 初終：見出し1マス・○字・見出し1マス・○字 をひとつづきに並べる
@@ -1231,7 +1233,7 @@ function buildRects(d, type, at, opt){
     // 文字マスを連ねる欄。入り切らないときは複数の行（列）に分ける
     const n = type===8 ? KANJI_CHARS : Math.max(1, Number(opt.n)||1);
     if(type===8){
-      const rect={c:at.c,r:at.r,w:vertical?1:KANJI_CHARS,h:vertical?KANJI_CHARS*CHAR_ROWS:CHAR_ROWS};
+      const rect={c:at.c,r:at.r,w:vertical?1:KANJI_CHARS,h:vertical?KANJI_CHARS:CHAR_ROWS};
       if(rect.c<0 || rect.r<0 || rect.c+rect.w>cols || rect.r+rect.h>rows)return {error:'10文字分の漢字欄がこの位置に入りません'};
       return {rects:[rect]};
     }
@@ -2193,7 +2195,7 @@ function flowingAnswerPlan(d, f, text){
   };
   const top = Math.min(40,textPtOf(f))*(f.type===8 ? Math.min(1,KANJI_CHARS/Math.max(1,chars.length)) : 1);
   let plan;
-  for (let size=top;size>=Math.min(6,top);size-=0.5){
+  for (let size=top;size>=Math.min(f.type===8?.5:6,top);size-=0.5){
     plan = trySize(size);
     if (plan.used >= chars.length) return plan;
   }
@@ -3246,7 +3248,7 @@ async function openBigWizard(){
 /* シンプル枠：選んだ範囲の外側に罫線を引く（今の線の太さで） */
 function simpleFrame(){
   if (!needSheet('枠を引けません')) return;
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   // タイトル・氏名欄・得点枠の上には引かない
   for (let i=0;i<s.w;i++) for (let j=0;j<s.h;j++)
     if (ui.reserved.has((s.c+i)+','+(s.r+j)))
@@ -3286,7 +3288,7 @@ function setLine(kind){
 function insertCells(){
   if (!needSheet('マスを差し込めません')) return;
   const vertical = doc.paper.writing==='vertical';
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   let n = vertical ? s.h : s.w;                      // 差し込む量
   const lo = vertical ? s.c : s.r;                   // かかる列（行）の範囲
   const hi = vertical ? s.c + s.w - 1 : s.r + s.h - 1;
@@ -3347,7 +3349,7 @@ function insertCells(){
 function insertLine(){
   if (!needSheet('行を差し込めません')) return;
   const vertical = doc.paper.writing==='vertical';
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   const n = vertical ? s.w : s.h;                 // 差し込む行（列）の数
   const from = vertical ? s.c + s.w - 1 : s.r;
   const limit = vertical ? doc.grid.cols : doc.grid.rows;
@@ -3464,7 +3466,7 @@ function removeBand(alongRow, from, n, lo, hi, pullBefore){
 function deleteCells(){
   if (!needSheet('マスを削除できません')) return;
   const vertical = doc.paper.writing==='vertical';
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   const n = vertical ? s.h : s.w;
   snapshot();
   removeBand(vertical, vertical ? s.r : s.c, n,
@@ -3477,7 +3479,7 @@ function deleteCells(){
 function deleteLine(){
   if (!needSheet('行を削除できません')) return;
   const vertical = doc.paper.writing==='vertical';
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   const n = vertical ? s.w : s.h;
   snapshot();
   const ok = vertical
@@ -3531,7 +3533,7 @@ function refitColumns(){
 /* 列の幅を変える（選んだ列ぶん） */
 async function setColWidth(){
   if (!needSheet('列の幅を変えられません')) return;
-  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:1 };
+  const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   const v = await ask(s.w+'列ぶんの幅を変える', [
     {key:'p', label:'幅（％）', type:'number', value:Math.round(colFactor(s.c)*100), min:40,
      hint:'ふつうの列を100とした割合です。漢字の欄は130（お手本と同じ）。\n'+
@@ -5684,6 +5686,7 @@ function toggleZen(){
 function openButtonSetup(){
   let order = fieldOrder().slice();
   let cells = [customCells(0), customCells(1)];
+  let names = [customName(0),customName(1)];
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   const draw = () => {
@@ -5696,9 +5699,9 @@ function openButtonSetup(){
           '<span class="k" style="font-size:11px;font-weight:700;color:#fff;background:var(--key);'+
           'border-radius:5px;padding:1px 7px;width:auto;flex:none">'+(i===9?'0':(i+1))+'</span>'+
           '<span style="flex:1;min-width:0">'+xmlEsc(cu !== undefined ? FIELD_DEFS[t].name : fieldName(t))+
-          (cu !== undefined ? '　<input type="number" data-cu="'+cu+'" value="'+cells[cu]+
+          (cu !== undefined ? ' <input aria-label="カスタム'+(cu+1)+'のボタン名" data-custom-name="'+cu+'" value="'+xmlEsc(names[cu])+'" maxlength="30" style="width:120px"> <input aria-label="カスタム'+(cu+1)+'のセル数" type="number" data-cu="'+cu+'" value="'+cells[cu]+
             '" min="1" max="40" style="width:64px;border:1px solid var(--line);border-radius:9px;'+
-            'padding:4px 6px;font:inherit;background:var(--field);color:inherit"> マス' : '')+'</span>'+
+            'padding:4px 6px;font:inherit;background:var(--field);color:inherit"> セル' : '')+'</span>'+
           '<button class="tb" data-up="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
           '<button class="tb" data-down="'+i+'"'+(i===order.length-1?' disabled':'')+'>↓</button>'+
         '</div>';
@@ -5707,8 +5710,8 @@ function openButtonSetup(){
       '<button class="tb" data-act="cancel">やめる</button>'+
       '<button class="tb primary" data-act="ok">決定</button></div></div>';
   };
-  const readCells = () => wrap.querySelectorAll('input[data-cu]').forEach(inp => {
-    cells[+inp.dataset.cu] = Math.max(1, Math.min(40, Number(inp.value) || 1)); });
+  const readCells = () => {wrap.querySelectorAll('[data-custom-name]').forEach(inp=>names[+inp.dataset.customName]=inp.value.trim() || ('カスタム'+(+inp.dataset.customName?'B':'A')));wrap.querySelectorAll('input[data-cu]').forEach(inp => {
+    cells[+inp.dataset.cu] = Math.max(1, Math.min(40, Number(inp.value) || 1)); });};
   draw();
   document.body.appendChild(wrap);
   const close = () => { wrap.remove(); document.body.focus(); };
@@ -5731,6 +5734,7 @@ function openButtonSetup(){
       readCells();
       options.fieldOrder = order.slice();
       options.custom = cells.slice();
+      options.customNames = names.slice();
       saveOptions();
       close();
       buildTools();
@@ -6010,6 +6014,7 @@ function buildTools(){
   fw.innerHTML = fieldOrder().map((k,i) =>
     '<button class="tool" data-field="'+k+'" aria-keyshortcuts="'+fieldKeyLabel(k)+'" title="'+FIELD_DEFS[k].hint+'（数字キー：'+fieldKeyLabel(k)+'）">'+icon(k)+
     '<span class="nm">'+fieldName(k)+'</span><kbd class="k">'+fieldKeyLabel(k)+'</kbd></button>').join('')+
+    '<button class="tool" id="t-custom-settings"><span class="nm">カスタムを設定</span></button>'+
     '<button class="tool" id="t-table-place"><span class="nm">▦ 表を作る</span></button>'+
     '<button class="tool" id="t-table-edit"><span class="nm">表の行・列を編集</span></button>'+
     '<button class="tool" id="t-kanbun-place"><span class="nm">□ 漢文</span></button>'+
@@ -6019,6 +6024,7 @@ function buildTools(){
     '<button class="tool" id="t-auto" style="grid-column:1/-1"><span class="nm">模範解答から作る・編集</span></button>';
   fw.querySelectorAll('[data-field]').forEach(b =>
     b.addEventListener('click', ()=>placeField(+b.dataset.field)));
+  $('#t-custom-settings').onclick=openButtonSetup;
   $('#t-table-place').onclick=placeTable;
   $('#t-table-edit').onclick=()=>{const f=fieldAt(ui.cur.c,ui.cur.r);if(!f || f.type!==12)return toast('編集する表をクリックしてから押してください');editTableField(f);};
   $('#t-kanbun-place').onclick=()=>placeField(11);
