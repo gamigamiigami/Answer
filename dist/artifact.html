@@ -615,6 +615,18 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 
 .input-batch-rule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 0;border-bottom:1px solid var(--line);margin-bottom:12px}.input-batch-rule label,.batch-scope{display:grid;gap:6px;font-size:13px;color:var(--sub)}.input-batch-rule input,.input-batch-rule select,.batch-scope select{min-width:0;width:100%;padding:9px;font:inherit;border:1px solid var(--line);border-radius:5px;color:var(--ink);background:var(--field)}.batch-checks{display:grid;gap:8px;max-height:240px;overflow:auto;border:1px solid var(--line);padding:12px}.batch-checks label{font-size:13px;overflow-wrap:anywhere}#answer-input-grid td:first-child{min-width:42px;text-align:center}#answer-input-grid input[type=checkbox]{width:18px;height:18px}
 @media(max-width:600px){.input-batch-rule{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* まとめて変更：対象 → 内容 → 適用の順に読む。 */
+.batch-editor{padding:0 0 8px}.batch-step{margin:0 0 22px}.batch-step h4{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}.batch-step h4>span{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:var(--soft);border-radius:50%;color:var(--ink);font-size:13px}.batch-note{font-size:13px;color:var(--sub);margin:0 0 12px}.batch-scope{max-width:420px;gap:7px}.batch-scope select{min-height:44px;font-size:15px}
+.input-batch-rule{display:block;border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 12px;background:var(--field)}.batch-rule-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.batch-rule-heading strong{font-size:14px}.batch-remove{border:0;background:transparent;color:var(--sub);padding:4px;font:inherit;font-size:12px;text-decoration:underline;cursor:pointer}.batch-remove:hover{color:var(--danger)}
+.input-batch-rule .batch-range{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--soft);border-radius:6px;margin-bottom:16px;font-size:14px}.batch-range label{width:74px}.batch-range input{text-align:center}.batch-visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.batch-fields{display:grid;grid-template-columns:minmax(140px,.8fr) minmax(180px,1fr) minmax(200px,1.2fr);gap:18px;align-items:start}.batch-fields>label{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--ink)}.batch-fields b{font-weight:600}.batch-fields input,.batch-fields select{min-height:44px;font-size:15px;background:var(--panel);border-color:var(--line)}.batch-fields small{font-size:11px;color:var(--sub);font-weight:400;line-height:1.5}.batch-points{display:flex;align-items:center;gap:8px;min-height:44px}.batch-points input{flex:1;min-width:0}.batch-points>span{white-space:nowrap;font-size:12px;color:var(--sub)}
+.batch-add{min-height:40px;border-style:dashed;color:var(--place);padding:8px 14px}.batch-confirm{border-top:1px solid var(--line);padding-top:18px;margin-bottom:0}.batch-summary{white-space:pre-wrap;font-size:14px;line-height:1.8;padding:12px 14px;background:var(--soft);border-radius:6px;overflow-wrap:anywhere}.batch-apply{margin-top:12px;padding:10px 16px;min-height:44px;font-size:15px}
+#source-bulk-apply,#input-bulk-apply{display:none}#source-bulk-footer-apply,#input-bulk-footer-apply{min-height:42px;padding:9px 16px;font-size:14px}
+@media(max-width:850px){.batch-fields{grid-template-columns:1fr}.batch-fields>label{gap:6px}.batch-fields small{display:none}.input-batch-rule{padding:14px}.batch-step{margin-bottom:18px}.batch-rule-heading{margin-bottom:12px}.input-batch-rule .batch-range{gap:7px;padding:10px 8px}.batch-range label{width:62px}.batch-range input{padding:8px 4px}.batch-fields{gap:16px}}
+
+/* 設定タブでは入力元の説明を省き、設定欄の表示領域を確保する。 */
+.auto-modal:has(#bulk-tab-score[aria-selected="true"]) .auto-steps,.auto-modal:has(#bulk-tab-score[aria-selected="true"])>.card>p.desc,.auto-modal:has(#bulk-tab-score[aria-selected="true"]) #auto-method-back{display:none}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -749,8 +761,9 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.8.1';
 const APP_RELEASES = [
+  ['2.8.1','まとめて変更を3手順に整理・適用内容を表示'],
   ['2.8.0','番号の全半角を継承・入力中に範囲／選択変更'],
   ['2.7.0','入力表の連番・一括変更／自由欄の標準寸法'],
   ['2.6.0','作成→確認→Excelの導線を整理・詳細はタブへ'],
@@ -1883,19 +1896,39 @@ function missingTableCells(f,answer){
 // Shared by the input table and bulk text input. Validate all rules before changing data.
 function mountInputBatch(host,{prefix,subject,getRows,apply,status,selected=new Set()}){
   const id=name=>prefix+'-'+name,q=name=>host.querySelector('#'+id(name));
-  host.innerHTML='<p>入力しながら、点数・観点・形式をまとめて変更できます。</p><label class="batch-scope">変更する問題<select id="'+id('scope')+'"><option value="all">全問</option><option value="groups">大問の範囲ごと</option><option value="selected">チェックした問題</option></select></label><div id="'+id('selection')+'" hidden><p>変更したい問題にチェックしてください。</p><div class="batch-checks"></div></div><div id="'+id('rules')+'"></div><button class="tb" id="'+id('add')+'">＋ 大問の範囲を追加</button><p class="desc">空欄・「変更しない」の項目は保持します。範囲が重なる場合は下の設定を優先します。</p><button class="tb primary" id="'+id('apply')+'">まとめて変更する</button>';
+  host.classList.add('batch-editor');
+  host.innerHTML='<section class="batch-step"><h4><span>1</span> 変更する問題を選ぶ</h4><label class="batch-scope">対象<select id="'+id('scope')+'"><option value="all">すべての問題</option><option value="groups">大問を指定する</option><option value="selected">チェックした問題だけ</option></select></label><div id="'+id('selection')+'" hidden><p class="batch-note">変更したい問題にチェックしてください。</p><div class="batch-checks"></div></div></section><section class="batch-step"><h4><span>2</span> 変更後の内容を決める</h4><p class="batch-note">変えたい項目だけ入力してください。</p><div id="'+id('rules')+'"></div><button class="tb batch-add" id="'+id('add')+'">＋ 別の大問にも設定する</button></section><section class="batch-step batch-confirm"><h4><span>3</span> 内容を確認して適用</h4><div class="batch-summary" id="'+id('summary')+'" role="status" aria-live="polite"></div><button class="tb primary batch-apply" id="'+id('apply')+'">変更を適用する</button></section>';
   const add=(from=1,to=from)=>{
     const row=document.createElement('div');row.className='input-batch-rule';
-    row.innerHTML='<label class="batch-range">大問（始め）<input data-batch="from" type="number" min="1" max="200" value="'+from+'"></label><label class="batch-range">大問（終わり）<input data-batch="to" type="number" min="1" max="200" value="'+to+'"></label><label>点数<input data-batch="points" type="number" min="0" max="1000" step="any" placeholder="変更しない"></label><label>観点<select data-batch="aspect"><option value="">変更しない</option>'+aspectOptions().map(([k,t])=>'<option value="'+xmlEsc(k)+'">'+xmlEsc(t)+'</option>').join('')+'</select></label><label>形式<select data-batch="kind">'+autoKindOptions(typeof subject==='function'?subject():subject,'',[['','変更しない'],['auto','自動']])+'</select></label><button class="tb" data-rule-remove>削除</button>';
-    q('rules').appendChild(row);row.querySelector('[data-rule-remove]').onclick=()=>{if(q('rules').children.length===1){row.querySelectorAll('[data-batch="points"]').forEach(n=>n.value='');row.querySelectorAll('select').forEach(n=>n.value='');}else row.remove();};return row;
+    row.innerHTML='<div class="batch-rule-heading"><strong>変更内容</strong><button type="button" class="batch-remove" data-rule-remove>この設定を削除</button></div><div class="batch-range"><b>大問</b><label><span class="batch-visually-hidden">始めの大問</span><input data-batch="from" aria-label="始めの大問" type="number" min="1" max="200" value="'+from+'"></label><span>〜</span><label><span class="batch-visually-hidden">終わりの大問</span><input data-batch="to" aria-label="終わりの大問" type="number" min="1" max="200" value="'+to+'"></label><span>の問題</span></div><div class="batch-fields"><label><b>点数</b><div class="batch-points"><input data-batch="points" aria-label="変更後の点数" type="number" min="0" max="1000" step="any" placeholder="今のまま"><span>点／問</span></div><small>空欄なら今の点数を使います</small></label><label><b>観点</b><select data-batch="aspect" aria-label="変更後の観点"><option value="">今のまま</option>'+aspectOptions().map(([k,t])=>'<option value="'+xmlEsc(k)+'">'+xmlEsc(t)+'</option>').join('')+'</select><small>変更後の観点を選びます</small></label><label><b>解答欄の種類</b><select data-batch="kind" aria-label="変更後の解答欄の種類">'+autoKindOptions(typeof subject==='function'?subject():subject,'',[['','今のまま'],['auto','自動で選ぶ']])+'</select><small>変更後の欄を選びます</small></label></div>';
+    q('rules').appendChild(row);row.querySelector('[data-rule-remove]').onclick=()=>{if(q('rules').children.length===1){row.querySelector('[data-batch="points"]').value='';row.querySelectorAll('select').forEach(n=>n.value='');}else row.remove();refresh();};return row;
   };
+  const preview=()=>{
+    try{
+      const rows=getRows(),scope=q('scope').value,targets=new Set(),lines=[];
+      [...q('rules').children].filter(r=>!r.hidden).forEach(r=>{
+        const value=k=>r.querySelector('[data-batch="'+k+'"]').value,point=value('points'),aspect=value('aspect'),kind=value('kind'),from=+value('from'),to=+value('to');
+        if(point==='' && !aspect && !kind)return;
+        if(point!=='' && (!Number.isFinite(+point) || +point<0 || +point>1000) || scope==='groups' && (![from,to].every(n=>Number.isInteger(n) && n>=1 && n<=200) || from>to)){lines.push('入力した数値・大問の範囲を確認してください。');return;}
+        let count=0;rows.forEach((row,i)=>{if(scope==='selected'?!selected.has(i):scope==='groups' && !(autoNumberIndex(row.group)>=from && autoNumberIndex(row.group)<=to))return;count++;targets.add(i);});
+        const parts=[point!==''?point+'点／問':'',aspect?new Map(aspectOptions()).get(aspect) || aspect:'',kind?r.querySelector('[data-batch="kind"] option:checked').textContent:''].filter(Boolean);
+        const label=scope==='groups'?'大問'+from+(from===to?'':'〜'+to):scope==='selected'?'チェックした問題':'すべての問題';
+        lines.push(label+'（'+count+'問） → '+parts.join('・'));
+      });
+      q('summary').textContent=lines.length?lines.join('\n'):'変更内容はまだありません。上で点数・観点・欄の種類を指定してください。';
+      q('apply').textContent=targets.size?targets.size+'問に変更を適用する':'変更を適用する';
+      const footer=document.getElementById(id('footer-apply'));if(footer)footer.textContent=q('apply').textContent;
+    }catch(e){q('summary').textContent=e.message;}
+  };
+  host.addEventListener('input',preview);host.addEventListener('change',preview);
   const refresh=()=>{
     const scope=q('scope').value,group=scope==='groups';
-    q('rules').querySelectorAll('[data-batch="kind"]').forEach(n=>{const value=n.value;n.innerHTML=autoKindOptions(typeof subject==='function'?subject():subject,value,[['','変更しない'],['auto','自動']]);});
-    [...q('rules').children].forEach((r,i)=>{r.hidden=!group && i>0;r.querySelectorAll('.batch-range,[data-rule-remove]').forEach(n=>n.hidden=!group);});q('add').hidden=!group;q('selection').hidden=scope!=='selected';
+    q('rules').querySelectorAll('[data-batch="kind"]').forEach(n=>{const value=n.value;n.innerHTML=autoKindOptions(typeof subject==='function'?subject():subject,value,[['','今のまま'],['auto','自動で選ぶ']]);});
+    [...q('rules').children].forEach((r,i)=>{r.hidden=!group && i>0;r.querySelectorAll('.batch-range,[data-rule-remove]').forEach(n=>n.hidden=!group);r.querySelector('.batch-rule-heading strong').textContent=group?'設定 '+(i+1):'変更後の設定';r.querySelector('[data-rule-remove]').textContent=q('rules').children.length===1?'入力をクリア':'この設定を削除';});q('add').hidden=!group;q('selection').hidden=scope!=='selected';
     if(scope==='selected'){
       try{const rows=getRows();q('selection').querySelector('.batch-checks').innerHTML=rows.map((r,i)=>'<label><input type="checkbox" data-batch-check="'+i+'"'+(selected.has(i)?' checked':'')+'> '+xmlEsc('大問'+r.group+' '+r.label+'　'+String(r.answer || '（答えは空欄）').slice(0,45))+'</label>').join('');}catch(e){status.textContent=e.message;}
     }
+    preview();
   };
   q('selection').onchange=e=>{if(e.target.dataset.batchCheck!==undefined){const i=+e.target.dataset.batchCheck;if(e.target.checked)selected.add(i);else selected.delete(i);}};
   q('scope').onchange=refresh;q('add').onclick=()=>{const last=q('rules').lastElementChild,from=Number(last.querySelector('[data-batch="to"]').value)+1;add(from);refresh();};
@@ -1913,7 +1946,7 @@ function mountInputBatch(host,{prefix,subject,getRows,apply,status,selected=new 
       apply(changes,rows);status.textContent=changes.size+'問を変更しました。入力タブで確認できます。';refresh();
     }catch(e){status.textContent=e.message;}
   };
-  add(1,3);refresh();return {refresh,selected};
+  add(1,3);refresh();return {refresh,selected,preview};
 }
 
 function openAnswerInputTable(initial,defaults,onSave){
@@ -1967,6 +2000,9 @@ function openAnswerInputTable(initial,defaults,onSave){
       data.forEach((r,i)=>{for(const c of [3,4,5])r[c]=resolved[i][c];const change=changes.get(i);if(change){if(change.points!==undefined)r[3]=String(change.points);if(change.aspect)r[4]=change.aspect;if(change.kind)r[5]=change.kind;}});draw();
     }});
   const chooseBulk=q('#input-table-tab-bulk').onclick;q('#input-table-tab-bulk').onclick=()=>{batch.refresh();chooseBulk();};
+  const tableApply=document.createElement('button');tableApply.id='input-bulk-footer-apply';tableApply.className='tb primary';tableApply.hidden=true;tableApply.textContent='変更を適用する';tableApply.onclick=()=>q('#input-bulk-apply').click();q('#answer-input-save').before(tableApply);
+  tabs.addEventListener('click',()=>{const settings=q('#input-table-tab-bulk').getAttribute('aria-selected')==='true';tableApply.hidden=!settings;q('#answer-input-save').hidden=settings;batch.preview();});
+
   const hints=()=>{const rows=resolvedRows();rows.forEach((row,r)=>row.forEach((v,c)=>{
     const node=q('[data-input-cell="'+r+','+c+'"]');if(c===2)return;
     if(c>=4)v=r?rows[r-1][c]:c===4?defaults.aspect || '知技':'auto';
@@ -7223,8 +7259,8 @@ function openAnswerGenerator(initialTitle='',creation=null){
       rows=parsed;scoringDirty=false;drawRows(true);q('#auto-tab-review').disabled=!rows.length;
     }});
   const chooseScore=q('#bulk-tab-score').onclick;q('#bulk-tab-score').onclick=()=>{sourceBatch.refresh();chooseScore();};
-  const scoreApply=document.createElement('button');scoreApply.id='source-bulk-footer-apply';scoreApply.className='tb primary';scoreApply.textContent='設定を適用する';scoreApply.hidden=true;scoreApply.onclick=()=>q('#source-bulk-apply').click();q('#auto-parse').before(scoreApply);
-  bulkTabs.addEventListener('click',()=>{const settings=q('#bulk-tab-score').getAttribute('aria-selected')==='true';scoreApply.hidden=!settings;q('#auto-parse').hidden=settings;});
+  const scoreApply=document.createElement('button');scoreApply.id='source-bulk-footer-apply';scoreApply.className='tb primary';scoreApply.textContent='変更を適用する';scoreApply.hidden=true;scoreApply.onclick=()=>q('#source-bulk-apply').click();q('#auto-parse').before(scoreApply);
+  bulkTabs.addEventListener('click',()=>{const settings=q('#bulk-tab-score').getAttribute('aria-selected')==='true';scoreApply.hidden=!settings;q('#auto-parse').hidden=settings;sourceBatch.preview();});
 
   source.addEventListener('input',()=>sourceBatch.selected.clear());
   q('#auto-input-table').onclick=()=>{
