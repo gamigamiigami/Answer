@@ -576,7 +576,7 @@ input[type=checkbox]{accent-color:var(--place)}
 #workspace-tabs{padding:0 18px;margin:0}#basic-guidance{padding:14px 18px;background:var(--panel);line-height:1.7}
 #basic-guidance span{display:block;color:var(--sub);font-size:13px}
 body:not(.simple-workspace) #basic-guidance{display:none}
-.simple-workspace #side,.simple-workspace #status,.simple-workspace #tab-draw,.simple-workspace #btn-undo,.simple-workspace #btn-redo{display:none!important}
+.simple-workspace #side,.simple-workspace #status,.simple-workspace #tab-draw{display:none!important}
 .simple-workspace #sheet{pointer-events:none}.simple-workspace #paper .guide{display:none}
 #app-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:6px 18px;border-top:1px solid var(--line);background:var(--panel);color:var(--sub);font-size:11px}
 #app-footer .app-release-history{max-height:4.5em;font-size:10px;width:34em}
@@ -635,6 +635,20 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 @media(max-width:650px){#answer-input-grid th:nth-child(2),#answer-input-grid td:nth-child(2){width:65px}#answer-input-grid th:nth-child(3),#answer-input-grid td:nth-child(3){width:110px}}
 
 .header-edit{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--sub)}.header-edit>span{display:flex;align-items:center;gap:4px}#grade-input{width:65px!important}#border-erase-side{display:block;width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);margin:6px 0 10px}#erase-borders{white-space:normal;width:100%}
+
+@media(min-width:1101px){.auto-modal.reviewing .auto-grid{grid-template-columns:85px 110px minmax(170px,.8fr) minmax(170px,1fr) 150px 135px}}
+/* Keep the preview readable; reclaim space from repeated headings and controls. */
+.auto-modal.reviewing #auto-title{margin:0 80px 8px 0;font-size:16px}
+.auto-modal.reviewing .auto-steps{margin:0 0 8px}.auto-modal.reviewing .auto-steps button{padding:6px}
+.auto-modal.reviewing .card>p.desc{display:none}.auto-modal.reviewing .card>.row{margin:4px 0;display:flex;gap:12px}
+.auto-modal.reviewing .view-tabs{margin:4px 0}.auto-modal.reviewing #review-list>p{margin:8px 0}
+.auto-modal.reviewing .auto-question{padding:10px;margin:12px 0}.auto-modal.reviewing .auto-numbering{grid-template-columns:90px 110px}
+.question-scoring{font-size:13px;min-width:120px}.question-scoring summary{cursor:pointer;padding:8px;background:var(--soft);border-radius:5px}.question-scoring label{display:block;margin-top:8px}
+#answer-input-grid thead{position:sticky;top:0;z-index:2;background:var(--panel)}
+#answer-input-grid td:nth-child(2) textarea,#answer-input-grid td:nth-child(3) textarea{min-height:42px;height:42px}
+#auto-batch>.batch-step>label{display:inline-grid;gap:6px;margin:8px;vertical-align:top}#auto-batch>.batch-step{margin:12px 0}
+#review-batch-summary{padding:12px;background:var(--soft)}
+[hidden]{display:none!important}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -682,7 +696,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
     <span class="logo"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><span><small>テストのお供</small>てすとも君</span></span>
     <label class="header-edit">学年<span><input type="text" id="grade-input" aria-label="学年" placeholder="例：1"> 年</span></label><label class="header-edit">テスト名<input type="text" id="title-input" title="テスト名" aria-label="テスト名" placeholder="例：中間テスト"></label>
     <button class="tb" id="btn-answer-editor" title="作成した解答欄と模範解答の入力一覧を開く">模範解答の編集</button>
-    <button class="tb" id="btn-undo">戻す<kbd>Ctrl+Z</kbd></button>
+    <button class="tb" id="btn-undo">元に戻す<kbd>Ctrl+Z</kbd></button>
     <button class="tb" id="btn-redo">やり直す<kbd>Ctrl+Y</kbd></button>
     <span class="spacer"></span>
     <button class="tb primary" id="btn-xlsx">Excel出力</button>
@@ -692,7 +706,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
     <button class="tb" id="btn-settings" title="設定">設定</button></div></details>
   </div>
   <div id="workspace-tabs" class="view-tabs" role="tablist" aria-label="画面の切り替え"><button id="workspace-basic" role="tab" aria-controls="main" aria-selected="true">確認・Excel出力</button><button id="workspace-detail" role="tab" aria-controls="main" aria-selected="false" tabindex="-1">細かな編集</button></div>
-  <div id="basic-guidance"><b>用紙を確認して、右上の「Excel出力」を押してください。</b><span>答えや欄を直すときは「模範解答の編集」へ。</span></div>
+  <div id="basic-guidance"><b>用紙を確認して、「Excel出力」を押してください。</b><span>答えや欄を直すときは「模範解答の編集」へ。</span></div>
   <div id="workbar">
     <div id="tabs" role="tablist" aria-label="作業の切り替え">
       <button class="tab on" id="tab-sheet" role="tab" aria-controls="main" data-tab="sheet">解答用紙</button>
@@ -769,8 +783,9 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 const APP_RELEASES = [
+  ['2.11.0','一覧を整理／変更操作を統一・途中入力を保持'],
   ['2.10.0','学年・テスト名を分離／選択した罫線だけ削除'],
   ['2.9.0','入力表を3項目に・形式は一覧で調整／カスタム設定'],
   ['2.8.1','まとめて変更を3手順に整理・適用内容を表示'],
@@ -1954,15 +1969,16 @@ function mountInputBatch(host,{prefix,subject,getRows,apply,status,selected=new 
       if(!rules.some(r=>r.points!==null || r.aspect || r.kind))throw new Error('変更する点数・観点を指定してください。');
       const changes=new Map();rows.forEach((r,i)=>{for(const rule of rules){if(scope==='selected' && !selected.has(i) || scope==='groups' && !(autoNumberIndex(r.group)>=rule.from && autoNumberIndex(r.group)<=rule.to))continue;const change=changes.get(i) || {};if(rule.points!==null)change.points=rule.points;if(rule.aspect)change.aspect=rule.aspect;if(rule.kind)change.kind=rule.kind;if(Object.keys(change).length)changes.set(i,change);}});
       if(!changes.size)throw new Error('変更する問題がありません。範囲またはチェックを確認してください。');
-      apply(changes,rows);status.textContent=changes.size+'問を変更しました。入力タブで確認できます。';refresh();
+      apply(changes,rows);status.textContent=changes.size+'問を変更しました。「問題を入力」で確認するか、右下から次へ進めます。';refresh();
     }catch(e){status.textContent=e.message;}
   };
   add(1,3);refresh();return {refresh,selected,preview};
 }
 
-function openAnswerInputTable(initial,defaults,onSave){
+function openAnswerInputTable(initial,defaults,onSave,draft={}){
   const quote=s=>'"'+String(s).replace(/"/g,'""')+'"';
   let data=initial.length?initial.map(r=>[r.group,r.label,r.answer,String(r.points),r.aspect,autoChoiceKind(r.kind)]):[['1','1','',String(defaults.points ?? 2),defaults.aspect || '知技','auto']];
+  if(draft.data)data=structuredClone(draft.data);
   const emptyRow=()=>['','','','','','auto'];
   const nextNumber=(label,fallback)=>{
     // Increment only the deepest number. Prefixes such as 問一（１） stay intact.
@@ -1993,7 +2009,7 @@ function openAnswerInputTable(initial,defaults,onSave){
   };
   const modal=document.createElement('div');modal.className='modal table-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','問題の入力表');
   modal.innerHTML='<div class="card"><h3>模範解答を入力</h3><p>「大問・番号・答え」を入力してください。「＋ 1問追加」で番号が続きます。</p><p class="desc">点数・観点は「まとめて変更」タブで設定。欄の種類は答えから自動判定し、次の一覧で調整できます。</p><details class="table-input-help"><summary>入力例・Excelから貼り付け</summary><table class="input-example"><caption>例：大問1の問1、答え「太陽」</caption><thead><tr><th>大問</th><th>番号</th><th>答え</th></tr></thead><tbody><tr><td>1</td><td>1</td><td>太陽</td></tr></tbody></table><p>大問の空欄は上と同じ。番号の空欄は連番になります。答えの空欄は空欄のままです。</p><p>Excelからも「大問・番号・答え」の3列を、最初の「大問」の欄に貼り付けます。</p></details><div class="table-scroll"><table id="answer-input-grid"></table></div><button class="tb" id="answer-input-add">＋ 1問追加</button><p role="status" id="answer-input-status"></p><div class="modal-actions"><button class="tb" id="answer-input-cancel">やめる</button><button class="tb primary" id="answer-input-save">入力した答えを確認する →</button></div></div>';
-  document.body.append(modal);const q=s=>modal.querySelector(s),opener=document.activeElement;
+  document.body.append(modal);draft.onOpen?.();const q=s=>modal.querySelector(s),opener=document.activeElement;
   const card=q('.card'),tabs=document.createElement('div');tabs.className='view-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','入力表の操作');
   tabs.innerHTML='<button id="input-table-tab-edit" role="tab" aria-controls="input-table-edit" aria-selected="true">問題を入力</button><button id="input-table-tab-bulk" role="tab" aria-controls="input-table-bulk" aria-selected="false" tabindex="-1">まとめて変更</button>';
   const edit=document.createElement('section');edit.id='input-table-edit';edit.setAttribute('role','tabpanel');edit.setAttribute('aria-labelledby','input-table-tab-edit');
@@ -2012,7 +2028,7 @@ function openAnswerInputTable(initial,defaults,onSave){
     }});
   const chooseBulk=q('#input-table-tab-bulk').onclick;q('#input-table-tab-bulk').onclick=()=>{batch.refresh();chooseBulk();};
   const tableApply=document.createElement('button');tableApply.id='input-bulk-footer-apply';tableApply.className='tb primary';tableApply.hidden=true;tableApply.textContent='変更を適用する';tableApply.onclick=()=>q('#input-bulk-apply').click();q('#answer-input-save').before(tableApply);
-  tabs.addEventListener('click',()=>{const settings=q('#input-table-tab-bulk').getAttribute('aria-selected')==='true';tableApply.hidden=!settings;q('#answer-input-save').hidden=settings;batch.preview();});
+  tabs.addEventListener('click',()=>{const settings=q('#input-table-tab-bulk').getAttribute('aria-selected')==='true';tableApply.hidden=!settings;q('#answer-input-save').hidden=false;batch.preview();});
 
   const hints=()=>{resolvedRows().forEach((row,r)=>{
     for(const c of [0,1])q('[data-input-cell="'+r+','+c+'"]').placeholder=c===1?'連番：'+row[c]:(r?'↑ 同じ：':'既定：')+row[c];
@@ -2034,7 +2050,7 @@ function openAnswerInputTable(initial,defaults,onSave){
     else data.push([String(defaults.group || '1'),autoNumberLabel(defaults.numStyle || 'digit',defaults.start || 1),'',String(defaults.points ?? 2),defaults.aspect || '知技','auto']);
     draw();q('[data-input-cell="'+(data.length-1)+',2"]').focus();
   };
-  const close=()=>{modal.remove();if(opener?.isConnected)opener.focus();};q('#answer-input-cancel').onclick=close;
+  let saved=false;const close=()=>{draft.data=saved?null:structuredClone(data);modal.remove();draft.onClose?.();if(opener?.isConnected)opener.focus();};q('#answer-input-cancel').textContent='入力を残して戻る';q('#answer-input-cancel').onclick=close;
   q('#answer-input-save').onclick=()=>{try{
     const rows=resolvedRows().map(([group,label,answer,point,aspect,savedKind],i)=>{
       let kind=savedKind;
@@ -2043,7 +2059,7 @@ function openAnswerInputTable(initial,defaults,onSave){
       r.group=/^\d+$/.test(group)?(SUBJECT_LAYOUTS[defaults.subject]?String(+group):kanji(+group)):group;const old=initial.find(o=>o.group===r.group && o.label===r.label);if(old && answer!==old.answer){kind='auto';}if(old && answer===old.answer && (kind==='auto' || old.kind===kind)){for(const key of ['fieldId','n','w','h','table','graphRange','kanbunGiven','appearance','completeGroup','complete','eight'])if(old[key]!==undefined)r[key]=JSON.parse(JSON.stringify(old[key]));}if(kind!=='auto'){r.kind=kind;r.kindAuto=false;}
       if(!answer && kind==='auto'){r.kind='blank';r.kindAuto=false;}
       const error=autoRowError(r);if(error)throw new Error((i+1)+'問目：'+error);return r;
-    });if(!rows.length)throw new Error('1問以上入力してください。');onSave(rows);close();
+    });if(!rows.length)throw new Error('1問以上入力してください。');onSave(rows);saved=true;close();
   }catch(e){q('#answer-input-status').textContent=e.message;}};
   modal.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();close();}if(e.key==='Tab'){const nodes=[...modal.querySelectorAll('button,textarea,select,summary')].filter(n=>!n.disabled && n.getClientRects().length),first=nodes[0],last=nodes.at(-1);if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}}};draw();q('[data-input-cell="0,2"]')?.focus();
 }
@@ -4516,7 +4532,9 @@ document.addEventListener('keydown', ev => {
   if ($('#start').style.display !== 'none') return;         // 起動画面では何もしない
   if (document.querySelector('.modal')) return;             // モーダルは各自で処理
   if (ev.isComposing || ev.keyCode === 229) return;
-  if(document.body.classList.contains('simple-workspace'))return;         // 日本語変換中は無視
+  if(document.body.classList.contains('simple-workspace')){
+    if((ev.ctrlKey || ev.metaKey) && ['KeyZ','KeyY'].includes(ev.code)){ev.preventDefault();if(ev.code==='KeyY' || ev.shiftKey)redo();else undo();}return;
+  }
 
   // --- 入力モード：Enter と Esc 以外は文字として通す ---
   if (ui.mode === 'input'){
@@ -7053,6 +7071,7 @@ function autoAnswerPreview(row,subject,paper){
 function openAnswerGenerator(initialTitle='',creation=null){
   if (typeof initialTitle!=='string') initialTitle='';
   if (ui.mode==='input'){ ui.seq=null; commitInput(); }
+  const tableDraft={};let initialCancelState;
   const wholeBook=!!(doc?.bookPages?.length>1);
   let rows=(wholeBook?allPages().flatMap((p,i)=>(currentAutoRows(p) || []).map(r=>({...r,fieldId:'p'+i+'/'+r.fieldId,completeGroup:r.completeGroup?'p'+i+'/'+r.completeGroup:''}))):currentAutoRows()) || [], parsedText='',scoringDirty=false;
   const initialScoring=(doc && doc.paper.autoScoring) || options.autoScoring || {points:2,aspect:'知技',aspectRanges:[]};
@@ -7122,6 +7141,17 @@ function openAnswerGenerator(initialTitle='',creation=null){
   while(reviewPanel.firstChild)reviewSettings.appendChild(reviewPanel.firstChild);
   reviewPanel.append(reviewTabs,reviewSettings,reviewList);q('#auto-batch').open=true;setupViewTabs(reviewTabs);
 
+  const batchBox=q('#auto-batch'),controls=q('.auto-batch');
+  const stage=(n,title)=>{const section=document.createElement('section');section.className='batch-step';section.innerHTML='<h4><span>'+n+'</span> '+title+'</h4>';batchBox.append(section);return section;};
+  const targetStage=stage(1,'変更する問題を選ぶ'),contentStage=stage(2,'変更後の内容を決める'),confirmStage=stage(3,'内容を確認して適用');
+  [...controls.children].forEach((node,i)=>(i<2?targetStage:i<7?contentStage:confirmStage).append(node));
+  confirmStage.append(q('#auto-bulk-apply'));controls.remove();
+  const previewChange=document.createElement('p');previewChange.id='review-batch-summary';previewChange.setAttribute('role','status');confirmStage.prepend(previewChange);
+  const summarizeBatch=()=>{const scope=q('#auto-bulk-scope').value;let count=rows.length;if(scope==='selected')count=selected.size;else if(scope.startsWith('group:'))count=rows.filter(r=>r.group===scope.slice(6)).length;else if(scope==='groups'){try{const groups=autoBulkGroupLabels(q('#auto-bulk-groups').value,rows);count=rows.filter(r=>groups.has(r.group)).length;}catch(e){previewChange.textContent=e.message;return;}}const changes=['kind','points','aspect'].map(k=>q('#auto-bulk-'+k)).filter(n=>n.value).map(n=>n.selectedOptions[0].textContent);previewChange.textContent=changes.length?count+'問 → '+changes.join('・'):'変えたい項目を選ぶと、ここに変更内容が表示されます。';};
+  batchBox.addEventListener('input',summarizeBatch);batchBox.addEventListener('change',summarizeBatch);
+  const advancedBatch=document.createElement('details');advancedBatch.className='auto-common';advancedBatch.innerHTML='<summary>完答の設定</summary>';batchBox.after(advancedBatch);
+  [q('#auto-completion-add').previousElementSibling,q('#auto-completion-add'),q('#auto-completion-remove')].forEach(n=>advancedBatch.append(n));
+  q('#review-tab-settings').addEventListener('click',summarizeBatch);
   const paintPreview=card=>{
     const target=card.querySelector('.auto-preview-sheet');
     try{target.replaceChildren(autoAnswerPreview(rows[+card.dataset.row],q('#auto-subject').value,doc?.paper));}
@@ -7147,7 +7177,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
   q('#auto-aspect-ranges').addEventListener('click',e=>{const button=e.target.closest('[data-range-remove]');if(button){button.closest('.auto-aspect-range').remove();changedScoring();}});
   q('#auto-help').onclick=()=>openHelp('quick');
   const showStep=step=>{
-    const review=step==='review';
+    const review=step==='review';wrap.classList.toggle('reviewing',review);
     q('#auto-input-panel').hidden=review; q('#auto-review-panel').hidden=!review;
     q('#auto-parse').hidden=review; q('#auto-apply').hidden=!review; q('#auto-back').hidden=!review;
     q('#auto-tab-review').disabled=!rows.length;
@@ -7162,7 +7192,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     if(b.dataset.step==='review' && sourceDirty()){ parse(); return; }
     showStep(b.dataset.step);
   });
-  q('#auto-back').onclick=()=>{ showStep('input'); if(!bulkPanel.hidden){q('#bulk-tab-write').click();source.focus();}else q('#auto-method-table').focus(); };
+  q('#auto-back').onclick=()=>{ showStep('input');if(bulkPanel.hidden){q('#auto-input-table').click();return;} if(!bulkPanel.hidden){q('#bulk-tab-write').click();source.focus();}else q('#auto-method-table').focus(); };
   wireTabKeys(q('.auto-steps'));
   q('#auto-subject').value=doc ? doc.paper.subject : '国語';
   const layoutChoice=document.createElement('label');layoutChoice.className='desc';
@@ -7188,7 +7218,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     return {...scoringSettings(),subject:q('#auto-subject').value,group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
       separator:'￥',answersOnly:q('#auto-answers-only').checked,numStyle:q('#auto-number-style').value,start,blankGroups:q('#auto-blank-groups').checked};
   };
-  const close=()=>{ previewObserver.disconnect(); wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
+  const close=()=>{ if((JSON.stringify(rows)!==initialCancelState || sourceDirty() || tableDraft.data?.some(r=>r[2].trim())) && !confirm('入力・変更した内容を破棄して閉じますか？ 用紙にはまだ反映されていません。'))return;previewObserver.disconnect(); wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
   const input=(key,value,type,label)=>'<input aria-label="'+label+'" data-k="'+key+'" type="'+(type || 'text')+'" value="'+xmlEsc(String(value))+'"'+(type==='number'?' min="0"':'')+'>';
   const infer=r=>{
     if (r.kindAuto){
@@ -7215,7 +7245,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     card.querySelector('.auto-kind-help').textContent=custom?customName(ci)+'：'+customCells(ci)+'セル分の枠。設定ボタンから名前とセル数を変更できます。':AUTO_KIND_HELP[r.kind] || '';
     card.querySelector('.auto-kind-help').hidden=!custom && !AUTO_KIND_HELP[r.kind];
     card.querySelector('[data-custom-settings]').hidden=!custom;
-    card.querySelector('[data-k="aspect"]').value=r.aspect;
+    card.querySelector('[data-k="aspect"]').value=r.aspect;card.querySelector('.question-scoring summary').textContent=r.points+'点・'+(new Map(aspectOptions()).get(r.aspect) || r.aspect);
     card.querySelector('[data-k="complete"]').disabled=!!r.completeGroup;
     for (const key of ['n','w','h','eight']){
       const enabled=key==='n'?['chars','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','essay','graph','table'].includes(r.kind);
@@ -7257,8 +7287,8 @@ function openAnswerGenerator(initialTitle='',creation=null){
       '<figure class="auto-field-preview"><figcaption>欄 <button type="button" class="auto-preview-open" data-preview="'+i+'" aria-label="'+(i+1)+'問目の欄を拡大">プレビュー拡大</button></figcaption><div class="auto-preview-sheet" tabindex="0" role="region" aria-label="解答欄プレビュー。長い欄は枠内をスクロールできます"></div></figure>'+
       '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+autoKindOptions(q('#auto-subject').value,r.kind)+'</select><small class="auto-kind-help"></small><button type="button" class="tb auto-custom-settings" data-custom-settings hidden>名前・セル数を設定</button></label>'+
-      '<label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
-      '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></div>'+
+      '<details class="question-scoring"><summary>'+r.points+'点・'+xmlEsc(new Map(aspectOptions()).get(r.aspect) || r.aspect)+'</summary><label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
+      '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></details></div>'+
       (hadDoc && r.fieldId?'<button class="tb" data-jump="'+i+'">この欄を用紙上で見る</button>':'')+
       '<details class="auto-detail"><summary>細かな設定<span class="auto-size-summary"></span></summary><div class="auto-options"><label>字数'+input('n',r.n,'number','字数')+'</label><label>幅'+input('w',r.w,'number','幅')+'</label><label>高さ'+input('h',r.h,'number','高さ')+'</label>'+
       '<label><input data-k="eight" type="checkbox"'+(r.eight?' checked':'')+'>8割ライン</label><label><input data-k="complete" type="checkbox"'+(r.complete?' checked':'')+'>完答（太枠）</label>'+
@@ -7312,7 +7342,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
   q('#auto-input-table').onclick=()=>{
     try{
       const defaults=getDefaults(),initial=source.value.trim() && sourceDirty()?parseAutoAnswers(source.value,defaults):rows;
-      openAnswerInputTable(initial,defaults,next=>{q('#auto-answers-only').checked=false;source.value=autoRowsSource(next,{separator:'￥'});parse();});
+      openAnswerInputTable(initial,defaults,next=>{q('#auto-answers-only').checked=false;source.value=autoRowsSource(next,{separator:'￥'});parse();},Object.assign(tableDraft,{onOpen:()=>wrap.hidden=true,onClose:()=>wrap.hidden=false}));
     }catch(e){status.textContent=e.message;}
   };
   q('#auto-bulk-groups').oninput=()=>{q('#auto-bulk-scope').value='groups';};
@@ -7481,7 +7511,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
     }
   });
-  drawRows(); if (rows.length) syncSource(); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):q('#auto-method-table')).focus();if(!rows.length)status.textContent='入力表か一括入力を選んでください。';
+  drawRows(); if (rows.length) syncSource();initialCancelState=JSON.stringify(rows); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):q('#auto-method-table')).focus();if(!rows.length)status.textContent='入力表か一括入力を選んでください。';
 }
 
 function applyCreationPaper(p,creation,title){
