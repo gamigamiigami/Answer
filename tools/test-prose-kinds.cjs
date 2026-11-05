@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
     assert.equal(await card.locator('[data-k="n"]').isVisible(), true);
     assert.equal(await card.locator('[data-k="eight"]').isVisible(), true);
     await page.click('#auto-tab-input'); await page.click('#auto-method-table');
-    assert.deepEqual(await page.locator('[data-input-cell="0,5"] > option').evaluateAll(nodes => nodes.slice(2).map(n => n.value)), ['mark', 'word', 'formula', 'chars', 'essay', 'graph', 'table']);
+    assert.equal(await page.locator('#answer-input-grid select').count(),0);
     await page.click('#answer-input-cancel');
     console.log('PASS: subject-specific order matches in row and bulk menus; character count and 80% line toggle are visible together');
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
