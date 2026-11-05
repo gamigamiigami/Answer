@@ -39,6 +39,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   assert.equal(await page.locator('#field-tools').isVisible(),false);
   assert.equal(await page.locator('#tab-draw').isVisible(),false);
   assert.equal(await page.locator('#btn-xlsx').isVisible(),true);
+  assert.equal(await page.locator('#btn-answer-editor').innerText(),'問題・答え・解答欄を編集');
+  await page.waitForFunction(()=>document.querySelector('#backup-status').textContent.includes('一時保存済み'));
+  assert.equal(await page.locator('#save-indicator').isVisible(),true);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(BK_KEY)).answers[doc.fields[0].id]),'太陽');
+  await page.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new Error('storage full');};backup();Storage.prototype.setItem=original;});
+  assert.match(await page.locator('#backup-status').innerText(),/一時保存できません/);
+  await page.evaluate(()=>backup());
+  assert.match(await page.locator('#backup-status').innerText(),/一時保存済み/);
+
   const before=await page.evaluate(()=>JSON.stringify(doc));
   await page.locator('#workspace-basic').focus();await page.keyboard.press('Digit1');await page.keyboard.press('Backspace');
   assert.equal(await page.evaluate(()=>JSON.stringify(doc)),before,'preview keyboard must not change the sheet');

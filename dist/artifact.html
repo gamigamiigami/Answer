@@ -649,6 +649,10 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 #auto-batch>.batch-step>label{display:inline-grid;gap:6px;margin:8px;vertical-align:top}#auto-batch>.batch-step{margin:12px 0}
 #review-batch-summary{padding:12px;background:var(--soft)}
 [hidden]{display:none!important}
+#save-indicator{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:8px 18px;border-bottom:1px solid var(--line);font-size:12px;background:var(--soft)}
+#backup-status{font-weight:600}#work-file-status{color:var(--sub)}#save-work-direct{margin-left:auto;font-size:12px}
+@media print{#save-indicator{display:none!important}}
+body.zen #save-indicator{display:none}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -695,18 +699,19 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
   <div id="topbar">
     <span class="logo"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><span><small>テストのお供</small>てすとも君</span></span>
     <label class="header-edit">学年<span><input type="text" id="grade-input" aria-label="学年" placeholder="例：1"> 年</span></label><label class="header-edit">テスト名<input type="text" id="title-input" title="テスト名" aria-label="テスト名" placeholder="例：中間テスト"></label>
-    <button class="tb" id="btn-answer-editor" title="作成した解答欄と模範解答の入力一覧を開く">模範解答の編集</button>
+    <button class="tb" id="btn-answer-editor" title="作成した解答欄と模範解答の入力一覧を開く">問題・答え・解答欄を編集</button>
     <button class="tb" id="btn-undo">元に戻す<kbd>Ctrl+Z</kbd></button>
     <button class="tb" id="btn-redo">やり直す<kbd>Ctrl+Y</kbd></button>
     <span class="spacer"></span>
     <button class="tb primary" id="btn-xlsx">Excel出力</button>
     <button class="tb" id="btn-help" title="使い方（F1）">使い方</button>
-    <details id="more-menu" class="more-menu"><summary class="tb">保存・その他</summary><div class="more-menu-items"><button class="tb" id="btn-save">作業ファイルを保存</button><small>後日編集するための保存（.json）</small>
+    <details id="more-menu" class="more-menu"><summary class="tb">保存・その他</summary><div class="more-menu-items"><button class="tb" id="btn-save">作業ファイルを保存</button><small>後日、このサイトで編集を再開するための保存（.json）。Excelは配布・印刷用です。</small>
     <button class="tb" id="btn-pdf">PDF（確認用）</button>
     <button class="tb" id="btn-settings" title="設定">設定</button></div></details>
   </div>
+  <div id="save-indicator"><span id="backup-status" role="status" aria-live="polite"></span><span id="work-file-status"></span><button class="tb" id="save-work-direct">編集用ファイルを保存</button></div>
   <div id="workspace-tabs" class="view-tabs" role="tablist" aria-label="画面の切り替え"><button id="workspace-basic" role="tab" aria-controls="main" aria-selected="true">確認・Excel出力</button><button id="workspace-detail" role="tab" aria-controls="main" aria-selected="false" tabindex="-1">細かな編集</button></div>
-  <div id="basic-guidance"><b>用紙を確認して、「Excel出力」を押してください。</b><span>答えや欄を直すときは「模範解答の編集」へ。</span></div>
+  <div id="basic-guidance"><b>用紙を確認して、「Excel出力」を押してください。</b><span>答えや欄を直すときは「問題・答え・解答欄を編集」へ。</span></div>
   <div id="workbar">
     <div id="tabs" role="tablist" aria-label="作業の切り替え">
       <button class="tab on" id="tab-sheet" role="tab" aria-controls="main" data-tab="sheet">解答用紙</button>
@@ -762,7 +767,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
       <p id="save-status" role="status" class="tip"></p>
     </div>
     <div id="preview">
-      <div id="paper"><svg id="sheet" role="img" aria-label="編集中の解答用紙。問題一覧は上の模範解答の編集から開けます。" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div id="paper"><svg id="sheet" role="img" aria-label="編集中の解答用紙。問題一覧は上の問題・答え・解答欄を編集から開けます。" xmlns="http://www.w3.org/2000/svg"></svg></div>
       <div id="status"></div>
     </div>
   </div>
@@ -783,8 +788,9 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '2.11.1';
 const APP_RELEASES = [
+  ['2.11.1','保存状態を表示／問題・答え・解答欄の編集先を明示'],
   ['2.11.0','一覧を整理／変更操作を統一・途中入力を保持'],
   ['2.10.0','学年・テスト名を分離／選択した罫線だけ削除'],
   ['2.9.0','入力表を3項目に・形式は一覧で調整／カスタム設定'],
@@ -1766,6 +1772,7 @@ async function removePage(){
 function syncPageControls(){
   const select=$('#page-select');if(!select)return;const pages=doc.bookPages || [doc];select.innerHTML=pages.map((_,i)=>'<option value="'+i+'">'+(i+1)+' / '+pages.length+' ページ</option>').join('');select.value=doc.pageIndex || 0;
   const review=$('#review-page-select');review.innerHTML=select.innerHTML;review.value=select.value;$('#review-page-control').hidden=pages.length<2;
+  syncSaveIndicator();
   $('#save-status').textContent=ui.dirty?'変更があります。作業ファイルを保存すると全ページと答えを残せます。':ui.workSaved?'全ページと模範解答を作業ファイルに保存しました。':'作業ファイルを保存して続きから編集できます。';
 }
 function buildPageDocuments(rows,subject,paper,title,minScale=.95){
@@ -2883,6 +2890,7 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
 }
 
 function render(singlePage=false){
+  clearTimeout(backupTimer);backupTimer=setTimeout(()=>{if(doc)backup();},800);
   renderSerial++;
   if($('#move-panel')){$('#move-panel').hidden=ui.tab!=='sheet';$('#move-mode').setAttribute('aria-pressed',String(!!ui.moveMode));$('#move-mode').textContent=ui.moveMode?'移動モード：ON（Escで終了）':'選んだ欄をドラッグ';svg.classList.toggle('field-move-mode',!!ui.moveMode && ui.tab==='sheet');}
   syncPaperControls();
@@ -5364,8 +5372,19 @@ function docJson(forBackup){
   if (forBackup && !options.backupAnswers){for(const page of [copy,...(copy.bookPages || [])]){page.answers={};page.answerGraphs={};page.images=(page.images || []).filter(i=>!i.answerOnly);page.drawings=(page.drawings || []).filter(i=>!i.answerOnly);}}
   return JSON.stringify(copy);
 }
+let backupTimer=null,backupText='',backupTime='',backupFailed=false;
+function syncSaveIndicator(){
+  if(!doc)return;
+  const label=$('#backup-status');if(!label)return;
+  const current=backupText===docJson(true);
+  label.textContent=backupFailed?'一時保存できません。編集用ファイルを保存してください。':current?(options.backupAnswers?'このブラウザーに用紙・答えを一時保存済み':'このブラウザーに用紙のみ一時保存済み（答えは含みません）')+' '+backupTime:'変更をこのブラウザーに一時保存しています…';
+  if(options.clearOnExit)label.textContent+='（閉じると消す設定）';
+  $('#work-file-status').textContent=ui.workSaved && !ui.dirty?'編集用ファイルは書き出し済みです。':'あとで別の端末でも編集するには、編集用ファイルを保存。Excelは配布・印刷用です。';
+}
 function backup(){
-  try { localStorage.setItem(BK_KEY, docJson(true));const label=$('#save-status');if(label)label.textContent=options.backupAnswers?'全ページと模範解答をブラウザーに一時保存しました。':'用紙のみ一時保存しました。答えを残すには作業ファイルを保存してください。'; } catch(e){const label=$('#save-status');if(label)label.textContent='一時保存できませんでした。作業ファイルを保存してください。';}
+  try{const text=docJson(true);localStorage.setItem(BK_KEY,text);backupText=text;backupTime=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});backupFailed=false;}
+  catch(e){backupFailed=true;}
+  syncSaveIndicator();
 }
 async function saveWork(){
   const name = baseName()+'.json';
@@ -5669,7 +5688,7 @@ async function openCheck(){
     row(readability.small.length,readability.small.length?'印刷時の文字が小さい欄が '+readability.small.length+'個あります（6pt未満が目安）':'文字の大きさの目安を満たしています')+
     row(readability.over.length,readability.over.length?'文章が欄の高さ・幅を超える欄が '+readability.over.length+'個あります。表は行を広げてください。':'文章の折り返しは欄に収まっています')+
     row(readability.smallBoxes,readability.smallBoxes?'手書きのマスが小さい欄が '+readability.smallBoxes+'個あります。ページ分割も利用できます。':'手書きのマスの大きさの目安を満たしています')+
-    row(brokenCompletion.length, brokenCompletion.length ? '完答の組で欄が1つだけになっています。模範解答の編集で組を確認してください。' : '完答の組の欄はそろっています')+
+    row(brokenCompletion.length, brokenCompletion.length ? '完答の組で欄が1つだけになっています。問題・答え・解答欄を編集で組を確認してください。' : '完答の組の欄はそろっています')+
     row(noAnswer.length, noAnswer.length ? '模範解答が入っていない欄が '+noAnswer.length+'個あります'
         : '模範解答はすべて入っています', 'answer')+
     row(over.length, over.length ? '欄に入りきらない模範解答が '+over.length+'個あります'
@@ -5801,7 +5820,7 @@ function openHelp(initialTab='quick'){
       <li><b>「入力した答えを確認する」→「この内容で用紙を作る」</b><br>一覧で答えと欄を確認します。必要なら欄の種類を変更できます。</li>
       <li><b>用紙を確認 →「Excel出力」</b><br>解答用紙と模範解答が、1つのExcelファイルに入ります。</li>
     </ol>
-    <p>直すときは<b>「模範解答の編集」</b>。配置や描画は<b>「細かな編集」</b>タブにあります。</p>
+    <p>直すときは<b>「問題・答え・解答欄を編集」</b>。配置や描画は<b>「細かな編集」</b>タブにあります。</p>
     <p>後日また編集するなら「保存・その他」→「作業ファイルを保存」。次回は「作業ファイルを開く」で再開できます。</p>
     <button class="tb" data-help-go="format">一括入力の書き方を見る</button>
     </section>
@@ -5821,7 +5840,7 @@ ${guideToken('question','2')}￥${guideToken('answer','太陽')}</pre><p>これ�
     <details><summary>答えだけで、まず試したい</summary><pre>ア
 太陽
 相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数・観点は入力画面の基本設定と大問の範囲に従います。数字だけの答えは「1,12」の形で書きます。</p></details>
-    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「模範解答の編集」で直し、「この内容で用紙を更新」を押します。一覧の全問で用紙全体を作り直します。</span></div>
+    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「問題・答え・解答欄を編集」で直し、「この内容で用紙を更新」を押します。一覧の全問で用紙全体を作り直します。</span></div>
     <button class="tb" data-help-go="advanced">小問・字数指定などは「詳しい機能」へ →</button></section>`+
     '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
     '<details><summary>手作業で欄を置く・動かす</summary><p>編集画面の「細かな編集」→「解答用紙」を開きます。用紙の位置を選んで、左の「解答欄」のボタンを押してください。ボタンに書かれた数字キーでも追加できます。</p><p>移動は「配置」タブへ。「解答欄を全部選ぶ」→「右に詰める」でまとめて動かします。一部なら欄を囲んで選び、矢印ボタンで動かします。「選んだ欄をドラッグ」をONにするとマウスでも動かせます。</p></details>'+
@@ -6404,7 +6423,7 @@ function showPanels(){
   $('#side-panel-tools .workspace-guide').hidden=!dr && !answer;
   $('#side-tab-layout').hidden=dr;
   selectSideTab('tools');
-  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'直したい欄を選んで「文字」から入力できます。まとめて直すときは、上の「模範解答の編集」へ。':'';
+  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'直したい欄を選んで「文字」から入力できます。まとめて直すときは、上の「問題・答え・解答欄を編集」へ。':'';
   document.querySelectorAll('#tabs .tab').forEach(t=>{
     const active=t.dataset.tab===ui.tab;
     t.setAttribute('aria-selected',String(active)); t.tabIndex=active?0:-1;
@@ -7499,7 +7518,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       if(generated && generated.length>1)next={...pageCopy(generated[0]),bookPages:generated.map(pageCopy),pageIndex:0};
       else next=pageCopy(next);
       doc=next; uid=rows.length+1; ui.targets=[]; ui.seq=null; ui.dirty=true;
-      wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。'+(doc.paper.autoFit ? autoFitSummary(doc.paper)+'に自動調整しました。' : 'おつかれさまです！')+'「模範解答の編集」で、いつでも直せます。');
+      wrap.remove(); startApp(); toast(rows.length+'問の用紙ができました。'+(doc.paper.autoFit ? autoFitSummary(doc.paper)+'に自動調整しました。' : 'おつかれさまです！')+'「問題・答え・解答欄を編集」で、いつでも直せます。');
     } catch(e){ status.textContent=e.message; }
   };
   wrap.addEventListener('keydown',e=>{
@@ -7587,6 +7606,7 @@ $('#btn-undo').onclick = undo;
 $('#btn-redo').onclick = redo;
 $('#btn-xlsx').onclick = exportXlsx;
 $('#btn-pdf').onclick  = printSheet;
+$('#save-work-direct').onclick=saveWork;
 $('#btn-save').onclick = saveWork;
 $('#btn-settings').onclick = openSettings;
 $('#btn-zen').onclick = toggleZen;
