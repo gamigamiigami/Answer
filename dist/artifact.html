@@ -686,8 +686,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const APP_RELEASES = [
+  ['2.4.0','自由欄の寸法一括指定・漢字を大きく普通罫線に'],
   ['2.3.0','入力方法を選択・一括入力に色付きの例を追加'],
   ['2.2.0','カスタム名とセル数の設定・漢字10セルに修正'],
   ['2.1.0','漢字10マス・自由欄5×1・入力省略と解答保存'],
@@ -2113,7 +2114,7 @@ function flowingAnswerPlan(d, f, text){
   const fixed = f.type!==8 && (f.fixedChars === true || (f.fixedChars !== false && [3,4,5].includes(f.type)));
   if (fixed) return null;
   const chars = Array.from(text);
-  const vertical = d.paper.writing === 'vertical' && /[^\x00-\x7f]/.test(text) && chars.length > 1;
+  const vertical = d.paper.writing === 'vertical' && /[^\x00-\x7f]/.test(text) && (chars.length > 1 || f.type===8);
   const note = new Set(placeNote(d, f).map(p=>p.c+','+p.r));
   const width = (c,w) => {
     let mm = 0;
@@ -2150,7 +2151,7 @@ function flowingAnswerPlan(d, f, text){
   }
   // 縦書きの長い欄は、上下1セルずつを空けた内側だけに文字を配置する。
   // Excelにも同じ空きセルを残すため、画面だけの位置調整にしない。
-  if (vertical) regions.forEach(p=>{
+  if (vertical && f.type!==8) regions.forEach(p=>{
     if (p.mh>=6){ p.r++; p.mh-=2; p.insetRows=1; }
   });
   // 日本語は全角幅、英数字は可変幅で見積もる。Canvasの測定値にも余白を加える。
@@ -2188,7 +2189,7 @@ function flowingAnswerPlan(d, f, text){
     }
     return {out,room:Math.max(room,index),need:chars.length,used:index};
   };
-  const top = Math.min(40,textPtOf(f))*(f.type===8 ? Math.min(1,KANJI_CHARS/Math.max(1,chars.length)) : 1);
+  const top = f.type===8 ? Math.min(96,Math.max(.5,...regions.map(p=>(vertical?width(p.c,p.mw)-1.6:p.mh*RH-1.6)/ptmm(1)/1.15))) : Math.min(40,textPtOf(f));
   let plan;
   for (let size=top;size>=Math.min(f.type===8?.5:6,top);size-=0.5){
     plan = trySize(size);
@@ -2381,7 +2382,7 @@ function buildCells(d, withAnswers){
   for (const f of d.fields){
     const fc = fillOf(f);
     if (fc) f.rects.forEach(r => paint(r.c, r.r, r.w, r.h, fc));
-    const outer = f.type===8 || f.complete && !f.completeGroup ? 'medium' : (f.line || 'thin');
+    const outer = f.type===8 ? 'thin' : f.complete && !f.completeGroup ? 'medium' : (f.line || 'thin');
     f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
     if (MARK_TYPES.indexOf(f.type) >= 0) f.rects.forEach(r => merge(r.c, r.r, r.w, r.h));  // 1マスに連結
     // 太線モードで作った欄は、番号欄の外枠も太線にする
@@ -2507,7 +2508,7 @@ function buildCells(d, withAnswers){
       });
     }
   }
-  for(const f of d.fields)if(f.label){box(f.label.c,f.label.r,f.label.w,f.label.h,f.line || 'thin');merge(f.label.c,f.label.r,f.label.w,f.label.h);}
+  for(const f of d.fields)if(f.label){box(f.label.c,f.label.r,f.label.w,f.label.h,f.type===8?'thin':f.line || 'thin');merge(f.label.c,f.label.r,f.label.w,f.label.h);}
   for(const q of d.decorations)if(q.questionHeading || q.subQuestionHeading){box(q.c,q.r,q.w,q.h,q.style || 'thin');merge(q.c,q.r,q.w,q.h);}
   return cells;
 }
@@ -2970,7 +2971,7 @@ async function placeField(type){
   }
   if (type===8){
     const v = await ask('漢字の解答欄', [
-      {key:'info',label:'10文字分の太枠',type:'none',hint:'区切り線はありません。11文字以上の答えは文字を小さくして枠内に収めます。'}, manyRow()
+      {key:'info',label:'10文字分の枠',type:'none',hint:'区切り線はありません。11文字以上の答えは文字を小さくして枠内に収めます。'}, manyRow()
     ]); if(!v) return; opt.n=KANJI_CHARS; opt.exact=true;
     many = num(v.many, 0, many);
   }
@@ -6202,7 +6203,7 @@ function autoKindOptions(subject,value,extra=[]){
   const other=AUTO_KIND_CHOICES.filter(([kind])=>!main.includes(kind));
   return extra.map(option).join('')+main.map(kind=>option([kind,labels.get(kind)])).join('')+'<optgroup label="その他">'+other.map(option).join('')+'</optgroup>';
 }
-const AUTO_KIND_HELP={word:'答えに合わせて欄の大きさを自動調整します。',essay:'英文・説明・途中式もここへ。幅と高さを指定します。答えは空でも作れます。',formula:'1/2（分数）・x^2（指数）などの書き方で式を表します。',kanji:'常に10文字分の太枠。11文字以上は文字を小さくして収めます。横書きは高さ1マスです。'};
+const AUTO_KIND_HELP={word:'答えに合わせて欄の大きさを自動調整します。',essay:'英文・説明・途中式もここへ。幅と高さを指定します。答えは空でも作れます。',formula:'1/2（分数）・x^2（指数）などの書き方で式を表します。',kanji:'常に10文字分の枠。11文字以上は文字を小さくして収めます。横書きは高さ1マスです。'};
 function essaySize(subject){return subject==='国語'?{w:1,h:10}:{w:5,h:1};}
 const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ～おわり，４，思\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
 const SUBJECT_SAMPLES = {
@@ -6838,7 +6839,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     completionAndDepthHelp()+
     kanbunHelp()+
     '</section>'+
-    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>形式・配点・観点をまとめて変更</summary><p class="desc">大問を入力して、形式・配点・観点をまとめて変更できます。全問やチェックした問題も選べます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>大問を入力<input id="auto-bulk-groups" type="text" placeholder="例：1～5 ／ 1，3，5" aria-label="まとめて変更する大問" autocomplete="off"><small>範囲と列挙を組み合わせられます。</small></label><label>解答形式<select id="auto-bulk-kind">'+choices([['','形式は変更しない'],...AUTO_KIND_CHOICES],'')+'</select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">選んだ内容をまとめて変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
+    '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>形式・配点・観点をまとめて変更</summary><p class="desc">大問を入力して、形式・配点・観点をまとめて変更できます。全問やチェックした問題も選べます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>大問を入力<input id="auto-bulk-groups" type="text" placeholder="例：1～5 ／ 1，3，5" aria-label="まとめて変更する大問" autocomplete="off"><small>範囲と列挙を組み合わせられます。</small></label><label>解答形式<select id="auto-bulk-kind">'+choices([['','形式は変更しない'],...AUTO_KIND_CHOICES],'')+'</select></label><span id="auto-bulk-size" hidden><label>幅<input id="auto-bulk-width" aria-label="まとめて変更する幅" type="number" min="1" max="40" value="5"></label><label>高さ<input id="auto-bulk-height" aria-label="まとめて変更する高さ" type="number" min="1" max="40" value="1"></label></span><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">選んだ内容をまとめて変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-parse">読み取って一覧にする →</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
   document.body.appendChild(wrap);
@@ -6961,7 +6962,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       const label=card.querySelector('[data-k="'+key+'"]').closest('label');
       (r.kind==='chars'?dimensions:card.querySelector('.auto-options')).appendChild(label);
     }
-    card.querySelector('.auto-size-summary').textContent=(r.kind==='kanji'?' · 10文字分の太枠':r.kind==='table'?' · '+(r.w || 3)+'列 × '+(r.h || 3)+'行':['chars','extract'].includes(r.kind)?' · '+r.n+'字':r.w && r.h?' · 幅'+r.w+'・高さ'+r.h:'')+(r.complete?' · 完答':'')+(r.eight && r.kind==='chars'?' · 8割ライン':'');
+    card.querySelector('.auto-size-summary').textContent=(r.kind==='kanji'?' · 10文字分の枠':r.kind==='table'?' · '+(r.w || 3)+'列 × '+(r.h || 3)+'行':['chars','extract'].includes(r.kind)?' · '+r.n+'字':r.w && r.h?' · 幅'+r.w+'・高さ'+r.h:'')+(r.complete?' · 完答':'')+(r.eight && r.kind==='chars'?' · 8割ライン':'');
     if(card.querySelector('.auto-preview-sheet').childElementCount)paintPreview(card);
     else previewObserver.observe(card);
     card.querySelector('.auto-hint').textContent=r.warnings.join('／'); card.querySelector('.auto-hint').hidden=!r.warnings.length;
@@ -7023,6 +7024,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
   q('#auto-bulk-groups').oninput=()=>{q('#auto-bulk-scope').value='groups';};
   q('#auto-bulk-scope').onchange=()=>{if(q('#auto-bulk-scope').value==='groups')q('#auto-bulk-groups').focus();};
   q('#auto-bulk-points').onchange=()=>{ q('#auto-bulk-point-custom').hidden=q('#auto-bulk-points').value!=='custom'; };
+  q('#auto-bulk-kind').onchange=()=>{q('#auto-bulk-size').hidden=q('#auto-bulk-kind').value!=='essay';};
   q('#auto-bulk-apply').onclick=()=>{
     try {
       if (sourceDirty()) throw new Error('入力を変更しています。先に「読み取って一覧にする」を押してください。');
@@ -7033,10 +7035,13 @@ function openAnswerGenerator(initialTitle='',creation=null){
       if (!value && !aspect && !kind) throw new Error('変更する形式・配点・観点のいずれかを選んでください。');
       const score=value===''?null:Number(value==='custom'?q('#auto-bulk-point-value').value:value);
       if (score!==null && (!Number.isFinite(score) || score<0 || score>1000)) throw new Error('配点は0〜1000の数値にしてください。');
+      const w=Number(q('#auto-bulk-width').value),h=Number(q('#auto-bulk-height').value);
+      if(kind==='essay' && (![w,h].every(n=>Number.isInteger(n) && n>=1 && n<=40)))throw new Error('幅・高さは1〜40の整数で指定してください。');
       list.forEach(r=>{
         if(kind){
           if(kind!==r.kind){r.n=kind==='extract'?Math.max(1,...splitExtract(r.answer).map(autoLength)):Math.max(1,autoLength(r.answer));r.w=0;r.h=0;r.eight=false;}
           r.kind=kind;r.kindAuto=false;r.aspectAuto=false;
+          if(kind==='essay'){r.w=w;r.h=h;}
           r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類') && w!=='観点を推定');
         }
         if(r.completeGroup)linkedScore(rows,r,score===null?undefined:score,aspect || undefined);

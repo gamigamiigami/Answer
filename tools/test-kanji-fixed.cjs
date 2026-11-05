@@ -29,8 +29,8 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
    for(const [i,f] of result.fields.entries()){
     assert.deepEqual([f.rect.w,f.rect.h],subject==='国語'?[1,10]:[10,2]);
     assert.equal(f.out,result.words[i]);assert.ok(f.room>=f.need);
-    assert.ok(Object.values(f.border).every(v=>v==='medium'));assert.ok(Object.values(f.blankBorder).every(v=>v==='medium'));assert.equal(f.insideLines,false);
-    if(i<2)assert.equal(f.size,result.fields[0].size);else assert.ok(f.size<=result.fields[0].size);
+    assert.ok(Object.values(f.border).every(v=>v==='thin'));assert.ok(Object.values(f.blankBorder).every(v=>v==='thin'));assert.equal(f.insideLines,false);
+    assert.ok(f.size<=result.fields[0].size);if(i===0)assert.ok(f.size>11);
     assert.ok(f.cols.every(w=>w===(subject==='国語'?1.3:1)));
    }
    await page.click('#tab-answer');await page.screenshot({path:path.join(out,subject+'.png'),fullPage:true});
@@ -44,7 +44,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
    assert.match(await card.locator('.auto-preview-sheet').innerText(),/基本的人権尊重/);
    await page.click('#auto-apply');assert.deepEqual(await page.evaluate(()=>doc.fields.map(f=>f.rects)),JSON.parse(result.saved).fields.map(f=>f.rects));
    assert.equal(await page.evaluate(()=>doc.answers[doc.fields[0].id]),'基本的人権尊重');
-   console.log('PASS:',subject,'fixed ten-character frame, full text, shrink, thick borders, preview, update and save/load');
+   console.log('PASS:',subject,'fixed ten-character frame, full text, fit, ordinary borders, preview, update and save/load');
   }
   for(const subject of ['国語','数学']){
    await page.evaluate(subject=>{doc=newDoc(subject);startApp();},subject);
@@ -62,15 +62,15 @@ for path in Path(sys.argv[1]).glob('*.xlsx'):
  for f in work['fields']:
   a=f['rects'][0];c,r,w,h=a['c']+1,a['r']+1,a['w'],a['h']
   for sheet in b:
-   assert sheet.cell(r,c).border.top.style=='medium'
-   assert sheet.cell(r+h-1,c+w-1).border.bottom.style=='medium'
+   assert sheet.cell(r,c).border.top.style=='thin'
+   assert sheet.cell(r+h-1,c+w-1).border.bottom.style=='thin'
   values=[b['模範解答'].cell(y,x) for y in range(r,r+h) for x in range(c,c+w) if b['模範解答'].cell(y,x).value is not None]
   assert ''.join(str(v.value) for v in values)==work['answers'][f['id']],(path,f,values)
   assert all(b['解答用紙'].cell(y,x).value is None for y in range(r,r+h) for x in range(c,c+w))
   sizes.append(values[0].font.sz)
- assert sizes[0]==sizes[1]
+ assert sizes[0]>11
  assert sizes[2]<=sizes[0]
- assert all(s<sizes[2] for s in sizes[3:])
+ assert all(s<=sizes[2] for s in sizes[3:])
  for sheet in b:
   used=set()
   for m in sheet.merged_cells.ranges:
