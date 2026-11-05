@@ -638,6 +638,8 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 
 #answer-input-grid th:first-child,#answer-input-grid td:first-child{width:42px}#answer-input-grid th:nth-child(2),#answer-input-grid td:nth-child(2){width:80px}#answer-input-grid th:nth-child(3),#answer-input-grid td:nth-child(3){width:150px}#answer-input-grid th:last-child,#answer-input-grid td:last-child{width:60px}
 @media(max-width:650px){#answer-input-grid th:nth-child(2),#answer-input-grid td:nth-child(2){width:65px}#answer-input-grid th:nth-child(3),#answer-input-grid td:nth-child(3){width:110px}}
+
+.header-edit{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--sub)}.header-edit>span{display:flex;align-items:center;gap:4px}#grade-input{width:65px!important}#border-erase-side{display:block;width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);margin:6px 0 10px}#erase-borders{white-space:normal;width:100%}
 </style>
 </head>
 <body>
@@ -684,7 +686,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 <div id="app">
   <div id="topbar">
     <span class="logo"><svg class="buddy" viewBox="0 0 112 116" aria-hidden="true" focusable="false"><use href="#tesutomo-mark"></use></svg><span><small>テストのお供</small>てすとも君</span></span>
-    <input type="text" id="title-input" title="解答用紙のタイトル" aria-label="解答用紙のタイトル">
+    <label class="header-edit">学年<span><input type="text" id="grade-input" aria-label="学年" placeholder="例：1"> 年</span></label><label class="header-edit">テスト名<input type="text" id="title-input" title="テスト名" aria-label="テスト名" placeholder="例：中間テスト"></label>
     <button class="tb" id="btn-answer-editor" title="作成した解答欄と模範解答の入力一覧を開く">模範解答の編集</button>
     <button class="tb" id="btn-undo">戻す<kbd>Ctrl+Z</kbd></button>
     <button class="tb" id="btn-redo">やり直す<kbd>Ctrl+Y</kbd></button>
@@ -741,7 +743,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 
       </section>
       <section id="side-panel-layout" role="tabpanel" aria-labelledby="side-tab-layout" hidden>
-      <section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>      <details id="edit-panel" class="tool-section"><summary>配置を直す・削除する</summary><div class="grid4" id="edit-tools"></div></details>
+      <section class="tool-section"><h2>選択した部分の罫線</h2><p class="tip">用紙上をドラッグして囲み、消す線を選びます。問題・答え・番号は残ります。</p><label>消す線<select id="border-erase-side"><option value="all">選択内のすべての罫線</option><option value="top">選択範囲の上側</option><option value="bottom">選択範囲の下側</option><option value="left">選択範囲の左側</option><option value="right">選択範囲の右側</option></select></label><button class="tb" id="erase-borders">選択した罫線だけ消す</button><p class="tip">大問の枠にも使えます。「戻す」で取り消せます。</p></section><section id="move-panel" class="tool-section"><h2>解答欄を移動</h2><p class="tip">欄を囲んで選ぶか、全部選んでから移動。番号・見出しも一緒に動きます。</p><div class="move-actions"><button class="tb" id="move-all">解答欄を全部選ぶ</button><button class="tb" id="move-mode" aria-pressed="false">選んだ欄をドラッグ</button></div><div class="move-arrows"><button class="tb" data-move="-1,0" aria-label="選んだ欄を左へ">← 左</button><button class="tb" data-move="0,-1" aria-label="選んだ欄を上へ">↑ 上</button><button class="tb" data-move="0,1" aria-label="選んだ欄を下へ">↓ 下</button><button class="tb" data-move="1,0" aria-label="選んだ欄を右へ">右 →</button></div><button class="tb" id="move-tight-right">右に詰める</button><details><summary>得点欄を空いた場所へ</summary><button class="tb" id="score-below-name">得点欄を名前の下へ</button><button class="tb" id="score-below-fields">得点欄を解答欄の下へ</button></details></section>      <details id="edit-panel" class="tool-section"><summary>配置を直す・削除する</summary><div class="grid4" id="edit-tools"></div></details>
       </section>
       <section id="side-panel-paper" role="tabpanel" aria-labelledby="side-tab-paper" hidden>
       <section id="paper-size-panel" class="tool-section"><h2>用紙と大きさ</h2><label>用紙の向き<select id="paper-orientation" aria-label="用紙の向き"><option value="portrait">A4 縦</option><option value="landscape">A4 横</option></select></label><label for="content-scale">用紙内の倍率（％）</label><div class="content-scale-row"><input id="content-scale" type="number" min="1" max="400" step="any" value="100"><button class="tb" id="content-fit">A4に合わせる</button></div><input id="content-scale-range" type="range" min="1" max="400" step="0.25" value="100" aria-label="用紙内の倍率"><p class="tip">文字・欄・得点欄を一緒に拡大縮小します。保存・印刷・Excelにも反映します。</p><p class="tip" id="readability-hint" role="status"></p><button class="tb" id="score-settings">満点・採点の設定</button></section>      <details id="misc-panel" class="tool-section"><summary>点検・道具の設定</summary><div class="grid2" id="misc-tools"></div></details>
@@ -773,8 +775,9 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.10.0';
 const APP_RELEASES = [
+  ['2.10.0','学年・テスト名を分離／選択した罫線だけ削除'],
   ['2.9.0','入力表を3項目に・形式は一覧で調整／カスタム設定'],
   ['2.8.1','まとめて変更を3手順に整理・適用内容を表示'],
   ['2.8.0','番号の全半角を継承・入力中に範囲／選択変更'],
@@ -2703,6 +2706,12 @@ function buildCells(d, withAnswers){
   }
   for(const f of d.fields)if(f.label){box(f.label.c,f.label.r,f.label.w,f.label.h,f.type===8?'thin':f.line || 'thin');merge(f.label.c,f.label.r,f.label.w,f.label.h);}
   for(const q of d.decorations)if(q.questionHeading || q.subQuestionHeading){box(q.c,q.r,q.w,q.h,q.style || 'thin');merge(q.c,q.r,q.w,q.h);}
+  // Apply the same edge removals to the SVG and Excel cell data, after generated frames.
+  for(const edge of d.paper.erasedBorderEdges || []){
+    const offset={top:[0,-1,'bottom'],bottom:[0,1,'top'],left:[-1,0,'right'],right:[1,0,'left']}[edge.side];if(!offset)continue;
+    const cell=cells.get(edge.c+','+edge.r);if(cell)delete cell.b[edge.side];
+    const neighbor=cells.get((edge.c+offset[0])+','+(edge.r+offset[1]));if(neighbor)delete neighbor.b[offset[2]];
+  }
   return cells;
 }
 
@@ -3002,7 +3011,8 @@ function render(singlePage=false){
   setModeBar();
   // 打っている最中のタイトル欄は書き換えない（入力が消えてしまうため）
   const ti = $('#title-input');
-  if (document.activeElement !== ti) ti.value = doc.paper.title;
+  if (document.activeElement !== ti) ti.value = doc.paper.testName ?? doc.paper.title;
+  const gi=$('#grade-input');if(document.activeElement!==gi)gi.value=doc.paper.grade || '';
   if(!singlePage) renderSpreadPreview();
 }
 
@@ -3828,6 +3838,16 @@ function placeScoreBelow(where){
   snapshot();moveScoreBox(x,y);toast(where==='name'?'得点欄を氏名欄の下へ置きました':'得点欄を解答欄の下へ置きました');
 }
 /* 消す */
+function eraseSelectedBorders(){
+  if(!doc || ui.tab!=='sheet')return toast('解答用紙タブで範囲を選んでください');
+  const cells=selectedCells(),keys=new Set(cells.map(p=>p.c+','+p.r)),side=$('#border-erase-side').value,edges=[];
+  const delta={top:[0,-1],bottom:[0,1],left:[-1,0],right:[1,0]};
+  for(const p of cells)for(const s of side==='all'?Object.keys(delta):[side]){
+    const [dc,dr]=delta[s];if(side!=='all' && keys.has((p.c+dc)+','+(p.r+dr)))continue;edges.push({...p,side:s});
+  }
+  if(!edges.length)return;
+  snapshot(['paper']);doc.paper.erasedBorderEdges=[...(doc.paper.erasedBorderEdges || []),...edges];render();toast('選択した罫線だけ消しました。問題・答えは残っています');
+}
 function clearSelection(){
   if (ui.tab === 'draw') return toast('描画タブでは消しゴム（3）を使ってください');
   const cells = selectedCells();
@@ -4496,7 +4516,7 @@ const CODE_STAMP = {KeyD:'D',KeyQ:'Q',KeyP:'P',KeyM:'M',KeyA:'A'};
 
 document.addEventListener('keydown', ev => {
   if (ev.defaultPrevented) return;
-  if(ev.target.id!=='cell-input' && ev.target.closest('input,textarea,select,[contenteditable="true"]'))return;
+  if(ev.target.id!=='cell-input' && (ev.target.closest('input,textarea,select,button,[contenteditable="true"]') || document.activeElement?.closest('input,textarea,select,[contenteditable="true"]')))return;
   if (ev.target.closest('#paper-size-panel')) return;
   if (ev.target.closest('summary') && ['Enter',' '].includes(ev.key)) return;
   if ($('#start').style.display !== 'none') return;         // 起動画面では何もしない
@@ -6211,6 +6231,7 @@ function setupSideTabs(){
 function buildTools(){
   setupSideTabs();
   $('#field-note').onclick=editSelectedNote;
+  $('#erase-borders').onclick=eraseSelectedBorders;
   $('#paper-orientation').onchange=e=>setPaperOrientation(e.target.value);
   $('#content-fit').onclick=fitContentToA4;
   $('#page-select').onchange=e=>switchPage(+e.target.value);$('#page-add').onclick=addPage;$('#page-remove').onclick=removePage;$('#page-split').onclick=splitCurrentPage;$('#image-add').onclick=()=>$('#image-file').click();$('#image-file').onchange=e=>{addImageFromFile(e.target.files[0]).catch(err=>toast('画像を開けませんでした：'+err.message));e.target.value='';};$('#image-edit').onclick=editImages;$('#figure-add').onclick=addGeometricFigure;$('#field-guides').onclick=editFieldGuides;
@@ -7551,11 +7572,17 @@ $('#zen-out').onclick = toggleZen;
 $('#btn-zo').onclick   = ()=>setZoom(-1);
 $('#btn-zi').onclick   = ()=>setZoom(1);
 $('#btn-zfit').onclick = ()=>setZoom(0);
-$('#title-input').addEventListener('change', e => {
-  if(!doc || e.target.value===doc.paper.title)return;
-  bookSnapshot();for(const page of [doc,...(doc.bookPages || [])])page.paper.title=e.target.value;render();
-});
-$('#title-input').addEventListener('keydown',e=>{if(e.key==='Enter' && !e.isComposing){e.preventDefault();e.target.blur();}});
+function updateHeaderInputs(){
+  if(!doc)return;
+  const grade=$('#grade-input').value.trim().replace(/年$/,''),testName=$('#title-input').value.trim();
+  if(grade===doc.paper.grade && testName===doc.paper.testName)return;
+  bookSnapshot();for(const page of [doc,...(doc.bookPages || [])]){page.paper.grade=grade;page.paper.testName=testName;page.paper.title=[grade?grade+'年':'',testName].filter(Boolean).join(' ');page.paper.nameLabel=makeNameLabel(page.paper);}render();
+}
+for(const id of ['grade-input','title-input']){
+  const input=$('#'+id);input.addEventListener('change',updateHeaderInputs);
+  input.addEventListener('focus',()=>{if(ui.mode==='input')commitInput();ui.mode='place';ui.seq=null;});
+  input.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter' && !e.isComposing){e.preventDefault();input.blur();}});
+}
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   if (ui.mode==='input') commitInput();
   ui.tab = t.dataset.tab;
