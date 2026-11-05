@@ -686,8 +686,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const APP_RELEASES = [
+  ['2.3.0','入力方法を選択・一括入力に色付きの例を追加'],
   ['2.2.0','カスタム名とセル数の設定・漢字10セルに修正'],
   ['2.1.0','漢字10マス・自由欄5×1・入力省略と解答保存'],
   ['2.0.1','横書きの高さ・縦書きの句読点位置を修正'],
@@ -5519,7 +5520,7 @@ function guideLegend(){
   ].map(([kind,label,desc])=>'<span class="guide-legend-item guide-'+kind+'"><b>'+label+'</b><br>'+desc+'</span>').join('')+'</div>';
 }
 function guideBasicExample(){
-  const question=(number,answer,points,aspect)=>[['question',number],['answer',answer],['points',points],['aspect',aspect]].map(([kind,value])=>guideToken(kind,value)).join(',');
+  const question=(number,answer,points,aspect)=>[['question',number],['answer',answer],['points',points],['aspect',aspect]].map(([kind,value])=>guideToken(kind,value)).join('￥');
   return [guideToken('group','1'),question('1','ア','2','知'),question('2','太陽','2','知'),guideToken('group','2'),question('1','相手の気持ちを考えたから。','5','思')].join('\n');
 }
 function completionGuideExample(){
@@ -6831,7 +6832,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     '<p class="desc">タイトル：<b>'+xmlEsc(doc ? doc.paper.title : initialTitle)+'</b></p>'+
     (doc?.bookPages?.length>1?'<p class="desc">編集中：'+((doc.pageIndex || 0)+1)+' / '+doc.bookPages.length+'ページ。このページの問題を更新します。ほかのページはプレビューで切り替えて編集できます。</p>':'')+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select></div>'+
-    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><section class="auto-scoring-setup" aria-labelledby="auto-scoring-title"><h4 id="auto-scoring-title">① 点数・観点を先に決める</h4><div class="auto-defaults"><label>基本点数（1問あたり）<input id="auto-base-points" type="number" min="0" max="1000" step="any" value="2"></label><label>基本の観点<select id="auto-base-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option><option value="">答えから推定</option></select></label></div><p class="desc">大問ごとに観点を変えるなら、範囲を追加。例：大問1〜3は知識、大問4〜5は思考。</p><div id="auto-aspect-ranges"></div><button class="tb" id="auto-range-add">＋ 大問の範囲を追加</button><button class="tb" id="auto-aspect-add">＋ 観点を追加</button></section><h4>② 問題番号と答えを書く</h4><div class="guide-mini"><b>これだけでOK</b><span>大問は数字だけの行。各問は <code>1￥ア</code> の形で書きます。</span></div><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+compactAnswerDiagram()+'<p class="desc">区切りは ￥（半角の¥・バックスラッシュも可）。例：1￥答え￥2￥知。￥で区切った行の「、」やカンマは答えとして残ります。従来のカンマ入力も使えます。</p><label><input id="auto-answers-only" type="checkbox">答えだけを1行ずつ入力（数字も答えとして読む）</label><button type="button" class="tb" id="auto-input-table">入力表を使う・Excelから貼る</button><p class="desc">数式：1^2、x^{n+1} は右上の指数、3C1・nCr・5P2 は小さい添字で表示します。ふりがなは 漢字《かんじ》 と入力します。</p><textarea id="auto-source" rows="6" placeholder="1&#10;1￥ア&#10;2￥太陽&#10;2&#10;1￥相手の気持ちを考えたから。"></textarea>'+
+    '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><section class="auto-scoring-setup" aria-labelledby="auto-scoring-title"><h4 id="auto-scoring-title">① 点数・観点を先に決める</h4><div class="auto-defaults"><label>基本点数（1問あたり）<input id="auto-base-points" type="number" min="0" max="1000" step="any" value="2"></label><label>基本の観点<select id="auto-base-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option><option value="">答えから推定</option></select></label></div><p class="desc">大問ごとに観点を変えるなら、範囲を追加。例：大問1〜3は知識、大問4〜5は思考。</p><div id="auto-aspect-ranges"></div><button class="tb" id="auto-range-add">＋ 大問の範囲を追加</button><button class="tb" id="auto-aspect-add">＋ 観点を追加</button></section><h4>② 問題番号と答えを書く</h4><div class="guide-mini"><b>これだけでOK</b><span>大問は数字だけの行。各問は <code>1￥ア</code> の形で書きます。</span></div><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">入力例を試す</button></div>'+'<div id="auto-bulk-example"><p>入力例：大問は数字だけで1行。各問は「問番号￥答え￥点数￥観点」の順です。</p><pre>'+guideBasicExample()+'</pre>'+guideLegend()+'<p class="desc">点数・観点は省略できます。省略した場合は①の設定を使います。</p></div>'+'<p class="desc">区切りは ￥（半角の¥・バックスラッシュも可）。例：1￥答え￥2￥知。￥で区切った行の「、」やカンマは答えとして残ります。従来のカンマ入力も使えます。</p><label><input id="auto-answers-only" type="checkbox">答えだけを1行ずつ入力（数字も答えとして読む）</label><button type="button" class="tb" id="auto-input-table">入力表を使う・Excelから貼る</button><p class="desc">数式：1^2、x^{n+1} は右上の指数、3C1・nCr・5P2 は小さい添字で表示します。ふりがなは 漢字《かんじ》 と入力します。</p><textarea id="auto-source" rows="6" placeholder="1&#10;1￥ア&#10;2￥太陽&#10;2&#10;1￥相手の気持ちを考えたから。"></textarea>'+
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">小問は①・A・（１）をそのまま書けます。例：「1￥①￥ア」の次は「②￥イ」。「1￥A￥ア」の次は「B￥イ」。「1￥（１）￥ア」の次は「（２）￥イ」。親の問番号は引き継ぎます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数・観点を省略すると上の設定が入ります。個別に書いた点数・観点を優先します（例：1，ア，5，思）。</p></details>'+
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     completionAndDepthHelp()+
@@ -6842,6 +6843,19 @@ function openAnswerGenerator(initialTitle='',creation=null){
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-parse">読み取って一覧にする →</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
+  const inputPanel=q('#auto-input-panel'),methodHeading=[...inputPanel.children].find(n=>n.tagName==='H4');
+  methodHeading.textContent='② 入力方法を選ぶ';
+  const bulkPanel=document.createElement('div');bulkPanel.id='auto-bulk-input';bulkPanel.hidden=true;
+  while(methodHeading.nextSibling)bulkPanel.appendChild(methodHeading.nextSibling);
+  const methods=document.createElement('div');methods.className='auto-input-methods';
+  methods.innerHTML='<p>初めての方は、項目ごとに書ける入力表がおすすめです。</p><div style="display:flex;gap:12px;flex-wrap:wrap"><button type="button" class="tb primary" id="auto-method-table">入力表を使う（初めての方におすすめ）</button><button type="button" class="tb" id="auto-input-bulk" aria-controls="auto-bulk-input" aria-expanded="false">一括入力する</button></div>';
+  methodHeading.after(methods,bulkPanel);
+  const tableButton=q('#auto-input-table');tableButton.hidden=true;
+  const chooseBulk=()=>{bulkPanel.hidden=false;q('#auto-input-bulk').setAttribute('aria-expanded','true');q('#auto-parse').disabled=false;bulkPanel.tabIndex=-1;bulkPanel.focus();};
+  q('#auto-input-bulk').onclick=chooseBulk;
+  q('#auto-method-table').onclick=()=>tableButton.click();
+  q('#auto-parse').disabled=true;
+
   const paintPreview=card=>{
     const target=card.querySelector('.auto-preview-sheet');
     try{target.replaceChildren(autoAnswerPreview(rows[+card.dataset.row],q('#auto-subject').value,doc?.paper));}
@@ -6880,7 +6894,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     if(b.dataset.step==='review' && sourceDirty()){ parse(); return; }
     showStep(b.dataset.step);
   });
-  q('#auto-back').onclick=()=>{ showStep('input'); source.focus(); };
+  q('#auto-back').onclick=()=>{ showStep('input'); if(!bulkPanel.hidden)source.focus();else q('#auto-method-table').focus(); };
   wireTabKeys(q('.auto-steps'));
   q('#auto-subject').value=doc ? doc.paper.subject : '国語';
   const layoutChoice=document.createElement('label');layoutChoice.className='desc';
@@ -7169,7 +7183,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
     }
   });
-  drawRows(); if (rows.length) syncSource(); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):source).focus();
+  drawRows(); if (rows.length) syncSource(); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):q('#auto-method-table')).focus();if(!rows.length)status.textContent='入力表か一括入力を選んでください。';
 }
 
 function applyCreationPaper(p,creation,title){
