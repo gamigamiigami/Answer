@@ -258,6 +258,11 @@ body.zen #zen-out{display:block}
 .auto-question{margin:12px 0;padding:14px}
 .auto-question legend{font-size:14px}
 .auto-grid{grid-template-columns:70px 100px minmax(150px,1fr) 140px 70px 130px}
+.auto-field-preview{margin:12px 0 0;min-width:0}
+.auto-field-preview figcaption{font-size:12px;color:var(--sub);margin-bottom:6px}
+.auto-preview-sheet{overflow:auto;max-height:260px;min-height:56px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#222;padding:8px}
+.auto-preview-sheet svg{display:block;max-width:none}
+.auto-preview-sheet p{margin:6px;font-size:13px}
 .auto-detail{margin-top:10px}
 .auto-detail>summary{cursor:pointer;color:var(--sub);font-size:12px;padding:6px 0}
 .auto-scoring>summary{cursor:pointer;font-weight:600;font-size:13px}
@@ -637,7 +642,7 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 document.querySelectorAll('[data-app-version]').forEach(node=>{
   node.textContent='Ver. '+APP_VERSION;
   node.setAttribute('aria-label','アプリのバージョン '+APP_VERSION);
@@ -2460,6 +2465,76 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 const el = (n, a) => { const e = document.createElementNS(SVGNS,n); for(const k in a) e.setAttribute(k,a[k]); return e; };
 let geo = null,renderSerial=0;   // {x0,y0,pw,ph} 用紙上のグリッド原点
 
+// 用紙と一覧のプレビューで、罫線・文字・数式・グラフを共通描画する。
+function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
+  renderSerial++;
+  const X=c=>x0+docColumnMM(d,c);
+  const W=(c,w=1)=>docColumnMM(d,c+w)-docColumnMM(d,c);
+  // 罫線
+  const lines = el('g',{'stroke-linecap':'square'});
+  cells.forEach(x=>{
+    const CX = X(x.c), CXW = W(x.c), Y = y0 + docRowMM(d,x.r);
+    const seg = (side) => {
+      const st = x.b[side]; if (!st) return;
+      const v = BORDER_VIEW[st];
+      const a = {stroke:'#000','stroke-width':v.w};
+      if (v.dash) a['stroke-dasharray'] = v.dash;
+      if (side==='top')    Object.assign(a,{x1:CX,y1:Y,x2:CX+CXW,y2:Y});
+      if (side==='bottom') Object.assign(a,{x1:CX,y1:Y+rowSpanMM(d,x.r,1),x2:CX+CXW,y2:Y+rowSpanMM(d,x.r,1)});
+      if (side==='left')   Object.assign(a,{x1:CX,y1:Y,x2:CX,y2:Y+rowSpanMM(d,x.r,1)});
+      if (side==='right')  Object.assign(a,{x1:CX+CXW,y1:Y,x2:CX+CXW,y2:Y+rowSpanMM(d,x.r,1)});
+      if (v.double){                                   // 二重線は2本引く
+        const dx = (side==='left'||side==='right') ? 0.2 : 0;
+        const dy = (side==='top'||side==='bottom') ? 0.2 : 0;
+        lines.appendChild(el('line',Object.assign({},a,
+          {x1:a.x1-dx, y1:a.y1-dy, x2:a.x2-dx, y2:a.y2-dy})));
+        lines.appendChild(el('line',Object.assign({},a,
+          {x1:a.x1+dx, y1:a.y1+dy, x2:a.x2+dx, y2:a.y2+dy})));
+        return;
+      }
+      lines.appendChild(el('line',a));
+    };
+    seg('top'); seg('bottom'); seg('left'); seg('right');
+  });
+  target.appendChild(lines);
+
+  // 文字
+  const texts = el('g',{'font-family':'"Yu Gothic","Yu Gothic UI","Meiryo",sans-serif'});
+  cells.forEach(x=>{
+    if (!x.t) return;
+    const fs = ptmm(x.size);
+    const mw = x.mg ? x.mg.w : 1;
+    const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
+    const a = { y: y0 + docRowMM(d,x.r) + rowSpanMM(d,x.r,mh)/2, 'font-size':fs, fill:'#000',
+                'dominant-baseline':'central' };
+    if (x.valign==='top') a.y = y0 + docRowMM(d,x.r) + 0.55 + fs/2;
+    if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
+    else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
+    else { a.x = X(x.c) + W(x.c, mw)/2; a['text-anchor']='middle'; }
+    if (x.bold) a['font-weight']='bold';
+    const t = el('text',a);
+    if(x.lines){const id='cell-clip-'+renderSerial+'-'+x.c+'-'+x.r,clip=el('clipPath',{id});clip.appendChild(el('rect',{x:X(x.c)+.35,y:y0+docRowMM(d,x.r)+.3,width:Math.max(.1,W(x.c,mw)-.7),height:Math.max(.1,rowSpanMM(d,x.r,mh)-.6)}));texts.appendChild(clip);t.setAttribute('clip-path','url(#'+id+')');}
+    if(x.lines){x.lines.forEach((line,i)=>{const span=el('tspan',{x:a.x,y:a.y+(i-(x.lines.length-1)/2)*fs*1.35});span.textContent=line;t.appendChild(span);});}
+    else if (x.stack){
+      const letters = Array.from(x.t), step = fs*(x.stackStep || 1.12);
+      if(x.valign==='bottom')a.y=y0+docRowMM(d,x.r+mh)-(x.referenceStack?fs:fs/2);
+      a.y+=ptmm(x.baselinePt || 0);
+      letters.forEach((ch,i) => {
+        // Excel's vertical parentheses use a different origin from horizontal glyphs.
+        const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
+        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
+        span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
+      });
+    } else t.textContent = cellText(d, x);
+    texts.appendChild(t);
+  });
+  target.appendChild(texts);
+  const mathg=el('g',{'class':'answer-vectors'});
+  appendVectorPrimitives(mathg,answerVectorPrimitives(d,withAnswers),x0,y0);
+  target.appendChild(mathg);
+
+}
+
 function render(singlePage=false){
   renderSerial++;
   if($('#move-panel')){$('#move-panel').hidden=ui.tab!=='sheet';$('#move-mode').setAttribute('aria-pressed',String(!!ui.moveMode));$('#move-mode').textContent=ui.moveMode?'移動モード：ON（Escで終了）':'選んだ欄をドラッグ';svg.classList.toggle('field-move-mode',!!ui.moveMode && ui.tab==='sheet');}
@@ -2518,68 +2593,7 @@ function render(singlePage=false){
   });
 
   for(const im of (doc.images || []).filter(i=>!i.answerOnly || ui.tab==='answer'))svg.appendChild(el('image',{href:im.data,x:x0+im.x,y:y0+im.y,width:im.w,height:im.h,preserveAspectRatio:'xMidYMid meet'}));
-  // 罫線
-  const lines = el('g',{'stroke-linecap':'square'});
-  cells.forEach(x=>{
-    const CX = X(x.c), CXW = W(x.c), Y = y0 + docRowMM(doc,x.r);
-    const seg = (side) => {
-      const st = x.b[side]; if (!st) return;
-      const v = BORDER_VIEW[st];
-      const a = {stroke:'#000','stroke-width':v.w};
-      if (v.dash) a['stroke-dasharray'] = v.dash;
-      if (side==='top')    Object.assign(a,{x1:CX,y1:Y,x2:CX+CXW,y2:Y});
-      if (side==='bottom') Object.assign(a,{x1:CX,y1:Y+rowSpanMM(doc,x.r,1),x2:CX+CXW,y2:Y+rowSpanMM(doc,x.r,1)});
-      if (side==='left')   Object.assign(a,{x1:CX,y1:Y,x2:CX,y2:Y+rowSpanMM(doc,x.r,1)});
-      if (side==='right')  Object.assign(a,{x1:CX+CXW,y1:Y,x2:CX+CXW,y2:Y+rowSpanMM(doc,x.r,1)});
-      if (v.double){                                   // 二重線は2本引く
-        const dx = (side==='left'||side==='right') ? 0.2 : 0;
-        const dy = (side==='top'||side==='bottom') ? 0.2 : 0;
-        lines.appendChild(el('line',Object.assign({},a,
-          {x1:a.x1-dx, y1:a.y1-dy, x2:a.x2-dx, y2:a.y2-dy})));
-        lines.appendChild(el('line',Object.assign({},a,
-          {x1:a.x1+dx, y1:a.y1+dy, x2:a.x2+dx, y2:a.y2+dy})));
-        return;
-      }
-      lines.appendChild(el('line',a));
-    };
-    seg('top'); seg('bottom'); seg('left'); seg('right');
-  });
-  svg.appendChild(lines);
-
-  // 文字
-  const texts = el('g',{'font-family':'"Yu Gothic","Yu Gothic UI","Meiryo",sans-serif'});
-  cells.forEach(x=>{
-    if (!x.t) return;
-    const fs = ptmm(x.size);
-    const mw = x.mg ? x.mg.w : 1;
-    const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
-    const a = { y: y0 + docRowMM(doc,x.r) + rowSpanMM(doc,x.r,mh)/2, 'font-size':fs, fill:'#000',
-                'dominant-baseline':'central' };
-    if (x.valign==='top') a.y = y0 + docRowMM(doc,x.r) + 0.55 + fs/2;
-    if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
-    else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
-    else { a.x = X(x.c) + W(x.c, mw)/2; a['text-anchor']='middle'; }
-    if (x.bold) a['font-weight']='bold';
-    const t = el('text',a);
-    if(x.lines){const id='cell-clip-'+renderSerial+'-'+x.c+'-'+x.r,clip=el('clipPath',{id});clip.appendChild(el('rect',{x:X(x.c)+.35,y:y0+docRowMM(doc,x.r)+.3,width:Math.max(.1,W(x.c,mw)-.7),height:Math.max(.1,rowSpanMM(doc,x.r,mh)-.6)}));texts.appendChild(clip);t.setAttribute('clip-path','url(#'+id+')');}
-    if(x.lines){x.lines.forEach((line,i)=>{const span=el('tspan',{x:a.x,y:a.y+(i-(x.lines.length-1)/2)*fs*1.35});span.textContent=line;t.appendChild(span);});}
-    else if (x.stack){
-      const letters = Array.from(x.t), step = fs*(x.stackStep || 1.12);
-      if(x.valign==='bottom')a.y=y0+docRowMM(doc,x.r+mh)-(x.referenceStack?fs:fs/2);
-      a.y+=ptmm(x.baselinePt || 0);
-      letters.forEach((ch,i) => {
-        // Excel's vertical parentheses use a different origin from horizontal glyphs.
-        const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
-        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
-        span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
-      });
-    } else t.textContent = cellText(doc, x);
-    texts.appendChild(t);
-  });
-  svg.appendChild(texts);
-  const mathg=el('g',{'class':'answer-vectors'});
-  appendVectorPrimitives(mathg,answerVectorPrimitives(doc,ui.tab==='answer'),x0,y0);
-  svg.appendChild(mathg);
+  appendCellArtwork(doc,cells,svg,x0,y0,ui.tab==='answer');
 
   // 描画（直線・点）
   const dg = el('g',{fill:'none'});
@@ -6621,6 +6635,25 @@ function currentAutoRows(){
   });
 }
 
+// 一問だけを仮の用紙に生成する。編集中の用紙・Undo・採番には触れない。
+function autoAnswerPreview(row,subject,paper){
+  const sample=structuredClone(row);
+  delete sample.completeGroup;
+  const d=buildAutoDocument([sample],subject,paper);
+  const f=d.fields[0], boxes=[...f.rects,...(f.label?[f.label]:[]),...d.decorations.filter(x=>x.questionHeading)];
+  const bounds=boxes.map(r=>rectMM(d,r));
+  const x=Math.min(...bounds.map(b=>b.x))-2,y=Math.min(...bounds.map(b=>b.y))-2;
+  const w=Math.max(...bounds.map(b=>b.x+b.w))-x+2,h=Math.max(...bounds.map(b=>b.y+b.h))-y+2;
+  // ヘッダー・得点・大問は省き、選んだ欄と問番号だけを見る。
+  d.paper.showScoreBox=false;
+  const cells=buildCells(d,true);
+  for(const [key,c] of cells)if(!boxes.some(b=>c.c>=b.c && c.c<b.c+b.w && c.r>=b.r && c.r<b.r+b.h))cells.delete(key);
+  const picture=el('svg',{viewBox:[x,y,w,h].join(' '),width:Math.max(80,w*3),height:Math.max(40,h*3),role:'img','aria-label':(AUTO_KINDS.find(k=>k[0]===row.kind)?.[1] || '解答欄')+'の模範解答プレビュー'});
+  for(const c of cells.values())if(c.fill){const b=rectMM(d,{...c,w:1,h:1});picture.appendChild(el('rect',{x:b.x,y:b.y,width:b.w,height:b.h,fill:'#'+c.fill}));}
+  appendCellArtwork(d,cells,picture);
+  return picture;
+}
+
 function openAnswerGenerator(initialTitle=''){
   if (typeof initialTitle!=='string') initialTitle='';
   if (ui.mode==='input'){ ui.seq=null; commitInput(); }
@@ -6651,6 +6684,14 @@ function openAnswerGenerator(initialTitle=''){
     '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
+  const paintPreview=card=>{
+    const target=card.querySelector('.auto-preview-sheet');
+    try{target.replaceChildren(autoAnswerPreview(rows[+card.dataset.row],q('#auto-subject').value,doc?.paper));}
+    catch(e){const message=document.createElement('p');message.textContent=e.message;target.replaceChildren(message);}
+  };
+  const previewObserver=new IntersectionObserver(entries=>{
+    for(const entry of entries)if(entry.isIntersecting){paintPreview(entry.target);previewObserver.unobserve(entry.target);}
+  });
   const addRange=(range={from:1,to:3,aspect:'知技'})=>{
     const row=document.createElement('div');row.className='auto-aspect-range';
     row.innerHTML='<label>大問<input data-range="from" aria-label="範囲の始まり" type="number" min="1" max="200" value="'+xmlEsc(String(range.from))+'"></label><span>〜</span><label>大問<input data-range="to" aria-label="範囲の終わり" type="number" min="1" max="200" value="'+xmlEsc(String(range.to))+'"></label><label>観点<select data-range="aspect">'+choices(aspectOptions(range.aspect),range.aspect)+'</select></label><button class="tb" data-range-remove aria-label="この範囲を削除">削除</button>';
@@ -6706,7 +6747,7 @@ function openAnswerGenerator(initialTitle=''){
     return {...scoringSettings(),subject:q('#auto-subject').value,group:q('#auto-default-group').value,groupStyle:SUBJECTS[q('#auto-subject').value].numberStyle==='arabic'?'digit':'kanji',
       separator:'￥',answersOnly:q('#auto-answers-only').checked,numStyle:q('#auto-number-style').value,start,blankGroups:q('#auto-blank-groups').checked};
   };
-  const close=()=>{ wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
+  const close=()=>{ previewObserver.disconnect(); wrap.remove(); (hadDoc?$('#btn-answer-editor'):$('#btn-from-answers')).focus(); };
   const input=(key,value,type,label)=>'<input aria-label="'+label+'" data-k="'+key+'" type="'+(type || 'text')+'" value="'+xmlEsc(String(value))+'"'+(type==='number'?' min="0"':'')+'>';
   const infer=r=>{
     if (r.kindAuto){
@@ -6735,6 +6776,8 @@ function openAnswerGenerator(initialTitle=''){
       if (key==='eight') node.checked=!!r.eight; else node.value=r[key];
     }
     card.querySelector('.auto-size-summary').textContent=(r.kind==='table'?' · '+(r.w || 3)+'列 × '+(r.h || 3)+'行':['chars','kanji','extract'].includes(r.kind)?' · '+r.n+'字':r.w && r.h?' · 幅'+r.w+'・高さ'+r.h:'')+(r.complete?' · 完答':'')+(r.eight && r.kind==='chars'?' · 8割ライン':'');
+    if(card.querySelector('.auto-preview-sheet').childElementCount)paintPreview(card);
+    else previewObserver.observe(card);
     card.querySelector('.auto-hint').textContent=r.warnings.join('／'); card.querySelector('.auto-hint').hidden=!r.warnings.length;
   };
   const syncSource=()=>{ q('#auto-answers-only').checked=false;source.value=autoRowsSource(rows,{...scoringSettings(),separator:'￥'}); parsedText=source.value; };
@@ -6742,6 +6785,7 @@ function openAnswerGenerator(initialTitle=''){
   const drawRows=(writeSource=false)=>{
     rows.forEach(infer); updateGroups(q('#auto-default-group').value);
     q('#auto-batch').hidden=!rows.length;
+    previewObserver.disconnect();
     q('#auto-rows').innerHTML=rows.map((r,i)=>{
       const numbering=splitAutoQuestionLabel(r.label);
       const labels=Array.from(new Set([numbering.main,'',...Array.from({length:Math.max(20,rows.filter(x=>x.group===r.group).length+Number(q('#auto-number-start').value || 1))},(_,j)=>autoNumberLabel(q('#auto-number-style').value,j+1))])).map(v=>[v,v || '番号なし']);
@@ -6757,6 +6801,7 @@ function openAnswerGenerator(initialTitle=''){
       '<label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></div>'+
       (hadDoc && r.fieldId?'<button class="tb" data-jump="'+i+'">この欄を用紙上で見る</button>':'')+
+      '<figure class="auto-field-preview"><figcaption>欄と模範解答のプレビュー</figcaption><div class="auto-preview-sheet"></div></figure>'+
       '<details class="auto-detail"><summary>細かな設定<span class="auto-size-summary"></span></summary><div class="auto-options"><label>字数'+input('n',r.n,'number','字数')+'</label><label>幅'+input('w',r.w,'number','幅')+'</label><label>高さ'+input('h',r.h,'number','高さ')+'</label>'+
       '<label><input data-k="eight" type="checkbox"'+(r.eight?' checked':'')+'>8割ライン</label><label><input data-k="complete" type="checkbox"'+(r.complete?' checked':'')+'>完答（太枠）</label>'+
       '<button class="tb" data-remove="'+i+'" aria-label="'+(i+1)+'問目を削除">削除</button></div><p class="auto-hint"></p></details></fieldset>';
