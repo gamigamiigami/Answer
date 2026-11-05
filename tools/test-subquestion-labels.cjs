@@ -29,7 +29,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   assert.equal((await parse('A cat is sleeping.'))[0].answer,'A cat is sleeping.');assert.equal((await parse('Apple'))[0].answer,'Apple');
   assert.deepEqual(await page.evaluate(()=>splitAutoQuestionLabel('CustomLabel')),{main:'CustomLabel',suffix:''});
   console.log('PASS: circled, alphabetic, full-width, parenthesized, attached and separated labels; inheritance/reset, safe answer letters and source round trips');
-  await page.click('#btn-from-answers');await page.fill('#creation-title','小問番号のテスト');await page.click('#creation-next');
+  await page.click('#btn-from-answers');await page.fill('#creation-title','小問番号のテスト');await page.click('#creation-next');await page.click('#auto-input-bulk');
   const source='1\n1，①，ア\n②，イ\n2，A，ウ\nB，エ\n3，（１），オ\n（２），カ';await page.fill('#auto-source',source);await page.click('#auto-parse');
   assert.deepEqual(await page.locator('[data-row] [data-k="subLabel"]').evaluateAll(ns=>ns.map(n=>n.value)),['①','②','A','B','（１）','（２）']);
   assert.deepEqual(await page.locator('[data-row] [data-k="label"]').evaluateAll(ns=>ns.map(n=>n.value)),['問一','問一','問二','問二','問三','問三']);
@@ -57,7 +57,8 @@ for p in sys.argv[1:]:
  for s in b:
   values=[str(c.value) for row in s for c in row if c.value is not None]
   parents=['問1','問2','問3'] if p.endswith('horizontal.xlsx') else ['問一','問二','問三']
-  for t in ['①','②','A','B','（１）','（２）']+parents:assert values.count(t)==1,(p,s.title,t)
+  for t in ['①','②','A','B','（１）','（２）']:assert values.count(t)==1,(p,s.title,t)
+  for t in parents:assert values.count(t)>=1,(p,s.title,t) # Parent headings repeat when children wrap to another row.
   ranges=list(s.merged_cells.ranges)
   for i,r in enumerate(ranges):
    for t in ranges[i+1:]:assert r.max_col<t.min_col or t.max_col<r.min_col or r.max_row<t.min_row or t.max_row<r.min_row

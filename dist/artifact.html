@@ -686,8 +686,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const APP_RELEASES = [
+  ['2.4.1','問番号なしの（1）→①の階層に対応'],
   ['2.4.0','自由欄の寸法一括指定・漢字を大きく普通罫線に'],
   ['2.3.0','入力方法を選択・一括入力に色付きの例を追加'],
   ['2.2.0','カスタム名とセル数の設定・漢字10セルに修正'],
@@ -6353,7 +6354,7 @@ function readAutoRecord(text,row,parentQuestion=''){
   } else {
     row.label=child ? inheritAutoChild(parentQuestion,childPath[1])+(childPath[2] || '') : parts[0].value;
     const path=splitAutoQuestionLabel(row.label);
-    if(child && path.main && !path.leaf && end>start+1 && !parts[start].quoted && isAutoSubLabel(parts[start].value))row.label+=parts[start++].value;
+    if(child && (path.main || path.suffix && autoSubStyle(path.suffix)==='bracket') && !path.leaf && end>start+1 && !parts[start].quoted && isAutoSubLabel(parts[start].value))row.label+=parts[start++].value;
   }
   if (start>=end) throw new Error('問番号の後ろに模範解答を入れてください。');
   return end===start+1 ? parts[start].value : text.slice(parts[start].start,parts[end-1].end).trim();
@@ -6485,7 +6486,7 @@ function parseAutoAnswers(source, defaults={}){
     const heading = /^(?:大問\s*([0-9０-９一二三四五六七八九十百]+)|第\s*([0-9０-９一二三四五六七八九十百]+)\s*問|【([0-9０-９一二三四五六七八九十百]+)】)\s*[:：.．、]?\s*$/.exec(text);
     if (heading || customHeading){ group = heading ? heading[1] || heading[2] || heading[3] : customHeading[1]; groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; continue; }
     if (sectionBreak){ group = nextAutoGroup(groups,defaults.groupStyle); groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; }
-    if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
+    if (/^(?:問\s*[0-9０-９一二三四五六七八九十百]+|[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）])$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
     const row = { ...(SUBJECT_LAYOUTS[defaults.subject] ? {subjectMode:defaults.subject} : {}), group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
       w:0, h:0, eight:!!defaults.eight, eightExplicit:defaults.eight!==undefined, complete:!!defaults.complete,
       points:null, aspect:'', warnings:[], sourceLine };
@@ -6495,7 +6496,7 @@ function parseAutoAnswers(source, defaults={}){
     const namedPrefix=new RegExp('^(問\\s*[0-9０-９一二三四五六七八九十百]+(?:\\s*'+prefixAtom+'){0,2})(?=\\s|[:：]|$)\\s*[:：]?\\s*').exec(text);
     let label = /^(問\s*[0-9０-９一二三四五六七八九十百]+(?:\s*(?:[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ](?=[\s:：])))?|[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）]|[①-⑳㉑-㉟㊱-㊿]|[A-Za-zＡ-Ｚａ-ｚ](?=[\s:：])|[0-9０-９]+[.．、])\s*[:：]?\s*/.exec(text);
     if(namedPrefix)label=namedPrefix;
-    const referencePrefix=new RegExp('^((?:[⑴-⒇](?:'+AUTO_SUB_LABEL+')?|[Ⅰ-Ⅻⅰ-ⅻ](?=[\\s:：])))(?=.+)\\s*[:：]?\\s*').exec(text);
+    const referencePrefix=new RegExp('^((?:(?:[⑴-⒇]|[（(][0-9０-９一二三四五六七八九十A-Za-zＡ-Ｚａ-ｚ]+[)）])(?:'+AUTO_SUB_LABEL+')?|[Ⅰ-Ⅻⅰ-ⅻ](?=[\\s:：])))(?=.+)\\s*[:：]?\\s*').exec(text);
     if(!namedPrefix && referencePrefix)label=referencePrefix;
     if(label && /^[A-Za-zＡ-Ｚａ-ｚ]$/.test(label[1]) && !recordQuestion && !question && !/^[A-Za-zＡ-Ｚａ-ｚ]\s*[:：]/.test(text))label=null;
     number++;
