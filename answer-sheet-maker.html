@@ -692,8 +692,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1';
 const APP_RELEASES = [
+  ['2.0.1','横書きの高さ・縦書きの句読点位置を修正'],
   ['2.0.0','自動選択・漢文・表・作成手順を改善'],
   ['1.8.0','記述系を統合・教科別の欄順序に'],
   ['1.7.0','欄プレビュー拡大・欄の種類を整理'],
@@ -1215,7 +1216,7 @@ function buildRects(d, type, at, opt){
   }
   else if (MARK_TYPES.indexOf(type) >= 0){
     // 記号用・カスタム：セル○つぶんの大きさの1マス
-    const cells = (type===2) ? MARK_ROWS : customCells(FIELD_DEFS[type].custom);
+    const cells = (type===2) ? (vertical ? MARK_ROWS : CHAR_ROWS) : customCells(FIELD_DEFS[type].custom);
     rects.push({ c: at.c, r: at.r, w:!vertical && type===2 ? 2 : 1, h: cells });
   }
   else if (type===EXTRACT_TYPE){
@@ -2470,7 +2471,7 @@ function buildCells(d, withAnswers){
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
         if(vertical && Array.from(ch).length===1 && /[、。，．,。っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch)){
-          const cell=get(p.c,p.r);cell.align='right';cell.valign='bottom';cell.verticalCorner=true;
+          const cell=get(p.c,p.r);cell.align='right';cell.valign='top';cell.verticalCorner=true;
         }
       });
     }
@@ -2608,7 +2609,6 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
     const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
     const a = { y: y0 + docRowMM(d,x.r) + rowSpanMM(d,x.r,mh)/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
-    if(x.verticalCorner)a.y=y0+docRowMM(d,x.r)+rowSpanMM(d,x.r,mh)-fs/2-.3;
     if (x.valign==='top') a.y = y0 + docRowMM(d,x.r) + 0.55 + fs/2;
     if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
     else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
@@ -2625,7 +2625,7 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
         // Excel's vertical parentheses use a different origin from horizontal glyphs.
         const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
         const corner=/[、。，．,っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch);
-        const span = el('tspan',{x:a.x+(corner?fs*.28:0),y:a.y+(corner?fs*.2:0)+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
+        const span = el('tspan',{x:a.x+(corner?fs*.28:0),y:a.y-(corner?fs*.2:0)+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
     } else t.textContent = cellText(d, x);
@@ -6184,7 +6184,7 @@ function subjectAnswerSize(row,d){
   // 手書きの余白を含める。半角は全角の約半分として、英文を一字一マスにしない。
   const units=Math.max(1,...lines.map(line=>Array.from(line).reduce((n,c)=>n+(/[\x00-\x7f]/.test(c)?0.55:1),0)));
   if(autoChoiceKind(row.kind)==='essay') return essaySize(d.paper.subject);
-  if(row.kind==='word' || row.kind==='formula') return {w:Math.min(wide,Math.max(p.shortW,Math.ceil(units*.65+1))),h:Math.max(row.kind==='formula'?2:p.shortH,lines.length)};
+  if(row.kind==='word' || row.kind==='formula') return {w:Math.min(wide,Math.max(p.shortW,Math.ceil(units*.65+1))),h:Math.max(row.kind==='formula'?2:1,lines.length)};
   return {w:wide,h:Math.max(row.kind==='working'?4:reference && d.paper.subject==='社会'?2:p.essayH,lines.reduce((n,line)=>n+Math.max(1,Math.ceil(Array.from(line).length/(wide*1.5))),0))};
 }
 const autoDigits = s => String(s).replace(/[０-９]/g, c => String(c.charCodeAt(0)-0xff10));
@@ -6623,19 +6623,19 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
     for (let attempt=0;attempt<d.grid.cols+d.grid.rows;attempt++){
       const parentNeeded=hierarchical && (questionMain!==numbering.main || !questionFrame ||
         (vertical ? questionFrame.c!==cur.c : questionFrame.r!==cur.r));
-      const parent=parentNeeded ? {c:cur.c,r:cur.r,w:1,h:vertical || fixed ? 1 : CHAR_ROWS} : null;
+      const parent=parentNeeded ? {c:cur.c,r:cur.r,w:1,h:vertical ? 1 : CHAR_ROWS} : null;
       const midNeeded=numbering.leaf && (parentNeeded || !subFrame || subMain!==numbering.main+numbering.suffix || (vertical ? subFrame.c!==cur.c : subFrame.r!==cur.r));
       const middleAt=parent ? boxStart(d,cur) : cur;
-      const middle=midNeeded ? {c:middleAt.c,r:middleAt.r,w:1,h:vertical || fixed?1:CHAR_ROWS} : null;
+      const middle=midNeeded ? {c:middleAt.c,r:middleAt.r,w:1,h:vertical ? 1 : CHAR_ROWS} : null;
       const labelAt=middle ? boxStart(d,middleAt) : middleAt;
       const at = row.label ? boxStart(d,labelAt) : labelAt;
       const b = buildRects(d,type,at,opt);
       if (vertical && !b.error && cur.r>groupTop.r && Math.max(...b.rects.map(r=>r.c+r.w))-Math.min(...b.rects.map(r=>r.c))>1){
         cur={c:minC-1,r:groupTop.r}; minC=Math.min(minC,cur.c); continue;
       }
-      const lab = row.label && !b.error ? (hierarchical ? {c:labelAt.c,r:labelAt.r,w:1,h:vertical ? 1 : CHAR_ROWS} : labelRect(d,labelAt,b.rects)) : null;
-      // 字数指定欄では一字マスを縮めず、番号枠を半分の高さにする。
-      if(lab && !vertical && fixed)lab.h=1;
+      const lab = row.label && !b.error ? (hierarchical && vertical ? {c:labelAt.c,r:labelAt.r,w:1,h:1} : labelRect(d,labelAt,b.rects)) : null;
+      // 横書きでは、親番号・小問番号も解答欄全体と同じ高さで予約する。
+      if(!vertical && lab)for(const frame of [parent,middle])if(frame)frame.h=lab.h;
       if (!b.error && !b.rects.some(clash) && (!lab || !clash(lab)) && (!parent || !clash(parent)) && (!middle || !clash(middle))){ got = {rects:b.rects,lab,parent,middle}; break; }
       // 同じ大問内は次の列／行の先頭に折り返し、空き列・空き行は入れない。
       cur = vertical ? {c:minC-1,r:groupTop.r} : {c:groupTop.c,r:maxR};
@@ -6651,20 +6651,19 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
     if(type===12)f.table=tableSpec(row.table,row.w || 3,row.h || 3);
     if(type===11){f.chars=opt.n;f.kanbunGiven=row.kanbunGiven || '';}
     if (got.parent){
-      questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,...(!vertical && fixed?{compactNumber:true}:{}),style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
+      questionFrame={...got.parent,id:'q'+(i+1),questionHeading:true,style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
       d.decorations.push(questionFrame); take(questionFrame);
       d.texts[questionFrame.c+','+questionFrame.r]={t:numbering.main,size:autoLabelPointSize(numbering.main,fit.width)};
       questionMain=numbering.main;
     }
     if(got.middle){
-      subFrame={...got.middle,id:'sq'+(i+1),questionHeading:true,questionLevel:2,...(!vertical && fixed?{compactNumber:true}:{}),style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
+      subFrame={...got.middle,id:'sq'+(i+1),questionHeading:true,questionLevel:2,style:'thin',points:0,aspect:'知技',note:'',notePos:'end'};
       d.decorations.push(subFrame);take(subFrame);subMain=numbering.main+numbering.suffix;
       d.texts[subFrame.c+','+subFrame.r]={t:numbering.suffix,size:autoLabelPointSize(numbering.suffix,fit.width)};
     }
     if(numbering.leaf)f.auto.subQuestionId=subFrame.id;else {subMain='';subFrame=null;}
     if (hierarchical) f.auto.questionId=questionFrame.id;
     else { questionMain=''; questionFrame=null; }
-    if(!vertical && fixed)for(const frame of [questionFrame,subFrame])if(frame){frame.h=1;frame.compactNumber=true;}
     if (got.lab){
       f.label = got.lab; take(got.lab);
       const label=hierarchical ? numbering.leaf || numbering.suffix : row.label;
@@ -6684,16 +6683,24 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
                    : {c:Math.max(...got.rects.map(r=>r.c+r.w)),r:cur.r};
   }
   finishGroup();
-  if(headingAbove){
+  if(!vertical){
     // お手本の表と同じく、同じ行の短答・記述・番号欄の下端をそろえる。
     const bottoms=new Map(),aligned=d.fields.filter(f=>[2,6].includes(f.type) && !f.fixedChars && f.rects.length===1);
     for(const f of aligned){const r=f.label?.r ?? f.rects[0].r;bottoms.set(r,Math.max(bottoms.get(r) || r,...f.rects.map(b=>b.r+b.h)));}
+    // 字数マスと並ぶ短答は基本の高さを保つ。長い式・記述につられて伸ばさない。
+    const fixedRows=new Set(d.fields.filter(f=>f.fixedChars).map(f=>f.rects[0].r));
     for(const f of aligned){
       const r=f.label?.r ?? f.rects[0].r,bottom=bottoms.get(r);
-      if([2,6].includes(f.type) && !f.fixedChars && !f.auto.h && f.rects.length===1)f.rects[0].h=bottom-f.rects[0].r;
-      if(f.label)f.label.h=bottom-f.label.r;
+      if(!fixedRows.has(r) && !f.auto.h)f.rects[0].h=bottom-f.rects[0].r;
     }
-    for(const h of d.decorations.filter(h=>h.questionHeading || h.subQuestionHeading))if(!h.compactNumber && bottoms.has(h.r))h.h=Math.max(h.h,bottoms.get(h.r)-h.r);
+    // 指定した欄の高さ・字数マス・表・グラフを保ち、番号を対応する欄に合わせる。
+    for(const f of d.fields){
+      if(f.label)Object.assign(f.label,labelRect(d,f.label,f.rects));
+      for(const id of [f.auto.questionId,f.auto.subQuestionId]){
+        const frame=d.decorations.find(h=>h.id===id);
+        if(frame)frame.h=Math.max(frame.h,...f.rects.map(r=>r.r+r.h-frame.r));
+      }
+    }
   }
   // 国語の漢字欄は、手動で置いた欄と同じ1.3倍の列幅にする。
   // 左端の未使用列だけを減らし、現在の用紙には触れずA4幅を検査する。

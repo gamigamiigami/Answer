@@ -3,11 +3,13 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 const {chromium}=require('playwright'),{spawnSync}=require('node:child_process');
 (async()=>{
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'testomo-reference-subjects-'));
+ const server=require('node:http').createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.resolve(__dirname,'../answer-sheet-maker.html')));});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});
  try{
   const page=await browser.newPage({viewport:{width:1400,height:1000}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(require('node:url').pathToFileURL(path.resolve(__dirname,'../answer-sheet-maker.html')).href);
+  await page.goto('http://127.0.0.1:'+server.address().port);
   const source='1\n⑴A￥日米安全保障条約￥2￥知\nB￥サンフランシスコ平和条約￥2￥知\n⑵￥ア￥1￥知\n⑸Ⅰ￥B￥1￥知\nⅡ￥A￥1￥知\n⑿￥F￥1￥知';
   const rows=await page.evaluate(source=>parseAutoAnswers(source,{subject:'社会',groupStyle:'digit'}),source);
   assert.deepEqual(rows.map(r=>r.label),['⑴A','⑴B','⑵','⑸Ⅰ','⑸Ⅱ','⑿']);
@@ -24,15 +26,14 @@ const {chromium}=require('playwright'),{spawnSync}=require('node:child_process')
     const d=buildAutoDocument(rows,subject,{...newDoc(subject).paper,groupHeading:'above'});
     return d.fields.map(f=>{
      const a=f.rects[0],label=f.label,parent=d.decorations.find(v=>v.id===f.auto.questionId);
-     const area=r=>{const b=rectMM(d,r);return b.w*b.h;};
-     return {smaller:area(label)<area(a) && (!parent || area(parent)<area(a)),wide:f.type!==2 || a.w===2,
+     return {aligned:label.r===a.r && label.h===a.h && (!parent || parent.r===a.r && parent.h===a.h),wide:f.type!==2 || a.w===2,
       complete:answerPlan(d,f,d.answers[f.id]).need<=answerPlan(d,f,d.answers[f.id]).room,
       merged:f.type!==2 || [...buildCells(d,true).values()].some(c=>c.c===a.c && c.r===a.r && c.mg?.w===2)};
     });
    },subject);
-   assert.equal(result.length,4);assert.ok(result.every(r=>r.smaller && r.wide && r.complete && r.merged),JSON.stringify({subject,result}));
+   assert.equal(result.length,4);assert.ok(result.every(r=>r.aligned && r.wide && r.complete && r.merged),JSON.stringify({subject,result}));
   }
-  console.log('PASS: parent/child number boxes are smaller than one-character answers; wide answer cells remain merged in Excel');
+  console.log('PASS: parent/child number boxes match the answer height; wide answer cells remain merged in Excel');
   const samples={
    '社会':source+'\n2\n⑴￥先進工業国と発展途上国の経済格差の問題。￥2￥思\n⑵￥三権分立￥2￥知',
    '理科':'1\n（１）￥原子￥2￥知\n（２）￥分子￥2￥知\n（３）￥H₂O￥2￥知\n2\n（１）￥2H₂O → 2H₂ + O₂￥2￥知\n（２）￥6.8 km/s￥2￥知\n（３）￥あたたかく浅い海￥2￥知',
@@ -71,5 +72,5 @@ for f in Path(sys.argv[1]).glob('*.pdf'):
 print('PASS: all four single-page PDFs are A4 portrait')`,out],{encoding:'utf8'});
   process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');assert.equal(result.status,0);
   console.log('Artifacts: '+out);
- }finally{await browser.close();}
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

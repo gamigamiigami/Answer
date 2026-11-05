@@ -34,10 +34,16 @@ const { chromium } = require('playwright');
     const geometry = await page.evaluate(() => {
       const cells = buildCells(doc, true), corners = [...cells.values()].filter(x => ['、', '。', 'っ', 'ゃ'].includes(x.t));
       const frames = [...doc.fields.flatMap(f => f.label ? [f.label] : []), ...doc.decorations.filter(q => q.questionHeading)];
-      return { grade: doc.paper.grade, name: doc.paper.testName, title: doc.paper.title, corners: corners.map(c => [c.t, c.align, c.valign]), boxed: frames.every(r => { const b = unionBorders(cells, r.c, r.r, r.w, r.h); return b.top && b.bottom && b.left && b.right; }) };
+      const picture=el('svg');appendCellArtwork(doc,cells,picture);
+      const drawn=[...picture.querySelectorAll('text')].filter(t=>['、','。','っ','ゃ'].includes(t.textContent));
+      const upperRight=drawn.length===corners.length && corners.every((c,i)=>{
+        const box=rectMM(doc,{c:c.c,r:c.r,w:c.mg?.w || 1,h:c.mg?.h || CHAR_ROWS}),text=drawn[i];
+        return +text.getAttribute('y')<box.y+box.h/2 && +text.getAttribute('x')>box.x+box.w/2;
+      });
+      return { grade: doc.paper.grade, name: doc.paper.testName, title: doc.paper.title, upperRight, corners: corners.map(c => [c.t, c.align, c.valign]), boxed: frames.every(r => { const b = unionBorders(cells, r.c, r.r, r.w, r.h); return b.top && b.bottom && b.left && b.right; }) };
     });
     assert.equal(geometry.grade, '2'); assert.equal(geometry.name, '国語テスト'); assert.equal(geometry.title, '2 国語テスト');
-    assert.ok(geometry.corners.length >= 5); assert.ok(geometry.corners.every(c => c[1] === 'right' && c[2] === 'bottom')); assert.equal(geometry.boxed, true);
+    assert.ok(geometry.corners.length >= 5); assert.ok(geometry.corners.every(c => c[1] === 'right' && c[2] === 'top')); assert.equal(geometry.upperRight,true); assert.equal(geometry.boxed, true);
     await page.click('#tab-answer'); await page.screenshot({ path: path.join(out, 'vertical-corners.png') });
     const download = page.waitForEvent('download'); await page.click('#btn-xlsx'); await (await download).saveAs(path.join(out, 'corners.xlsx'));
     const excel = spawnSync(process.env.TEST_PYTHON_PATH || 'python3', ['-c', `
@@ -47,10 +53,10 @@ for s in b:
  for row in s:
   for c in row:
    if c.value in ['、','。','っ','ゃ']:
-    assert c.alignment.horizontal=='right' and c.alignment.vertical=='bottom',(s.title,c.coordinate,c.alignment)
+    assert c.alignment.horizontal=='right' and c.alignment.vertical=='top',(s.title,c.coordinate,c.alignment)
     found.append(c.value)
 assert len(found)>=5,found
-print('PASS: independent Excel inspection confirms right/bottom vertical punctuation and small kana')
+print('PASS: independent Excel inspection confirms right/top vertical punctuation and small kana')
 `, path.join(out, 'corners.xlsx')], { encoding: 'utf8' });
     process.stdout.write(excel.stdout); process.stderr.write(excel.stderr); assert.equal(excel.status, 0);
     console.log('PASS: grade/test name persist; parse button stays visible to the right of cancel on PC/mobile; all question labels have four borders');

@@ -3,11 +3,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {spawnSync}=require('node:child_process'),{chromium}=require('playwright');
 (async()=>{
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'testomo-spread-'));
+ const server=require('node:http').createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(path.resolve(__dirname,'../answer-sheet-maker.html')));});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({headless:true,executablePath:process.env.TEST_BROWSER_PATH||'/usr/bin/chromium'});
  try{
   const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(require('node:url').pathToFileURL(path.resolve(__dirname,'../answer-sheet-maker.html')).href);
+  await page.goto('http://127.0.0.1:'+server.address().port);
   for(const subject of ['数学','英語','理科','社会']){
    await page.evaluate(subject=>{
     doc=null;openAnswerGenerator('見開き検証');document.querySelector('#auto-subject').value=subject;
@@ -90,11 +92,13 @@ for f in p.glob('*.pdf'):
   assert abs(float(page.mediabox.width)*25.4/72-420)<1,(f,page.mediabox)
   assert abs(float(page.mediabox.height)*25.4/72-297)<1
 b=PdfReader(p/'order.pdf');assert len(b.pages)==2
-assert 'PAGE1' in b.pages[0].extract_text() and 'PAGE2' in b.pages[0].extract_text()
-assert 'PAGE3' in b.pages[1].extract_text()
-assert all('PAGE' not in page.extract_text() for page in PdfReader(p/'blank.pdf').pages)
+# Character-grid answers are extracted with spaces between individual cells.
+text=lambda page: ''.join(page.extract_text().split())
+assert 'PAGE1' in text(b.pages[0]) and 'PAGE2' in text(b.pages[0])
+assert 'PAGE3' in text(b.pages[1])
+assert all('PAGE' not in text(page) for page in PdfReader(p/'blank.pdf').pages)
 print('PASS: A3 420 x 297 mm, odd-page count/order and no model-answer leaks')
 `,out],{encoding:'utf8'});process.stdout.write(check.stdout||'');process.stderr.write(check.stderr||'');assert.equal(check.status,0);
   console.log('Artifacts: '+out);
- }finally{await browser.close();}
+ }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
