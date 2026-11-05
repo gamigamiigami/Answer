@@ -115,4 +115,4 @@ node tools/test-graph-answers.cjs
 
 テストには Playwright、Chromium、Python 3 と openpyxl を使用します。アプリ本体の利用・ビルドに追加依存はありません。
 
-現在のバージョンは Ver. 2.0.1。今後は変更の検証後、公開ブランチへのpush・GitHub Pagesの公開・公開サイトでの確認まで行います。
+現在のバージョンは Ver. 2.1.0。今後は変更の検証後、公開ブランチへのpush・GitHub Pagesの公開・公開サイトでの確認まで行います。

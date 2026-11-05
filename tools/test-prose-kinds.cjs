@@ -16,6 +16,8 @@ const { chromium } = require('playwright');
     await page.selectOption('#auto-subject', '英語');
     await page.fill('#auto-source', '1\n1,,2,思,解答欄のみ'); await page.click('#auto-parse');
     const card = page.locator('[data-row="0"]');
+    assert.equal(await card.locator('[data-k="w"]').inputValue(),'5');
+    assert.equal(await card.locator('[data-k="h"]').inputValue(),'1');
     for (const subject of ['国語', '英語', '数学', '理科', '社会']) {
       await page.selectOption('#auto-subject', subject);
       const expected = subject === '国語' ? ['mark', 'word', 'chars', 'extract', 'essay', 'kanji', 'kanbun'] : ['mark', 'word', 'formula', 'chars', 'essay', 'graph', 'table'];
@@ -40,6 +42,8 @@ const { chromium } = require('playwright');
     assert.equal(await card.locator('[data-k="w"]').inputValue(), '6');
     assert.equal(await card.locator('[data-k="h"]').inputValue(), '3');
     console.log('PASS: blank/prose share one choice; visible dimensions survive answer edits, generation, save/load and reopening');
+    const defaults=await page.evaluate(()=>['数学','英語','理科','社会','その他'].map(subject=>{const d=buildAutoDocument(parseAutoAnswers('1\n1,,2,思,解答欄のみ',{subject}),subject);return [d.fields[0].rects[0].w,d.fields[0].rects[0].h];}));
+    assert.deepEqual(defaults,Array(5).fill([5,2]));
     const result = await page.evaluate(() => {
       const base = { ...parseAutoAnswers('1\n1,太陽,2,知')[0], kindAuto: false };
       const shapes = answer => buildAutoDocument([{ ...base, kind: 'essay', answer, w: 6, h: 3 }], '英語').fields[0].rects;
@@ -54,7 +58,7 @@ const { chromium } = require('playwright');
     assert.equal(await card.locator('[data-k="n"]').isVisible(), true);
     assert.equal(await card.locator('[data-k="eight"]').isVisible(), true);
     await page.click('#auto-tab-input'); await page.click('#auto-input-table');
-    assert.deepEqual(await page.locator('[data-input-cell="0,5"] > option').evaluateAll(nodes => nodes.slice(1).map(n => n.value)), ['mark', 'word', 'formula', 'chars', 'essay', 'graph', 'table']);
+    assert.deepEqual(await page.locator('[data-input-cell="0,5"] > option').evaluateAll(nodes => nodes.slice(2).map(n => n.value)), ['mark', 'word', 'formula', 'chars', 'essay', 'graph', 'table']);
     await page.click('#answer-input-cancel');
     console.log('PASS: subject-specific order matches in row and bulk menus; character count and 80% line toggle are visible together');
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
