@@ -262,6 +262,8 @@ body.zen #zen-out{display:block}
 .auto-preview-sheet{position:absolute;inset:22px 0 0;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fff;color:#222;padding:3px}
 .auto-preview-sheet svg{display:block;width:100%;height:100%;min-width:var(--preview-width);min-height:var(--preview-height)}
 .auto-preview-sheet p{margin:0;font-size:11px;line-height:1.4;overflow:auto;max-height:100%}
+.auto-dimensions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.auto-dimensions label{flex:1;min-width:55px}
 .auto-kind-help{display:block;font-size:11px;line-height:1.5;margin-top:5px;color:var(--sub)}
 .auto-completion-note{grid-column:1/-1;margin:0;font-size:12px}
 .auto-preview-dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);max-width:90vw;width:700px;padding:16px}
@@ -657,8 +659,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 const APP_RELEASES = [
+  ['1.8.0','記述系を統合・教科別の欄順序に'],
   ['1.7.0','欄プレビュー拡大・欄の種類を整理'],
   ['1.6.0','欄プレビュー小型化・履歴3件表示'],
   ['1.5.0','バージョン横に更新内容を表示'],
@@ -1757,9 +1760,9 @@ function openAnswerInputTable(initial,defaults,onSave){
   const modal=document.createElement('div');modal.className='modal table-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','問題の入力表');
   modal.innerHTML='<div class="card"><h3>問題の入力表</h3><p>数字も文章も「答え」列にそのまま入力できます。Excelからは、大問・番号・答え・点数・観点・形式の順で貼り付けます。</p><div class="table-scroll"><table id="answer-input-grid"></table></div><button class="tb" id="answer-input-add">＋ 1問追加</button><p role="status" id="answer-input-status"></p><div class="modal-actions"><button class="tb" id="answer-input-cancel">やめる</button><button class="tb primary" id="answer-input-save">一覧に反映</button></div></div>';
   document.body.append(modal);const q=s=>modal.querySelector(s),opener=document.activeElement;
-  const draw=()=>{q('table').innerHTML='<thead><tr>'+['大問','番号','答え','点数','観点','形式',''].map(t=>'<th>'+t+'</th>').join('')+'</tr></thead><tbody>'+data.map((row,r)=>'<tr>'+row.map((v,c)=>'<td>'+(c===4||c===5?'<select data-input-cell="'+r+','+c+'" aria-label="'+(r+1)+'問目 '+(c===4?'観点':'形式')+'">'+(c===4?aspectOptions(v):[['auto','自動'],...AUTO_KIND_CHOICES]).map(([k,t])=>'<option value="'+k+'"'+(k===(c===5?autoChoiceKind(v):v)?' selected':'')+'>'+t+'</option>').join('')+'</select>':'<textarea rows="2" data-input-cell="'+r+','+c+'" aria-label="'+(r+1)+'問目 '+['大問','番号','答え','点数'][c]+'">'+xmlEsc(v)+'</textarea>')+'</td>').join('')+'<td><button class="tb" data-delete-input="'+r+'">削除</button></td></tr>').join('')+'</tbody>';};
+  const draw=()=>{q('table').innerHTML='<thead><tr>'+['大問','番号','答え','点数','観点','形式',''].map(t=>'<th>'+t+'</th>').join('')+'</tr></thead><tbody>'+data.map((row,r)=>'<tr>'+row.map((v,c)=>'<td>'+(c===4||c===5?'<select data-input-cell="'+r+','+c+'" aria-label="'+(r+1)+'問目 '+(c===4?'観点':'形式')+'">'+(c===4?aspectOptions(v).map(([k,t])=>'<option value="'+k+'"'+(k===v?' selected':'')+'>'+t+'</option>').join(''):autoKindOptions(defaults.subject,v,[['auto','自動']]))+'</select>':'<textarea rows="2" data-input-cell="'+r+','+c+'" aria-label="'+(r+1)+'問目 '+['大問','番号','答え','点数'][c]+'">'+xmlEsc(v)+'</textarea>')+'</td>').join('')+'<td><button class="tb" data-delete-input="'+r+'">削除</button></td></tr>').join('')+'</tbody>';};
   modal.oninput=e=>{if(e.target.dataset.inputCell){const [r,c]=e.target.dataset.inputCell.split(',').map(Number);data[r][c]=e.target.value;}};
-  modal.addEventListener('paste',e=>{if(!e.target.dataset.inputCell)return;const text=e.clipboardData.getData('text/plain');if(!text.includes('\t'))return;e.preventDefault();const [r,c]=e.target.dataset.inputCell.split(',').map(Number),pasted=parseTableTSV(text);if(r+pasted.length>200 || pasted.some(row=>c+row.length>6)){q('#answer-input-status').textContent='200問・6列まで貼り付けられます。';return;}while(data.length<r+pasted.length)data.push(['1',String(data.length+1),'',String(defaults.points ?? 2),'知技','auto']);pasted.forEach((row,y)=>row.forEach((v,x)=>{let val=v;if(c+x===4)val=/^(?:知|知技|知識・技能)$/.test(v)?'知技':/^(?:思|思判表|思考・判断・表現)$/.test(v)?'思判表':v.trim();if(c+x===5)val=(AUTO_KINDS.find(([k,t])=>k===v || t===v) || ['auto'])[0];data[r+y][c+x]=val;}));draw();});
+  modal.addEventListener('paste',e=>{if(!e.target.dataset.inputCell)return;const text=e.clipboardData.getData('text/plain');if(!text.includes('\t'))return;e.preventDefault();const [r,c]=e.target.dataset.inputCell.split(',').map(Number),pasted=parseTableTSV(text);if(r+pasted.length>200 || pasted.some(row=>c+row.length>6)){q('#answer-input-status').textContent='200問・6列まで貼り付けられます。';return;}while(data.length<r+pasted.length)data.push(['1',String(data.length+1),'',String(defaults.points ?? 2),'知技','auto']);pasted.forEach((row,y)=>row.forEach((v,x)=>{let val=v;if(c+x===4)val=/^(?:知|知技|知識・技能)$/.test(v)?'知技':/^(?:思|思判表|思考・判断・表現)$/.test(v)?'思判表':v.trim();if(c+x===5)val=([...AUTO_KIND_CHOICES,...AUTO_KINDS].find(([k,t])=>k===v || t===v) || ['auto'])[0];data[r+y][c+x]=val;}));draw();});
   modal.onclick=e=>{const b=e.target.closest('[data-delete-input]');if(b){data.splice(+b.dataset.deleteInput,1);draw();}};
   q('#answer-input-add').onclick=()=>{if(data.length>=200)return;data.push([data.at(-1)?.[0] || '1',String(data.length+1),'',String(defaults.points ?? 2),defaults.aspect || '知技','auto']);draw();q('[data-input-cell="'+(data.length-1)+',2"]').focus();};
   const close=()=>{modal.remove();if(opener?.isConnected)opener.focus();};q('#answer-input-cancel').onclick=close;
@@ -6080,10 +6083,18 @@ function startApp(){
 /* 模範解答から作る。解析→編集→配置は、確定まで現在の用紙に触れない。 */
 const AUTO_KINDS = [['table','表（列 × 行）'],['kanbun','漢文（□・送り仮名・返り点）'],['formula','数式・数値・化学式'],['sentence','英文'],['working','途中式・説明'],['mark','記号（1文字）'],['word','語句（自動幅）'],['essay','記述（字数自由）'],
   ['chars','字数指定'],['blank','解答欄のみ'],['graph','グラフ'],['kanji','漢字'],['extract','初終'],['customA','カスタムA'],['customB','カスタムB']];
-// 英文は文章・記述と同じ欄。保存済みの sentence は互換用に読み込む。
-const AUTO_KIND_CHOICES=AUTO_KINDS.filter(([kind])=>kind!=='sentence').map(([kind,label])=>[kind,({word:'短答（語句・自動幅）',essay:'文章・記述（英文も）',formula:'数式・数値・化学式',working:'途中式・説明（広い欄）',blank:'空欄（答えなしで作る）'})[kind] || label]);
-const autoChoiceKind=kind=>kind==='sentence'?'essay':kind;
-const AUTO_KIND_HELP={word:'短い語句や英単語。答えに合わせた幅の、マスなしの欄。',essay:'長い文章や英文。広いマスなしの欄で、字数は指定しません。',sentence:'長い文章や英文。広いマスなしの欄で、字数は指定しません。',formula:'計算結果や化学式。式を書く高さを確保し、分数・指数も表示します。',working:'途中式や説明。文章欄より高さを取り、複数行を書く欄です。',blank:'模範解答を入れずに作る欄。幅と高さを自由に指定できます。'};
+// 旧形式名は読み込み互換用に残し、選択肢は記述へ統合する。
+const autoChoiceKind=kind=>['sentence','working','blank'].includes(kind)?'essay':kind;
+const AUTO_KIND_CHOICES=AUTO_KINDS.filter(([kind])=>!['sentence','working','blank'].includes(kind)).map(([kind,label])=>[kind,({mark:'記号',word:'語句',essay:'自由記述（欄のみ）',formula:'式',chars:'字数指定（8割ライン切替）'})[kind] || label]);
+function autoKindOrder(subject){return subject==='国語'?['mark','word','chars','extract','essay','kanji','kanbun']:['mark','word','formula','chars','essay','graph','table'];}
+function autoKindOptions(subject,value,extra=[]){
+  const main=autoKindOrder(subject),labels=new Map(AUTO_KIND_CHOICES);
+  const option=([kind,label])=>'<option value="'+xmlEsc(kind)+'"'+(autoChoiceKind(value)===kind?' selected':'')+'>'+xmlEsc(label)+'</option>';
+  const other=AUTO_KIND_CHOICES.filter(([kind])=>!main.includes(kind));
+  return extra.map(option).join('')+main.map(kind=>option([kind,labels.get(kind)])).join('')+'<optgroup label="その他">'+other.map(option).join('')+'</optgroup>';
+}
+const AUTO_KIND_HELP={word:'答えに合わせて欄の大きさを自動調整します。',essay:'英文・説明・途中式もここへ。幅と高さを指定します。答えは空でも作れます。',formula:'1/2（分数）・x^2（指数）などの書き方で式を表します。'};
+function essaySize(subject){return subject==='国語'?{w:1,h:10}:{w:8,h:4};}
 const AUTO_SAMPLE = '１\n１，ア、２，知\n２，こんにちは、２、思\n３，太陽，２，知，漢字2字\n２\n１，（１）、ウ、２、知\n（２），相手の気持ちを考えたから。，５，思，20字以内\n２，ア・ウ，４，知，完答\n３，はじめ～おわり，４，思\n３\n１，自分の考えを相手に伝えたかったから。，５，思\n２，，４，思，解答欄のみ';
 const SUBJECT_SAMPLES = {
   '数学':'1\n1,12,2,知\n2,x = 1/2,3,知\n3,3x^2 + 2x,3,知\n2\n1,"2x + 3 = 7\nx = 2",5,思,途中式\n2,y = 2x + 1,5,思,グラフ',
@@ -6108,7 +6119,7 @@ function subjectAnswerSize(row,d){
   const wide=Math.min(reference?d.grid.cols-3:12,d.grid.cols-3), lines=String(row.answer).split('\n');
   // 手書きの余白を含める。半角は全角の約半分として、英文を一字一マスにしない。
   const units=Math.max(1,...lines.map(line=>Array.from(line).reduce((n,c)=>n+(/[\x00-\x7f]/.test(c)?0.55:1),0)));
-  if(row.kind==='blank') return {w:p.blankW,h:p.blankH};
+  if(autoChoiceKind(row.kind)==='essay') return essaySize(d.paper.subject);
   if(row.kind==='word' || row.kind==='formula') return {w:Math.min(wide,Math.max(p.shortW,Math.ceil(units*.65+1))),h:Math.max(row.kind==='formula'?2:p.shortH,lines.length)};
   return {w:wide,h:Math.max(row.kind==='working'?4:reference && d.paper.subject==='社会'?2:p.essayH,lines.reduce((n,line)=>n+Math.max(1,Math.ceil(Array.from(line).length/(wide*1.5))),0))};
 }
@@ -6291,7 +6302,7 @@ function autoSourceExtras(row){
   else if (row.kind==='extract') extras.push('初終'+row.n+'字');
   else if (['blank','graph','customA','customB'].includes(row.kind)) extras.push(({blank:'解答欄のみ',graph:'グラフ',customA:'カスタムA',customB:'カスタムB'})[row.kind]);
   else if (['formula','sentence','working'].includes(row.kind)) extras.push(({formula:'数式',sentence:'英文',working:'途中式'})[row.kind]);
-  else if (!row.kindAuto) extras.push(row.kind==='word'?'語句':row.kind==='mark'?'記号':'記述');
+  else if (row.kind==='essay' || !row.kindAuto) extras.push(row.kind==='word'?'語句':row.kind==='mark'?'記号':'記述');
   if (row.w || row.h) extras.push((row.w || 0)+'×'+(row.h || 0));
   if (row.complete && !row.completeGroup) extras.push('完答');
   return extras;
@@ -6439,7 +6450,7 @@ function autoRowError(row){
   if (!AUTO_KINDS.some(x => x[0] === row.kind)) return '欄の種類を選んでください。';
   if (!Number.isFinite(row.points) || row.points < 0 || row.points > 1000) return '配点は0〜1000の数値にしてください。';
   if (!validAspect(row.aspect)) return '観点を選んでください。';
-  if (!row.answer.trim() && !['blank','graph','working','table'].includes(row.kind)) return '模範解答を入れるか「解答欄のみ」を選んでください。';
+  if (!row.answer.trim() && autoChoiceKind(row.kind)!=='essay' && !['graph','table'].includes(row.kind)) return '模範解答を入れるか「自由記述（欄のみ）」を選んでください。';
   if (autoLength(row.answer) > 4000) return '1問の答えは4000文字以内にしてください。';
   if (['chars','kanji','extract'].includes(row.kind) && (!Number.isInteger(row.n) || row.n < 1 || row.n > 1000)) return '字数は1〜1000の整数にしてください。';
   if (row.kind==='extract' && /[～〜~]/.test(row.answer) && !extractWaveParts(row.answer)) return '初終は「初め～終わり」の形で、～の前後に答えを入れてください（～は1つ）。';
@@ -6539,8 +6550,8 @@ function buildAutoLayout(rows, subject, currentPaper, initialTitle, fit){
     const type = ({table:12,kanbun:11,formula:6,sentence:6,working:6,mark:2,word:6,essay:6,chars:5,blank:6,graph:7,kanji:8,extract:3,customA:9,customB:10})[row.kind];
     const n = autoLength(row.answer), fixed = ['chars','kanji','extract'].includes(row.kind);
     // 字数自由は筆記用の余白を確保。大きさは一覧から変更できる。
-    const defaultW = row.kind === 'blank' ? 1 : row.kind === 'word' ? (vertical ? 1 : Math.max(2,n)) : (vertical ? Math.max(1,Math.ceil(n/18)) : Math.min(12,d.grid.cols-3));
-    const defaultH = row.kind === 'blank' ? 10 : row.kind === 'word' ? (vertical ? Math.max(2,n) : 1) : (vertical ? Math.min(18,Math.max(4,n)) : Math.max(2,Math.ceil(n/12)));
+    const defaultW = autoChoiceKind(row.kind)==='essay' ? essaySize(subject).w : row.kind === 'word' ? (vertical ? 1 : Math.max(2,n)) : (vertical ? Math.max(1,Math.ceil(n/18)) : Math.min(12,d.grid.cols-3));
+    const defaultH = autoChoiceKind(row.kind)==='essay' ? essaySize(subject).h : row.kind === 'word' ? (vertical ? Math.max(2,n) : 1) : (vertical ? Math.min(18,Math.max(4,n)) : Math.max(2,Math.ceil(n/12)));
     const size=subjectAnswerSize(row,d);
     const opt = {table:row.table,n:row.kind==='kanbun' ? parseKanbun(row.answer).length : row.n, tate:row.h || (size ? size.h : defaultH), yoko:row.w || (size ? size.w : defaultW), w:row.w || (row.kind==='table'?3:6), h:row.h || (row.kind==='table'?3:6)};
     let got = null;
@@ -6664,7 +6675,7 @@ function currentAutoRows(){
     return {...fallback,...(f.auto || {}),fieldId:f.id,completeGroup:f.completeGroup || '',aspectDefault:!!(f.auto || {}).aspectDefault && f.aspect===(f.auto || {}).aspect,answer,...(f.type===12?{table:tableSpec(f.table),w:f.table.cols,h:f.table.rows}:{}),kanbunGiven:f.kanbunGiven || '',graphRange:(doc.answerGraphs || {})[f.id] || (f.auto || {}).graphRange,points:f.points || 0,aspect:f.aspect || '知技',
       complete:!!f.complete,eight:f.type===5 && !f.exact,n:f.fixedChars === false ? (f.auto || {}).n || Math.max(1,autoLength(answer)) : f.chars || fallback.n,
       label:parentLabel+subParentLabel+(f.label ? (doc.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
-      ...(((f.auto || {}).kind || kind)==='blank' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
+      ...(autoChoiceKind((f.auto || {}).kind || kind)==='essay' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
       warnings:((f.auto || {}).warnings || []).filter(w=>!(w.startsWith('配点') && f.points!==(f.auto || {}).points) && !(w.startsWith('観点') && f.aspect!==(f.auto || {}).aspect)),
       appearance:Object.fromEntries(['textPt','textScale','fill','line','note','notePos','guides','targetWords'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]]))};
   });
@@ -6796,7 +6807,9 @@ function openAnswerGenerator(initialTitle=''){
     const defaultAspect=r.aspectDefault ? autoDefaultAspect(scoringSettings(),r.group) : '';
     if(defaultAspect){r.aspect=defaultAspect;r.warnings=r.warnings.filter(w=>!w.startsWith('観点'));}
     else if (!r.completeGroup && (r.aspectAuto || r.warnings.includes('観点を推定'))) r.aspect=['essay','sentence','working','chars','graph','blank'].includes(r.kind)?'思判表':'知技';
-    if (r.kind==='blank' && !SUBJECT_LAYOUTS[q('#auto-subject').value]){ r.w=r.w || 1; r.h=r.h || 10; }
+    r.kind=autoChoiceKind(r.kind);
+    if(r.kind==='essay'){const size=essaySize(q('#auto-subject').value);r.w=r.w || size.w;r.h=r.h || size.h;}
+    if(r.kind==='word'){r.w=0;r.h=0;}
   };
   const syncControls=card=>{
     const r=rows[+card.dataset.row];
@@ -6809,10 +6822,19 @@ function openAnswerGenerator(initialTitle=''){
     card.querySelector('[data-k="aspect"]').value=r.aspect;
     card.querySelector('[data-k="complete"]').disabled=!!r.completeGroup;
     for (const key of ['n','w','h','eight']){
-      const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','sentence','working','word','essay','blank','graph','table'].includes(r.kind);
+      const enabled=key==='n'?['chars','kanji','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','essay','graph','table'].includes(r.kind);
       const node=card.querySelector('[data-k="'+key+'"]'); node.disabled=!enabled; node.closest('label').hidden=!enabled;
       if(key==='w' || key==='h')node.closest('label').firstChild.textContent=r.kind==='table'?(key==='w'?'列数（横）':'行数（縦）'):(key==='w'?'幅':'高さ');
       if (key==='eight') node.checked=!!r.eight; else node.value=r[key];
+    }
+    const dimensions=card.querySelector('.auto-dimensions');dimensions.hidden=!['essay','chars'].includes(r.kind);
+    for(const key of ['w','h']){
+      const label=card.querySelector('[data-k="'+key+'"]').closest('label');
+      (r.kind==='essay'?dimensions:card.querySelector('.auto-options')).appendChild(label);
+    }
+    for(const key of ['n','eight']){
+      const label=card.querySelector('[data-k="'+key+'"]').closest('label');
+      (r.kind==='chars'?dimensions:card.querySelector('.auto-options')).appendChild(label);
     }
     card.querySelector('.auto-size-summary').textContent=(r.kind==='table'?' · '+(r.w || 3)+'列 × '+(r.h || 3)+'行':['chars','kanji','extract'].includes(r.kind)?' · '+r.n+'字':r.w && r.h?' · 幅'+r.w+'・高さ'+r.h:'')+(r.complete?' · 完答':'')+(r.eight && r.kind==='chars'?' · 8割ライン':'');
     if(card.querySelector('.auto-preview-sheet').childElementCount)paintPreview(card);
@@ -6822,6 +6844,7 @@ function openAnswerGenerator(initialTitle=''){
   const syncSource=()=>{ q('#auto-answers-only').checked=false;source.value=autoRowsSource(rows,{...scoringSettings(),separator:'￥'}); parsedText=source.value; };
   const sourceDirty=()=>scoringDirty || source.value!==parsedText;
   const drawRows=(writeSource=false)=>{
+    const bulkKind=q('#auto-bulk-kind');bulkKind.innerHTML=autoKindOptions(q('#auto-subject').value,bulkKind.value,[['','形式は変更しない']]);
     rows.forEach(infer); updateGroups(q('#auto-default-group').value);
     q('#auto-batch').hidden=!rows.length;
     previewObserver.disconnect();
@@ -6836,8 +6859,8 @@ function openAnswerGenerator(initialTitle=''){
       '<label>小問内の番号<select data-k="leafLabel" aria-label="小問内の番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.leaf || '')+'</select><span data-leaf-label-custom hidden>'+input('leafLabelCustom',numbering.leaf || '','text','小問内の番号を自由に指定')+'</span></label></div></div>'+
       (r.completeGroup?'<p class="auto-completion-note">'+xmlEsc('まとめて完答：'+rows.filter(x=>x.completeGroup===r.completeGroup).map(x=>x.label).join('・')+' の全てで '+r.points+'点')+'</p>':'')+
       '<figure class="auto-field-preview"><figcaption>欄 <button type="button" class="auto-preview-open" data-preview="'+i+'" aria-label="'+(i+1)+'問目の欄を拡大">プレビュー拡大</button></figcaption><div class="auto-preview-sheet" tabindex="0" role="region" aria-label="解答欄プレビュー。長い欄は枠内をスクロールできます"></div></figure>'+
-      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
-      '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KIND_CHOICES,autoChoiceKind(r.kind))+'</select><small class="auto-kind-help"></small></label>'+
+      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
+      '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+autoKindOptions(q('#auto-subject').value,r.kind)+'</select><small class="auto-kind-help"></small></label>'+
       '<label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></div>'+
       (hadDoc && r.fieldId?'<button class="tb" data-jump="'+i+'">この欄を用紙上で見る</button>':'')+
@@ -6949,6 +6972,7 @@ function openAnswerGenerator(initialTitle=''){
       if (key==='subLabel') card.querySelector('[data-sub-label-custom]').hidden=true;
       if (key==='leafLabel')card.querySelector('[data-leaf-label-custom]').hidden=true;
     } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
+    if(['w','h'].includes(key) && r.kind==='essay')r.kindAuto=false;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='n' && r.kindAuto && r.kind==='extract'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='aspect'){ r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }

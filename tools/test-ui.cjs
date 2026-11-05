@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.locator('#auto-input-panel').isVisible(),false);
     assert.equal(await page.locator('#auto-review-panel').isVisible(),true);
     assert.equal(await page.locator('[data-row="0"] [data-check]').isVisible(),false);
-    assert.equal(await page.locator('[data-row="2"] [data-k="w"]').isVisible(),false);
+    assert.equal(await page.locator('[data-row="2"] [data-k="w"]').isVisible(),true);
     assert.match(await page.locator('[data-row="2"] .auto-detail > summary').innerText(),/幅1・高さ10/);
     assert.equal(await page.locator('[data-row="1"] [data-k="kind"]').inputValue(),'extract');
     await page.screenshot({path:path.join(output,'review.png')});
