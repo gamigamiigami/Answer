@@ -26,6 +26,13 @@ const { chromium } = require('playwright');
     const card = page.locator('[data-row="0"]'), preview = card.locator('.auto-preview-sheet');
     await preview.locator('svg').waitFor();
     assert.match(await preview.textContent(), /太陽/);
+    const placement = await card.evaluate(c => {
+      const number = c.querySelector('[data-k="label"]').getBoundingClientRect();
+      const box = c.querySelector('.auto-preview-sheet').getBoundingClientRect();
+      const answer = c.querySelector('[data-k="answer"]').getBoundingClientRect();
+      return { between: number.right <= box.left && box.right <= answer.left, height: box.height };
+    });
+    assert.equal(placement.between, true); assert.ok(placement.height >= 130);
     await card.locator('[data-preview]').click();
     await page.locator('.auto-preview-dialog svg').waitFor();
     await page.keyboard.press('Escape');
@@ -63,6 +70,13 @@ const { chromium } = require('playwright');
       return { count, unchanged: before === JSON.stringify({ doc, uid, ui }) };
     });
     assert.equal(cases.count, 30); assert.equal(cases.unchanged, true);
+    const english = await page.evaluate(() => {
+      const rows = parseAutoAnswers('1\n1,This is a pen.,2,知,英文', { subject: '英語' });
+      const old = buildAutoDocument(rows, '英語');
+      const merged = buildAutoDocument(rows.map(r => ({ ...r, kind: 'essay' })), '英語');
+      return { same: JSON.stringify(old.fields.map(f => f.rects)) === JSON.stringify(merged.fields.map(f => f.rects)), oneChoice: !AUTO_KIND_CHOICES.some(([k]) => k === 'sentence') };
+    });
+    assert.equal(english.same, true); assert.equal(english.oneChoice, true);
     console.log('PASS: all 15 field kinds render in both writing directions without changing the document, IDs or editing state');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'dark' });
