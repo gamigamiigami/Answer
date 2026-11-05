@@ -258,11 +258,19 @@ body.zen #zen-out{display:block}
 .auto-question{margin:12px 0;padding:14px}
 .auto-question legend{font-size:14px}
 .auto-grid{grid-template-columns:70px 100px minmax(150px,1fr) 140px 70px 130px}
-.auto-field-preview{margin:12px 0 0;min-width:0}
-.auto-field-preview figcaption{font-size:12px;color:var(--sub);margin-bottom:6px}
-.auto-preview-sheet{overflow:auto;max-height:260px;min-height:56px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#222;padding:8px}
-.auto-preview-sheet svg{display:block;max-width:none}
-.auto-preview-sheet p{margin:6px;font-size:13px}
+.auto-answer{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(65px,.7fr);gap:6px;align-items:start;min-width:0}
+.auto-answer>label{min-width:0}
+.auto-answer>button{grid-column:1/-1}
+.auto-field-preview{position:absolute;grid-column:2;grid-row:1;inset:0 0 auto 0;margin:0;min-width:0}
+.auto-field-preview figcaption{font-size:12px;color:var(--sub);height:18px;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.auto-preview-open{border:0;background:transparent;color:var(--place);font:inherit;text-decoration:underline;cursor:pointer;padding:0}
+.auto-preview-sheet{overflow:hidden;height:56px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:#fff;color:#222;padding:3px}
+.auto-preview-sheet svg{display:block;width:100%;height:100%}
+.auto-preview-sheet p{margin:0;font-size:11px;line-height:1.4;overflow:auto;max-height:100%}
+.auto-preview-dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);max-width:90vw;width:700px;padding:16px}
+.auto-preview-dialog::backdrop{background:#0006}
+.auto-preview-large{background:white;color:#222;height:65vh;margin:12px 0;overflow:auto}
+.auto-preview-large svg{display:block;width:100%;height:100%}
 .auto-detail{margin-top:10px}
 .auto-detail>summary{cursor:pointer;color:var(--sub);font-size:12px;padding:6px 0}
 .auto-scoring>summary{cursor:pointer;font-weight:600;font-size:13px}
@@ -301,8 +309,11 @@ body.zen #workbar{display:none}
 #topbar .logo small{display:block;font-size:10px;font-weight:400;color:var(--sub);letter-spacing:.12em;margin-bottom:1px}
 #topbar .logo .buddy{width:38px;height:40px}
 .app-version{font-size:11px;font-weight:400;color:var(--sub);white-space:nowrap;letter-spacing:normal}
-.app-update-note{display:block;margin-top:3px;white-space:normal;line-height:1.5;font-size:11px;max-width:30em}
-#start .app-version{margin:16px 0 0;text-align:right}
+.app-release-history{display:block;margin-top:3px;line-height:1.5;font-size:11px;width:29em;max-width:100%;max-height:4.5em;overflow-y:auto;text-align:left;white-space:normal;overscroll-behavior:contain;scrollbar-gutter:stable}
+.app-release-history>span{display:flex;gap:8px;min-height:1.5em;align-items:baseline}
+.app-release-history b{font-weight:500;flex:none}
+.app-release-history:focus-visible{outline:2px solid var(--place);outline-offset:2px}
+#start .app-version{margin:16px 0 0;text-align:left}
 #topbar .app-version{display:block;font-size:10px;line-height:1.3}
 #workbar{background:var(--panel);padding-top:4px;padding-bottom:10px}
 #tabs{background:var(--soft);padding:4px;border-radius:24px;gap:2px}
@@ -643,15 +654,25 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '1.5.0';
-const APP_UPDATE_NOTE = '一覧で欄と答えをプレビュー・更新内容を表示';
+const APP_VERSION = '1.6.0';
+const APP_RELEASES = [
+  ['1.6.0','欄プレビュー小型化・履歴3件表示'],
+  ['1.5.0','バージョン横に更新内容を表示'],
+  ['1.4.0','一覧に解答欄プレビューを追加'],
+  ['1.3.0','原本レイアウトとA3見開きに対応']
+];
 document.querySelectorAll('[data-app-version]').forEach(node=>{
   node.textContent='Ver. '+APP_VERSION;
-  const note=document.createElement('span');
-  note.className='app-update-note';
-  note.textContent='今回の更新：'+APP_UPDATE_NOTE;
-  node.appendChild(note);
-  node.setAttribute('aria-label','アプリのバージョン '+APP_VERSION+'。今回の更新：'+APP_UPDATE_NOTE);
+  const history=document.createElement('span');
+  history.className='app-release-history';history.tabIndex=0;
+  history.setAttribute('role','list');history.setAttribute('aria-label','更新履歴（新しい順。以前の更新はスクロール）');
+  for(const [version,description] of APP_RELEASES){
+    const item=document.createElement('span');item.setAttribute('role','listitem');
+    const number=document.createElement('b');number.textContent=version;
+    const text=document.createElement('span');text.textContent=description;
+    item.append(number,text);history.appendChild(item);
+  }
+  node.appendChild(history);
 });
 
 /* ---------------------------------------------------------------
@@ -6802,12 +6823,11 @@ function openAnswerGenerator(initialTitle=''){
       '<label>小問番号<select data-k="subLabel" aria-label="小問番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.suffix)+'</select><span data-sub-label-custom hidden>'+input('subLabelCustom',numbering.suffix,'text','小問番号を自由に指定')+'</span></label>'+
       '<label>小問内の番号<select data-k="leafLabel" aria-label="小問内の番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.leaf || '')+'</select><span data-leaf-label-custom hidden>'+input('leafLabelCustom',numbering.leaf || '','text','小問内の番号を自由に指定')+'</span></label></div>'+
       (r.completeGroup?'<p class="auto-completion-note">'+xmlEsc('まとめて完答：'+rows.filter(x=>x.completeGroup===r.completeGroup).map(x=>x.label).join('・')+' の全てで '+r.points+'点')+'</p>':'')+
-      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
+      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><figure class="auto-field-preview"><figcaption>欄 <button type="button" class="auto-preview-open" data-preview="'+i+'" aria-label="'+(i+1)+'問目の欄を拡大">プレビュー拡大</button></figcaption><div class="auto-preview-sheet"></div></figure><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+choices(AUTO_KINDS,r.kind)+'</select></label>'+
       '<label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></div>'+
       (hadDoc && r.fieldId?'<button class="tb" data-jump="'+i+'">この欄を用紙上で見る</button>':'')+
-      '<figure class="auto-field-preview"><figcaption>欄と模範解答のプレビュー</figcaption><div class="auto-preview-sheet"></div></figure>'+
       '<details class="auto-detail"><summary>細かな設定<span class="auto-size-summary"></span></summary><div class="auto-options"><label>字数'+input('n',r.n,'number','字数')+'</label><label>幅'+input('w',r.w,'number','幅')+'</label><label>高さ'+input('h',r.h,'number','高さ')+'</label>'+
       '<label><input data-k="eight" type="checkbox"'+(r.eight?' checked':'')+'>8割ライン</label><label><input data-k="complete" type="checkbox"'+(r.complete?' checked':'')+'>完答（太枠）</label>'+
       '<button class="tb" data-remove="'+i+'" aria-label="'+(i+1)+'問目を削除">削除</button></div><p class="auto-hint"></p></details></fieldset>';
@@ -6926,6 +6946,21 @@ function openAnswerGenerator(initialTitle=''){
     syncControls(card); syncSource(); status.textContent=rows.length+'問・合計'+scoringItems(rows).reduce((s,r)=>s+r.points,0)+'点。';
   });
   q('#auto-rows').addEventListener('click',e=>{
+    const preview=e.target.closest('[data-preview]');
+    if(preview){
+      const dialog=document.createElement('dialog');dialog.className='auto-preview-dialog';
+      dialog.setAttribute('aria-label','欄と模範解答のプレビュー');
+      const title=document.createElement('strong');title.textContent='欄と模範解答のプレビュー';
+      const content=document.createElement('div');content.className='auto-preview-large';
+      try{content.appendChild(autoAnswerPreview(rows[+preview.dataset.preview],q('#auto-subject').value,doc?.paper));}
+      catch(error){content.textContent=error.message;}
+      const done=document.createElement('button');done.type='button';done.className='tb';done.textContent='閉じる';done.onclick=()=>dialog.close();
+      dialog.append(title,content,done);wrap.appendChild(dialog);
+      dialog.addEventListener('keydown',event=>event.stopPropagation());
+      dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});
+      dialog.showModal();done.focus();return;
+    }
+
     const jump=e.target.closest('[data-jump]');if(jump){const f=doc.fields.find(f=>f.id===rows[+jump.dataset.jump].fieldId);if(f){close();ui.cur={...f.rects[0]};ui.sel=null;ui.targets=[];render();svg.focus();}return;}
     const tb=e.target.closest('[data-table]');if(tb){const r=rows[+tb.dataset.table];openTableEditor({table:tableSpec(r.table,r.w || 3,r.h || 3),answer:r.answer,points:r.points,aspect:r.aspect,onSave:(table,answer,points,aspect)=>{Object.assign(r,{table,answer,points,aspect,w:table.cols,h:table.rows,kind:'table',kindAuto:false,pointsDefault:false,aspectDefault:false,aspectAuto:false});drawRows(true);}});return;}
     const kb=e.target.closest('[data-kanbun]');
