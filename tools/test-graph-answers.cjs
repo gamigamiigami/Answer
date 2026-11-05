@@ -50,7 +50,7 @@ const {chromium}=require('playwright');
 
     await page.click('#btn-from-answers');await page.fill('#creation-title','関数と分数のテスト');await page.click('#creation-next');
     await page.selectOption('#auto-subject','数学');
-    await page.fill('#auto-source','1\n1,y=3x+1,2,思\n2,y=6/x,3,思\n3,y=(1/2)x^2,4,思\n4,1/2,2,知,記述,4×2');
+    await page.fill('#auto-source','1\n1,y=3x+1,2,思,グラフ\n2,y=6/x,3,思,グラフ\n3,y=(1/2)x^2,4,思,グラフ\n4,1/2,2,知,記述,4×2');
     await page.click('#auto-parse');
     assert.deepEqual(await page.locator('[data-k="kind"]').evaluateAll(nodes=>nodes.map(n=>n.value)),['graph','graph','graph','essay']);
     await page.click('[data-row="2"] [data-graph]');
@@ -69,7 +69,7 @@ const {chromium}=require('playwright');
     assert.equal(fraction.room,fraction.need);assert.deepEqual(fraction.vectors.filter(v=>v.k==='text').map(v=>v.text),['1','2']);
     assert.ok(fraction.vectors[0].y<fraction.vectors[1].y1 && fraction.vectors[1].y1<fraction.vectors[2].y);
     await page.screenshot({path:path.join(output,'model-answers.png'),fullPage:true});
-    pass('Pasted equations infer graph fields; ranges edit before generation, and both graph captions and written fractions use stacked notation');
+    pass('Explicit graph fields preserve pasted equations; ranges edit before generation, and both graph captions and written fractions use stacked notation');
 
     await page.evaluate(()=>{ui.cur={...doc.fields[0].rects[0]};ui.sel=null;ui.extra=[];ui.targets=[];render();});
     await page.click('#t-graph');

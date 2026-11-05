@@ -16,7 +16,7 @@ const {spawnSync}=require('node:child_process'),{chromium}=require('playwright')
   await page.screenshot({path:path.join(out,'editor.png')});await page.click('#kanbun-save');await page.click('#auto-apply');
   assert.deepEqual(await page.evaluate(()=>doc.fields.map(f=>f.type)),[11,11,11]);
   assert.equal(await page.locator('.answer-vectors').textContent(),'レ');
-  assert.equal(await page.locator('.answer-vectors line').count(),48);
+  assert.equal(await page.locator('.answer-vectors line').count(),60);
   await page.click('#tab-answer');assert.match(await page.locator('.answer-vectors').textContent(),/不/);assert.match(await page.locator('.answer-vectors').textContent(),/学/);
   const bounds=await page.evaluate(()=>doc.fields.map(f=>{const b=rectMM(doc,f.rects[0]);return kanbunPrimitives(doc,f,doc.answers[f.id],true).every(v=>v.k==='line'?[v.x1,v.x2].every(x=>x>=b.x&&x<=b.x+b.w)&&[v.y1,v.y2].every(y=>y>=b.y&&y<=b.y+b.h):v.x>b.x&&v.x<b.x+b.w&&v.y>b.y&&v.y<b.y+b.h);}));assert.ok(bounds.every(Boolean));
   await page.screenshot({path:path.join(out,'answers.png'),fullPage:true});
@@ -55,8 +55,8 @@ with ZipFile(p) as z:
  assert [n.text for n in a.findall('.//a:t',ns)]==['レ']
  texts=[n.text for n in b.findall('.//a:t',ns)]
  assert all(t in texts for t in ['不','ズ','習','ブ','レ','下','二','上','6'])
- assert len(a.findall('.//a:prstGeom[@prst="line"]',ns))==48
- assert len(b.findall('.//a:prstGeom[@prst="line"]',ns))==48
+ assert len(a.findall('.//a:prstGeom[@prst="line"]',ns))==60
+ assert len(b.findall('.//a:prstGeom[@prst="line"]',ns))==60
  for drawing in [a,b]:
   assert len(drawing.findall('xdr:twoCellAnchor',ns))==3
 book=load_workbook(p)

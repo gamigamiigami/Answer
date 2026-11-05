@@ -30,10 +30,10 @@ const {chromium}=require('playwright');
      complete:doc.fields.every(f=>{const a=answerPlan(doc,f,doc.answers[f.id]||'');return a.need<=a.room;})};
    });
    assert.equal(result.subject,subject);assert.equal(result.outside,0);assert.equal(result.overlaps,0);assert.equal(result.complete,true);
-   if(subject==='数学')assert.deepEqual(result.dims[0],['formula',4,4]);
-   if(subject==='英語')assert.deepEqual(result.dims[1],['word',6,4]);
-   if(subject==='理科'){assert.deepEqual(result.dims[0],['word',4,4]);assert.deepEqual(result.dims[5],['essay',8,8]);}
-   if(subject==='社会'){assert.deepEqual(result.dims[1],['word',4,3]);assert.equal(result.dims[3][0],'essay');assert.equal(result.dims[3][2],8);}
+   if(subject==='数学')assert.deepEqual(result.dims[0],['chars',2,2]);
+   if(subject==='英語')assert.deepEqual(result.dims[1],['chars',12,2]);
+   if(subject==='理科'){assert.deepEqual(result.dims[0],['chars',2,2]);assert.deepEqual(result.dims[5],['essay',8,8]);}
+   if(subject==='社会'){assert.deepEqual(result.dims[1],['chars',4,2]);assert.equal(result.dims[3][0],'essay');assert.equal(result.dims[3][2],8);}
    const saved=await page.evaluate(()=>docJson(false));
    await page.evaluate(s=>loadWork(s),saved);assert.equal(await page.evaluate(()=>docJson(false)),saved);
    const before=await page.evaluate(()=>({answers:doc.answers,fields:doc.fields.map(f=>({kind:f.auto.kind,rects:f.rects}))}));
@@ -42,6 +42,7 @@ const {chromium}=require('playwright');
    await page.click('#tab-answer');
    await page.screenshot({path:path.join(output,subject+'.png'),fullPage:true});
    const pending=page.waitForEvent('download');await page.click('#btn-xlsx');await(await pending).saveAs(path.join(output,subject+'.xlsx'));
+   fs.writeFileSync(path.join(output,subject+'.json'),await page.evaluate(()=>docJson(false)));
    pass(subject+': example, dimensions, A4 bounds, save/load, editor regeneration and Excel download');
    await page.evaluate(subject=>{doc=newDoc(subject);applyTemplate(subject);},subject);
    assert.equal(await page.evaluate(()=>Object.keys(doc.answers).length),0);
@@ -56,9 +57,9 @@ const {chromium}=require('playwright');
     roundtrip:['数学','英語','理科','社会'].every(subject=>{const rows=parseAutoAnswers(SUBJECT_SAMPLES[subject],{subject});const again=parseAutoAnswers(autoRowsSource(rows),{subject});return rows.every((r,i)=>r.answer===again[i].answer && r.kind===again[i].kind);})};
   });
   assert.deepEqual(rules.kokugoTerms,['数式','英文','説明','化学式']);
-  assert.equal(rules.range,'formula');assert.equal(rules.chem,'formula');assert.equal(rules.english,'word');assert.equal(rules.explicit,'kanji');assert.equal(rules.roundtrip,true);
+  assert.equal(rules.range,'extract');assert.equal(rules.chem,'chars');assert.equal(rules.english,'chars');assert.equal(rules.explicit,'kanji');assert.equal(rules.roundtrip,true);
   assert.ok(rules.sizes.every(r=>r.w===3 && r.h===4));
-  pass('Ranges are not extracts; chemistry, English, explicit kinds/dimensions and source round trips are preserved');
+  pass('Automatic character/extract rules and explicit kinds, dimensions and source round trips are preserved');
   const wrapping=await page.evaluate(()=>{
    const d=newDoc('英語'),f={type:6,rects:[{c:2,r:12,w:4,h:12}],fixedChars:false,textPt:11};
    const text='These students enjoy learning science together every day.';
@@ -76,6 +77,7 @@ const {chromium}=require('playwright');
   const py=spawnSync(process.env.TEST_PYTHON_PATH||'python3',['-c',`
 import sys,warnings
 from pathlib import Path
+import json
 from openpyxl import load_workbook
 warnings.filterwarnings('ignore',category=UserWarning)
 for path in Path(sys.argv[1]).glob('*.xlsx'):
@@ -90,10 +92,20 @@ for path in Path(sys.argv[1]).glob('*.xlsx'):
     for col in range(m.min_col,m.max_col+1):
      assert (row,col) not in occupied,(path,m)
      occupied.add((row,col))
+ work=json.loads(path.with_suffix('.json').read_text())
+ char_answers=[]
+ for field in work['fields']:
+  if field['type'] not in [4,5,8]: continue
+  coords=[(r+1,c+1) for box in field['rects'] for r in range(box['r'],box['r']+box['h'],2) for c in range(box['c'],box['c']+box['w'])]
+  answer=work['answers'].get(field['id'],'')
+  actual=''.join(str(b['模範解答'].cell(r,c).value or '') for r,c in coords)
+  assert actual==answer,(path,actual,answer)
+  assert all(b['解答用紙'].cell(r,c).value is None for r,c in coords),(path,field)
+  char_answers.append(answer)
  texts=[str(c.value) for row in b['模範解答'] for c in row if c.value is not None]
  blank=[str(c.value) for row in b['解答用紙'] for c in row if c.value is not None]
  for expected in {'英語':['plastic bags','must not eat','What do you mean?'], '理科':['H₂O','2H₂O → 2H₂ + O₂','6.8 km/s'], '社会':['三権分立','地方分権'], '数学':['12']}[path.stem]:
-  assert expected in texts,(path,expected,texts)
+  assert expected in texts or expected in char_answers,(path,expected,texts)
   assert expected not in blank,(path,expected)
  print('PASS: workbook',path.stem,'A4, separate answers, merged cells and model text')
 `,output],{encoding:'utf8'});

@@ -530,6 +530,33 @@ input[type=checkbox]{accent-color:var(--place)}
 .spread-peer:focus-visible{outline:3px solid var(--place)}
 #spread-label{font-size:12px;color:var(--muted);text-align:center;margin:0 auto 6px}
 @media print{#spread-label{display:none!important}}
+
+/* 漢文・表は用紙の形へ直接入力する。 */
+.kanbun-layout{display:block;max-height:62vh;overflow:auto}
+.kanbun-rows{border:1px solid var(--line);background:var(--field);padding:12px;max-width:370px;margin:auto}
+.kanbun-rows fieldset{border:0;margin:0;padding:8px 0}
+.kanbun-inputs{display:grid;grid-template-columns:minmax(70px,1fr) 90px minmax(70px,1fr);gap:5px}
+.kanbun-position-0{grid-column:2;grid-row:1}
+.kanbun-position-1{grid-column:3;grid-row:2}
+.kanbun-position-2{grid-column:1;grid-row:2}
+.kanbun-position label{display:block;font-size:11px;color:var(--sub)}
+.kanbun-position-0 input:not([type=checkbox]){height:75px;border:2px solid #444;background:white;color:black;font-size:28px}
+.kanbun-position input:not([type=checkbox]){width:100%;box-sizing:border-box;padding:6px;border:1px solid var(--line);border-radius:2px;text-align:center}
+.kanbun-check{display:flex!important;align-items:center;white-space:normal}
+.table-advanced{border-top:1px solid var(--line);padding:10px 0;margin-top:10px}
+.table-advanced summary{cursor:pointer;font-weight:600}
+#table-grid{border-collapse:collapse;table-layout:fixed;background:#fff;color:#222}
+#table-grid td{border:1px solid #555;padding:0;vertical-align:top;position:relative}
+#table-grid td textarea{box-sizing:border-box;display:block;width:100%;min-width:0;min-height:48px;height:100%;margin:0;border:0;border-radius:0;padding:9px;background:transparent;color:inherit;resize:none;font:inherit}
+#table-grid td.given{background:#edf4e8}
+#table-grid td.selected{outline:2px solid var(--place);outline-offset:-2px}
+.auto-footer{position:sticky;bottom:-24px;z-index:5}
+@media(max-width:520px){.auto-footer{bottom:-16px}.kanbun-inputs{grid-template-columns:minmax(60px,1fr) 75px minmax(60px,1fr)}}
+
+.kanbun-position-0 input:not([type=checkbox]){width:80px!important;height:80px!important;border:2px solid #333!important;border-radius:0!important;display:block;margin:auto}
+.kanbun-check{font-size:10px!important;white-space:nowrap;justify-content:center}
+.kanbun-position-1 input:not([type=checkbox]),.kanbun-position-2 input:not([type=checkbox]){border:0;border-bottom:1px dashed var(--line);background:transparent;border-radius:0}
+#table-grid th{width:28px;min-width:28px;padding:3px;font-size:11px}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -659,8 +686,9 @@ input[type=checkbox]{accent-color:var(--place)}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '2.0.0';
 const APP_RELEASES = [
+  ['2.0.0','自動選択・漢文・表・作成手順を改善'],
   ['1.8.0','記述系を統合・教科別の欄順序に'],
   ['1.7.0','欄プレビュー拡大・欄の種類を整理'],
   ['1.6.0','欄プレビュー小型化・履歴3件表示'],
@@ -899,7 +927,7 @@ function makeTitle(p){
   return parts.join('　');
 }
 function standardNameLabel(p,spaces){
-  return (p.nameOrder==='short'?'　　組　　番　氏名（':p.grade+'年　　組　　番　氏名（')+'　'.repeat(spaces)+'）';
+  return (p.nameOrder==='short'?'　　組　　番　氏名（':(p.grade?p.grade+'年':'')+'　　組　　番　氏名（')+'　'.repeat(spaces)+'）';
 }
 function makeNameLabel(p){return standardNameLabel(p,REFERENCE_HEADER.nameSpaces);}
 
@@ -1501,7 +1529,7 @@ function graphPrimitives(d,f,text,range,withAnswers){
 }
 // 漢文は「中/右下/左下」を空白で区切る。□は空欄を表す。
 function kanbunHelp(){
-  return '<details class="kanbun-help"><summary>漢文の書き方：□・右下・左下</summary><div class="guide-flow"><div class="guide-step"><b>□の中</b><p>漢字や数字</p></div><span class="guide-arrow">/</span><div class="guide-step"><b>右下 ↘</b><p>送り仮名など</p></div><span class="guide-arrow">/</span><div class="guide-step"><b>左下 ↙</b><p>返り点など</p></div></div><p><code>不/ズ/レ</code> → □の中に「不」、右下に「ズ」、左下に「レ」。次の□へは空白で区切ります。</p><pre>1,不/ズ/レ 学/ブ/,4,知,漢文</pre><p>最後に「漢文」を付けます。右下が空なら <code>4//レ</code>、中も空なら <code>□//レ</code>。数字だけの例：<code>1 4//レ 3//レ 2</code></p><p>読み取ったあと「□・右下・左下を入力」を押せば、各位置を別々に編集できます。「用紙にも印刷」にチェックすると、その文字は解答用紙にも出ます。手で作るときは「□ 漢文」→□の数→「漢文の文字・返り点」。</p></details>';
+  return '<details class="kanbun-help"><summary>漢文の書き方：□・右下・左下</summary><div class="guide-flow"><div class="guide-step"><b>□の中</b><p>漢字や数字</p></div><span class="guide-arrow">/</span><div class="guide-step"><b>右下 ↘</b><p>送り仮名など</p></div><span class="guide-arrow">/</span><div class="guide-step"><b>左下 ↙</b><p>返り点など</p></div></div><p><code>不/ズ/レ</code> → □の中に「不」、右下に「ズ」、左下に「レ」。次の□へは空白で区切ります。</p><pre>1,不/ズ/レ 学/ブ/,4,知,漢文</pre><p>最後に「漢文」を付けます。右下が空なら <code>4//レ</code>、中も空なら <code>□//レ</code>。数字だけの例：<code>1 4//レ 3//レ 2</code></p><p>読み取ったあと「□・右下・左下を入力」を押せば、各位置を別々に編集できます。「問題に印刷」にチェックすると、その文字は解答用紙にも出ます。手で作るときは「□ 漢文」→□の数→「漢文の文字・返り点」。</p></details>';
 }
 function parseKanbun(text){
   if(!String(text || '').trim())return [];
@@ -1518,6 +1546,7 @@ function kanbunPrimitives(d,f,answer,withAnswers){
   let given=[],parts=[];
   try{given=parseKanbun(f.kanbunGiven || '');parts=withAnswers?parseKanbun(answer):[];}catch{}
   const out=[],side=Math.min(b.w*.44,step*.52),cx=b.x+b.w/2;
+  [[b.x,b.y,b.x+b.w,b.y],[b.x+b.w,b.y,b.x+b.w,b.y+b.h],[b.x+b.w,b.y+b.h,b.x,b.y+b.h],[b.x,b.y+b.h,b.x,b.y]].forEach(([x1,y1,x2,y2])=>out.push({k:'line',x1,y1,x2,y2,width:f.complete?.4:.22}));
   for(let i=0;i<n;i++){
     const top=b.y+i*step+1, left=cx-side/2,bottom=top+side;
     [[left,top,left+side,top],[left+side,top,left+side,bottom],[left+side,bottom,left,bottom],[left,bottom,left,top]].forEach(([x1,y1,x2,y2])=>out.push({k:'line',x1,y1,x2,y2,width:f.complete?.4:.22}));
@@ -1538,11 +1567,11 @@ function editKanbunField(f,next){
 }
 function openKanbunEditor({answer='',given='',count,onSave,onCancel}){
   let parts,printed;try{parts=parseKanbun(answer);printed=parseKanbun(given);}catch(e){toast(e.message);return;}
-  const n=count || Math.max(1,parts.length),opener=document.activeElement;
+  let n=count || Math.max(1,parts.length,printed.length);const opener=document.activeElement;
   if(n>12)return toast('漢文は1欄につき12個の□までです。');
   const wrap=document.createElement('div');wrap.className='modal help-modal';
   wrap.setAttribute('role','dialog');wrap.setAttribute('aria-modal','true');wrap.setAttribute('aria-labelledby','kanbun-title');
-  wrap.innerHTML='<form class="card"><h3 id="kanbun-title">漢文：□の中・右下・左下を入力</h3><p>上から順に1つずつ。<b>☑ 用紙にも印刷</b>を付けると、問題として文字を示せます。付けない文字は模範解答だけに出ます。</p><div class="kanbun-layout"><div id="kanbun-preview" aria-label="漢文の模範解答プレビュー"></div><div class="kanbun-rows">'+Array.from({length:n},(_,i)=>'<fieldset><legend>'+ (i+1)+'個目の□</legend><div class="kanbun-inputs">'+['□の中','右下 ↘','左下 ↙'].map((name,j)=>'<div><label>'+name+'<input data-i="'+i+'" data-j="'+j+'" maxlength="'+(j?4:2)+'" value="'+xmlEsc((printed[i] || [])[j] || (parts[i] || [])[j] || '')+'"></label><label class="kanbun-check"><input type="checkbox" data-print="'+i+'-'+j+'"'+((printed[i] || [])[j]?' checked':'')+'>用紙にも印刷</label></div>').join('')+'</div></fieldset>').join('')+'</div></div><p id="kanbun-status" role="status"></p><div class="actions"><button type="button" class="tb" id="kanbun-cancel">キャンセル</button><button class="tb primary" id="kanbun-save" type="submit">反映する</button></div></form>';
+  wrap.innerHTML='<form class="card"><h3 id="kanbun-title">漢文の□へ直接入力</h3><label>□の数 <input id="kanbun-count" type="number" min="1" max="12" value="'+n+'"'+(count?' disabled':'')+'></label><p>中央の□に漢字・数字、右下に送り仮名、左下に返り点を入力します。「問題に印刷」は問題として見せる文字だけにチェックします。</p><div class="kanbun-layout"><div id="kanbun-preview" hidden></div><div class="kanbun-rows">'+Array.from({length:n},(_,i)=>'<fieldset><legend>'+ (i+1)+'個目</legend><div class="kanbun-inputs">'+['□の中','右下・送り仮名','左下・返り点'].map((name,j)=>'<div class="kanbun-position kanbun-position-'+j+'"><label>'+name+'<input aria-label="'+(i+1)+'個目 '+name+'" data-i="'+i+'" data-j="'+j+'" maxlength="'+(j?4:2)+'" placeholder="'+(j?'':'□')+'" value="'+xmlEsc((printed[i] || [])[j] || (parts[i] || [])[j] || '')+'"></label><label class="kanbun-check"><input type="checkbox" data-print="'+i+'-'+j+'"'+((printed[i] || [])[j]?' checked':'')+'>問題に印刷</label></div>').join('')+'</div></fieldset>').join('')+'</div></div><p id="kanbun-status" role="status"></p><div class="actions"><button type="button" class="tb" id="kanbun-cancel">キャンセル</button><button class="tb primary" id="kanbun-save" type="submit">反映する</button></div></form>';
   document.body.appendChild(wrap);
   const read=()=>{
     const rows=Array.from({length:n},()=>['','','']),pre=Array.from({length:n},()=>['','','']);
@@ -1555,12 +1584,27 @@ function openKanbunEditor({answer='',given='',count,onSave,onCancel}){
     appendVectorPrimitives(sv,kanbunPrimitives(d,f,a,true));wrap.querySelector('#kanbun-preview').replaceChildren(sv);
     wrap.querySelector('#kanbun-status').textContent='';wrap.querySelector('#kanbun-save').disabled=false;
   }catch(e){wrap.querySelector('#kanbun-status').textContent=e.message;wrap.querySelector('#kanbun-save').disabled=true;}};
+  wrap.querySelector('#kanbun-count').onchange=e=>{
+    const desired=Number(e.target.value);if(!Number.isInteger(desired)||desired<1||desired>12){e.target.value=n;return;}
+    try{
+      const {a,g}=read(),answers=parseKanbun(a),given=parseKanbun(g),rows=wrap.querySelector('.kanbun-rows'),template=rows.firstElementChild.cloneNode(true);
+      if(desired<n && answers.slice(desired).some(p=>p.some(Boolean)) && !window.confirm('減らす□に文字があります。削除してもよいですか？')){e.target.value=n;return;}
+      rows.replaceChildren();
+      for(let i=0;i<desired;i++){
+        const unit=template.cloneNode(true);unit.querySelector('legend').textContent=(i+1)+'個目';
+        for(const input of unit.querySelectorAll('[data-i]')){const j=+input.dataset.j;input.dataset.i=i;input.value=(given[i] || [])[j] || (answers[i] || [])[j] || '';input.setAttribute('aria-label',(i+1)+'個目 '+['□の中','右下・送り仮名','左下・返り点'][j]);}
+        for(const input of unit.querySelectorAll('[data-print]')){const j=+input.dataset.print.split('-')[1];input.dataset.print=i+'-'+j;input.checked=!!(given[i] || [])[j];}
+        rows.appendChild(unit);
+      }
+      n=desired;preview();
+    }catch(error){wrap.querySelector('#kanbun-status').textContent=error.message;}
+  };
   const close=()=>{wrap.remove();if(opener && opener.isConnected)opener.focus();};
   const cancel=()=>{close();if(onCancel)onCancel();};
   wrap.addEventListener('input',preview);wrap.querySelector('#kanbun-cancel').onclick=cancel;
   wrap.querySelector('form').onsubmit=e=>{e.preventDefault();try{const {a,g}=read();onSave(a,g);close();}catch(e){wrap.querySelector('#kanbun-status').textContent=e.message;}};
-  wrap.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}if(e.key==='Tab'){const nodes=[...wrap.querySelectorAll('input,button:not(:disabled)')],first=nodes[0],last=nodes.at(-1);if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}}});
-  preview();wrap.querySelector('input').focus();
+  wrap.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel();}if(e.key==='Tab'){const nodes=[...wrap.querySelectorAll('input:not(:disabled),button:not(:disabled)')],first=nodes[0],last=nodes.at(-1);if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}}});
+  preview();wrap.querySelector('input:not(:disabled)').focus();
 }
 
 /* 表：セルの構造と問題に印刷する文字だけをフィールドに保存し、模範解答はanswersに置く。 */
@@ -1898,6 +1942,13 @@ function openTableEditor({table={},selection,answer='',points=0,aspect='知技',
   const wrap=document.createElement('div');wrap.className='modal table-modal';wrap.setAttribute('role','dialog');wrap.setAttribute('aria-modal','true');wrap.setAttribute('aria-label','表の編集');
   wrap.innerHTML='<form class="card"><h3>表の編集</h3><p class="desc">セルを選んで入力。Shift＋Enterでセル内改行、Tabで次へ。最後のセルのTabで行を追加します。</p><div class="table-toolbar"><label>列数（横）<input id="table-cols" type="number" min="1" max="20"></label><label>行数（縦）<input id="table-rows" type="number" min="1" max="40"></label><button class="tb" type="button" id="table-resize">サイズを変更</button><label>セルの幅<input id="table-cell-w" type="number" min="1" max="10"></label><label>セルの高さ<input id="table-cell-h" type="number" min="2" max="20"></label></div><div class="table-actions">'+[['row-before','上に行を追加'],['row-after','下に行を追加'],['row-delete','行を削除'],['col-before','左に列を追加'],['col-after','右に列を追加'],['col-delete','列を削除'],['undo','戻す'],['redo','やり直す']].map(([id,label])=>'<button class="tb" type="button" data-table-op="'+id+'">'+label+'</button>').join('')+'</div><p id="table-selection" aria-live="polite"></p><label><input id="table-given" type="checkbox">選んだセルを解答用紙にも印刷する（見出し・問題の文字）</label><div class="table-toolbar"><label><input id="table-unused" type="checkbox">選んだセルは解答不要</label><label>選んだ列の幅<input id="table-col-width" type="number" min="1" max="20"></label><label>選んだ行の高さ<input id="table-row-height" type="number" min="2" max="80"></label><button type="button" class="tb" id="table-fit-rows">文章に合わせて行を広げる</button><label>結合する列数<input id="table-merge-cols" type="number" min="1" value="2"></label><label>結合する行数<input id="table-merge-rows" type="number" min="1" value="1"></label><button type="button" class="tb" id="table-merge">セルを結合</button><button type="button" class="tb" id="table-split">結合を解除</button><label><input id="table-cell-scoring" type="checkbox">セルごとに配点</label><label>選んだセルの点数<input id="table-cell-points" type="number" min="0" max="1000" step="any"></label></div><div class="table-scroll"><table id="table-grid"></table></div><p class="desc">チェックのない文字は模範解答だけに出ます。Excelから複数セルを貼り付けることもできます。セルの幅・高さの単位は用紙のマス目です。</p><div class="table-toolbar"><label>表全体の配点<input id="table-points" step="any" type="number" min="0" max="1000"></label><label>観点<select id="table-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option></select></label></div><p id="table-status" role="status"></p><div class="modal-actions"><button class="tb" type="button" id="table-cancel">やめる</button><button class="tb primary" type="submit" id="table-save">表を反映</button></div></form>';
   document.body.appendChild(wrap);const q=s=>wrap.querySelector(s);q('#table-points').value=points;q('#table-aspect').innerHTML=aspectOptions(aspect).map(([key,name])=>'<option value="'+xmlEsc(key)+'">'+xmlEsc(name)+'</option>').join('');q('#table-aspect').value=aspect;
+  const advanced=document.createElement('details');advanced.className='table-advanced';
+  advanced.innerHTML='<summary>行・列の追加、結合、幅・高さ、配点の設定</summary>';
+  const basic=q('.table-toolbar');
+  for(const node of [...wrap.querySelectorAll('.table-toolbar,.table-actions')])if(node!==basic && !node.classList.contains('table-actions'))advanced.appendChild(node);
+  for(const id of ['#table-cell-w','#table-cell-h'])advanced.appendChild(q(id).closest('label'));
+  const sheet=q('.table-scroll');basic.after(sheet);
+  sheet.after(q('#table-selection'),q('#table-given').closest('label'),q('.table-actions'),advanced);
   const state=()=>JSON.stringify({spec,values,flags,selected});
   const restore=s=>{({spec,values,flags,selected}=JSON.parse(s));draw();};
   const remember=()=>{past.push(state());future.length=0;};
@@ -1905,7 +1956,11 @@ function openTableEditor({table={},selection,answer='',points=0,aspect='知技',
   const focus=()=>{const merged=spec.merges.find(m=>selected.r>=m.r && selected.r<m.r+m.rows && selected.c>=m.c && selected.c<m.c+m.cols);if(merged)selected={r:merged.r,c:merged.c};q('[data-table-cell="'+selected.r+','+selected.c+'"]').focus();};
   const draw=()=>{
     q('#table-cell-scoring').checked=spec.cellScoring;q('#table-cols').value=spec.cols;q('#table-rows').value=spec.rows;q('#table-cell-w').value=spec.cellW;q('#table-cell-h').value=spec.cellH;
-    q('#table-grid').innerHTML='<thead><tr><th></th>'+Array.from({length:spec.cols},(_,c)=>'<th scope="col">'+(c+1)+'</th>').join('')+'</tr></thead><tbody>'+values.map((row,r)=>'<tr><th scope="row">'+(r+1)+'</th>'+row.map((v,c)=>'<td data-r="'+r+'" data-c="'+c+'"'+(flags[r][c]?' class="given"':'')+'><textarea rows="2" aria-label="'+(r+1)+'行'+(c+1)+'列" data-table-cell="'+r+','+c+'">'+xmlEsc(v)+'</textarea></td>').join('')+'</tr>').join('')+'</tbody>';
+    q('#table-grid').innerHTML='<colgroup><col style="width:28px">'+spec.colWidths.map(w=>'<col style="width:'+Math.max(90,w*28)+'px">').join('')+'</colgroup><thead><tr><th></th>'+Array.from({length:spec.cols},(_,c)=>'<th scope="col">'+(c+1)+'</th>').join('')+'</tr></thead><tbody>'+values.map((row,r)=>'<tr style="height:'+Math.max(48,spec.rowHeights[r]*18)+'px"><th scope="row">'+(r+1)+'</th>'+row.map((v,c)=>{
+      if(tableCovered(spec,r,c))return '';
+      const m=spec.merges.find(m=>m.r===r && m.c===c);
+      return '<td data-r="'+r+'" data-c="'+c+'"'+(m?' rowspan="'+m.rows+'" colspan="'+m.cols+'"':'')+' class="'+(flags[r][c]?'given':'')+'"><textarea rows="2" placeholder="ここに入力" aria-label="'+(r+1)+'行'+(c+1)+'列" data-table-cell="'+r+','+c+'">'+xmlEsc(v)+'</textarea></td>';
+    }).join('')+'</tr>').join('')+'</tbody>';
     wrap.querySelectorAll('[data-table-cell]').forEach(el=>{const [r,c]=el.dataset.tableCell.split(',').map(Number);el.disabled=tableCovered(spec,r,c);el.closest('td').style.opacity=el.disabled?'.35':'1';});
     q('[data-table-op="row-delete"]').disabled=spec.rows===1;q('[data-table-op="col-delete"]').disabled=spec.cols===1;q('[data-table-op="undo"]').disabled=!past.length;q('[data-table-op="redo"]').disabled=!future.length;select(selected.r,selected.c);q('#table-status').textContent='';
   };
@@ -1930,8 +1985,8 @@ function openTableEditor({table={},selection,answer='',points=0,aspect='知技',
   wrap.addEventListener('focusin',e=>{if(e.target.dataset.tableCell){const [r,c]=e.target.dataset.tableCell.split(',').map(Number);select(r,c);}});
   wrap.addEventListener('input',e=>{if(e.target.dataset.tableCell){const [r,c]=e.target.dataset.tableCell.split(',').map(Number);values[r][c]=e.target.value.replace(/\r/g,'');}});
   q('#table-unused').onchange=e=>{remember();spec.unused[selected.r][selected.c]=e.target.checked;draw();};
-  q('#table-col-width').onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=20){remember();spec.colWidths[selected.c]=n;}};
-  q('#table-row-height').onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=2&&n<=80){remember();spec.rowHeights[selected.r]=n;}};
+  q('#table-col-width').onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=20){remember();spec.colWidths[selected.c]=n;draw();}};
+  q('#table-row-height').onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=2&&n<=80){remember();spec.rowHeights[selected.r]=n;draw();}};
   q('#table-cell-scoring').onchange=e=>{remember();spec.cellScoring=e.target.checked;};
   q('#table-cell-points').onchange=e=>{remember();spec.cellPoints[selected.r][selected.c]=pointValue(e.target.value);};
   q('#table-fit-rows').onclick=()=>{remember();for(let r=0;r<spec.rows;r++)for(let c=0;c<spec.cols;c++){if(tableCovered(spec,r,c))continue;const layout=tableTextLayout(values[r][c],spec.colWidths[c]*CW-1.5,1e6,11);spec.rowHeights[r]=Math.min(80,Math.max(spec.rowHeights[r],Math.ceil((layout.lines.length*ptmm(11)*1.35+1.2)/RH)));}draw();};
@@ -1946,7 +2001,8 @@ function openTableEditor({table={},selection,answer='',points=0,aspect='知技',
   q('#table-given').onchange=e=>{remember();flags[selected.r][selected.c]=e.target.checked;draw();focus();};
   wrap.querySelectorAll('[data-table-op]').forEach(b=>b.onclick=()=>operate(b.dataset.tableOp));
   q('#table-resize').onclick=()=>{const cols=Number(q('#table-cols').value),rows=Number(q('#table-rows').value);if(!Number.isInteger(cols) || !Number.isInteger(rows) || cols<1 || cols>20 || rows<1 || rows>40){q('#table-status').textContent='1〜20列 × 1〜40行で指定してください。';return;}remember();resize(cols,rows);draw();focus();};
-  for(const [id,key,min,max] of [['#table-cell-w','cellW',1,10],['#table-cell-h','cellH',2,20]])q(id).onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n) && n>=min && n<=max){remember();spec[key]=n;if(key==='cellW')spec.colWidths=Array(spec.cols).fill(n);else spec.rowHeights=Array(spec.rows).fill(n);}else e.target.value=spec[key];};
+  for(const [id,key,min,max] of [['#table-cell-w','cellW',1,10],['#table-cell-h','cellH',2,20]])q(id).onchange=e=>{const n=Number(e.target.value);if(Number.isInteger(n) && n>=min && n<=max){remember();spec[key]=n;if(key==='cellW')spec.colWidths=Array(spec.cols).fill(n);else spec.rowHeights=Array(spec.rows).fill(n);draw();}else e.target.value=spec[key];};
+  q('#table-grid').addEventListener('click',e=>{if(e.target.tagName==='TD')e.target.querySelector('textarea')?.focus();});
   q('#table-grid').addEventListener('paste',e=>{
     if(!e.target.dataset.tableCell)return;const text=e.clipboardData.getData('text/plain').replace(/\r/g,'');if(!/[\t\n]/.test(text))return;e.preventDefault();
     const data=parseTableTSV(text),[r,c]=e.target.dataset.tableCell.split(',').map(Number),rows=Math.max(spec.rows,r+data.length),cols=Math.max(spec.cols,c+Math.max(...data.map(row=>row.length)));
@@ -2288,7 +2344,7 @@ function buildCells(d, withAnswers){
     const fc = fillOf(f);
     if (fc) f.rects.forEach(r => paint(r.c, r.r, r.w, r.h, fc));
     const outer = f.complete && !f.completeGroup ? 'medium' : (f.line || 'thin');
-    if(f.type!==11) f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
+    f.rects.forEach(r => box(r.c, r.r, r.w, r.h, outer));
     if (MARK_TYPES.indexOf(f.type) >= 0) f.rects.forEach(r => merge(r.c, r.r, r.w, r.h));  // 1マスに連結
     // 太線モードで作った欄は、番号欄の外枠も太線にする
     // 番号欄が解答欄の幅いっぱいなら、そこは1つのマスとして連結する
@@ -2407,9 +2463,14 @@ function buildCells(d, withAnswers){
           get(p.c,p.r).valign = vertical && p.insetRows ? 'top' : 'center';
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
+        if(vertical && Array.from(ch).length===1 && /[、。，．,。っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch)){
+          const cell=get(p.c,p.r);cell.align='right';cell.valign='bottom';cell.verticalCorner=true;
+        }
       });
     }
   }
+  for(const f of d.fields)if(f.label){box(f.label.c,f.label.r,f.label.w,f.label.h,f.line || 'thin');merge(f.label.c,f.label.r,f.label.w,f.label.h);}
+  for(const q of d.decorations)if(q.questionHeading || q.subQuestionHeading){box(q.c,q.r,q.w,q.h,q.style || 'thin');merge(q.c,q.r,q.w,q.h);}
   return cells;
 }
 
@@ -2541,6 +2602,7 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
     const mh = x.mg ? x.mg.h : (x.mid ? CHAR_ROWS : 1);
     const a = { y: y0 + docRowMM(d,x.r) + rowSpanMM(d,x.r,mh)/2, 'font-size':fs, fill:'#000',
                 'dominant-baseline':'central' };
+    if(x.verticalCorner)a.y=y0+docRowMM(d,x.r)+rowSpanMM(d,x.r,mh)-fs/2-.3;
     if (x.valign==='top') a.y = y0 + docRowMM(d,x.r) + 0.55 + fs/2;
     if (x.align==='left'){ a.x = X(x.c) + (x.indent ? answerInset(x.size)*x.indent : 0.4); a['text-anchor']='start'; }
     else if (x.align==='right'){ a.x = X(x.c) + W(x.c, mw) - 1.2; a['text-anchor']='end'; }
@@ -2556,7 +2618,8 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
       letters.forEach((ch,i) => {
         // Excel's vertical parentheses use a different origin from horizontal glyphs.
         const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
-        const span = el('tspan',{x:a.x,y:a.y+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
+        const corner=/[、。，．,っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch);
+        const span = el('tspan',{x:a.x+(corner?fs*.28:0),y:a.y+(corner?fs*.2:0)+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
     } else t.textContent = cellText(d, x);
@@ -6103,15 +6166,10 @@ const SUBJECT_SAMPLES = {
   '社会':'1\n1,ア,2,知\n2,三権分立,2,知\n3,地方分権,2,知\n2\n1,生活に必要なものが不足したため。,4,思,記述\n2,国民の権利を守るため。,4,思,20字以内'
 };
 function inferAutoKind(answer,subject='国語'){
-  const n=autoLength(answer), profile=SUBJECT_LAYOUTS[subject];
-  if (!profile) return looksLikeGraph(answer)?'graph':extractWaveParts(answer)?'extract':n===1?'mark':n<=8 && !/[。！？!?\n]/.test(answer)?'word':'essay';
-  if (subject==='理科' && /^(?:[A-Z][a-z]?[₀-₉0-9]*)+$/.test(answer.trim())) return 'formula';
-  if (subject==='数学' && /^[a-z]$/.test(answer.trim())) return 'formula';
-  if (/^[ア-ンA-ZＡ-Ｚ①-⑳]$/.test(answer.trim())) return 'mark';
-  if (subject==='数学' && looksLikeGraph(answer)) return 'graph';
-  if (subject==='英語' && /[a-zA-Z]/.test(answer)) return /[.!?\n]/.test(answer) || answer.trim().split(/\s+/).length>=4 ? 'sentence':'word';
-  if (['数学','理科'].includes(subject) && /[0-9０-９₀-₉=＝+＋−×÷²³√→]/.test(answer) && !/[。！？!?]/.test(answer)) return answer.includes('\n')?'working':'formula';
-  return n<=12 && !/[。！？!?\n]/.test(answer)?'word':'essay';
+  if(/[\^/＾／]/.test(answer))return 'formula';
+  if(/[～〜~]/.test(answer))return 'extract';
+  const n=autoLength(answer);
+  return n===0?'essay':n===1?'mark':'chars';
 }
 function subjectAnswerSize(row,d){
   const p=subjectLayout(d); if(!p) return null;
@@ -6382,7 +6440,7 @@ function parseAutoAnswers(source, defaults={}){
     if (sectionBreak){ group = nextAutoGroup(groups,defaults.groupStyle); groups.push(group); question = ''; recordQuestion=''; number = 0; sectionBreak = false; }
     if (/^問\s*[0-9０-９一二三四五六七八九十百]+$/.test(text)){ question = text.replace(/\s/g,''); recordQuestion=''; continue; }
     const row = { ...(SUBJECT_LAYOUTS[defaults.subject] ? {subjectMode:defaults.subject} : {}), group, label:'', answer:'', kind:defaults.kind || '', n:defaults.kind && defaults.kind !== 'auto' && ['chars','kanji','extract'].includes(defaults.kind) ? defaults.n : null,
-      w:0, h:0, eight:!!defaults.eight, complete:!!defaults.complete,
+      w:0, h:0, eight:!!defaults.eight, eightExplicit:defaults.eight!==undefined, complete:!!defaults.complete,
       points:null, aspect:'', warnings:[], sourceLine };
     if (row.kind === 'auto') row.kind = '';
     const record=readAutoRecord(text,row,recordQuestion || question);
@@ -6433,6 +6491,7 @@ function parseAutoAnswers(source, defaults={}){
       row.warnings.push('観点を推定');
     }
     if (row.n === null) row.n = row.kind === 'extract' ? Math.max(1, ...splitExtract(row.answer).map(autoLength)) : Math.max(1, autoLength(row.answer));
+    if(row.kindAuto && row.kind==='chars' && !row.eightExplicit)row.eight=row.n>=10;
     if (row.kind === 'blank' && !SUBJECT_LAYOUTS[defaults.subject]){ row.w = row.w || 1; row.h = row.h || 10; }
     if (record!==null || /^問/.test(row.label) || referencePrefix) recordQuestion=row.label;
     if (!groups.includes(group)) groups.push(group);
@@ -6702,7 +6761,7 @@ function autoAnswerPreview(row,subject,paper){
   return picture;
 }
 
-function openAnswerGenerator(initialTitle=''){
+function openAnswerGenerator(initialTitle='',creation=null){
   if (typeof initialTitle!=='string') initialTitle='';
   if (ui.mode==='input'){ ui.seq=null; commitInput(); }
   let rows=currentAutoRows() || [], parsedText='',scoringDirty=false;
@@ -6726,10 +6785,10 @@ function openAnswerGenerator(initialTitle=''){
     '<details class="auto-common"><summary>番号を省略する場合の設定</summary><div class="auto-defaults"><label>追加先の大問<select id="auto-default-group"></select></label><label>問番号の書式<select id="auto-number-style">'+choices(AUTO_NUMBER_STYLES,'Q')+'</select></label><label>開始番号<input id="auto-number-start" type="number" value="1" min="1" max="200"></label></div><label><input id="auto-blank-groups" type="checkbox" checked>答えだけの入力は、空行で次の大問に分ける</label></details>'+
     completionAndDepthHelp()+
     kanbunHelp()+
-    '<div class="row"><button class="tb primary" id="auto-parse">読み取って一覧にする →</button></div></section>'+
+    '</section>'+
     '<section id="auto-review-panel" role="tabpanel" aria-labelledby="auto-tab-review" hidden><p class="desc">答えを読み取りました。思いどおりの欄になっているか、一緒に確認しましょう。寸法や完答は「細かな設定」へ。</p><p class="desc">A4より大きくても全問を生成します。作成後は「用紙・設定」タブでA4縦・横と倍率を変更できます。</p><details id="auto-batch" class="auto-scoring"><summary>形式・配点・観点をまとめて変更</summary><p class="desc">大問を入力して、形式・配点・観点をまとめて変更できます。全問やチェックした問題も選べます。用紙は一覧の全問から作成します。</p><div class="auto-batch"><label>変更する問題<select id="auto-bulk-scope"></select></label><label>大問を入力<input id="auto-bulk-groups" type="text" placeholder="例：1～5 ／ 1，3，5" aria-label="まとめて変更する大問" autocomplete="off"><small>範囲と列挙を組み合わせられます。</small></label><label>解答形式<select id="auto-bulk-kind">'+choices([['','形式は変更しない'],...AUTO_KIND_CHOICES],'')+'</select></label><label>配点<select id="auto-bulk-points">'+points('',true)+'</select><span id="auto-bulk-point-custom" hidden><input id="auto-bulk-point-value" aria-label="一括変更する配点" type="number" value="0" min="0" max="1000"></span></label><label>観点<select id="auto-bulk-aspect">'+choices([['','観点は変更しない'],...aspectOptions()],'')+'</select></label><button class="tb" id="auto-bulk-apply">選んだ内容をまとめて変更</button></div><p class="desc">複数の欄を合わせて完答にする場合は、連続する欄をチェックし、上で組全体の配点を選んでください。</p><button class="tb" id="auto-completion-add">チェックした欄をまとめて完答</button> <button class="tb" id="auto-completion-remove">完答の組を解除</button></details>'+
     '<div id="auto-rows"></div><button class="tb" id="auto-add">＋ 1問追加</button></section><div class="auto-footer"><p id="auto-status" role="status" aria-live="polite"></p>'+
-    '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
+    '<div class="modal-actions"><button class="tb" id="auto-back" hidden>← 入力に戻る</button><button class="tb" id="auto-cancel">キャンセル</button><button class="tb primary" id="auto-parse">読み取って一覧にする →</button><button class="tb primary" id="auto-apply" hidden>'+(hadDoc?'この内容で用紙を更新':'この内容で用紙を作る')+'</button></div></div></div>';
   document.body.appendChild(wrap);
   const q=s=>wrap.querySelector(s), source=q('#auto-source'), status=q('#auto-status');
   const paintPreview=card=>{
@@ -6759,7 +6818,7 @@ function openAnswerGenerator(initialTitle=''){
   const showStep=step=>{
     const review=step==='review';
     q('#auto-input-panel').hidden=review; q('#auto-review-panel').hidden=!review;
-    q('#auto-apply').hidden=!review; q('#auto-back').hidden=!review;
+    q('#auto-parse').hidden=review; q('#auto-apply').hidden=!review; q('#auto-back').hidden=!review;
     wrap.querySelectorAll('[data-step]').forEach(b=>{
       const active=b.dataset.step===step;
       b.setAttribute('aria-selected',String(active)); b.tabIndex=active?0:-1;
@@ -6801,7 +6860,8 @@ function openAnswerGenerator(initialTitle=''){
     if (r.kindAuto){
       const n=autoLength(r.answer), wave=extractWaveParts(r.answer);
       r.kind=inferAutoKind(r.answer,q('#auto-subject').value);
-      r.n=wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
+      r.n=r.kind==='extract' && wave ? Math.max(...wave.map(autoLength)) : Math.max(1,n);
+      if(r.kind==='chars' && !r.eightExplicit)r.eight=r.n>=10;
     }
     if(r.completeGroup)r.aspectDefault=false;
     const defaultAspect=r.aspectDefault ? autoDefaultAspect(scoringSettings(),r.group) : '';
@@ -6874,6 +6934,12 @@ function openAnswerGenerator(initialTitle=''){
   };
   const parse=()=>{
     try {
+      if(!source.value.trim()){
+        if(!window.confirm('入力されてへんで？ このまま空欄の用紙で作り始めますか？'))return;
+        const blank=newDoc(q('#auto-subject').value);applyCreationPaper(blank.paper,creation,initialTitle);
+        if(hadDoc)bookSnapshot();doc=blank;close();startApp();return;
+      }
+
       const previous=new Map(); rows.forEach(r=>{ const key=(autoNumberIndex(r.group) || r.group)+'\0'+r.label; if (!previous.has(key)) previous.set(key,[]); previous.get(key).push(r); });
       const parsed=parseAutoAnswers(source.value,getDefaults());
       parsed.forEach(r=>{ const old=(previous.get((autoNumberIndex(r.group) || r.group)+'\0'+r.label) || []).shift(); if(old)r.fieldId=old.fieldId;if(old && r.kind==='table')r.table=old.table; if(old && r.kind==='kanbun') r.kanbunGiven=old.kanbunGiven || ''; if (old && old.appearance) r.appearance={...old.appearance}; if(old && old.graphRange && r.kind==='graph') r.graphRange={...old.graphRange}; });
@@ -6974,7 +7040,8 @@ function openAnswerGenerator(initialTitle=''){
     } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
     if(['w','h'].includes(key) && r.kind==='essay')r.kindAuto=false;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
-    if (key==='n' && r.kindAuto && r.kind==='extract'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
+    if(key==='eight')r.eightExplicit=true;
+    if (key==='n' && r.kindAuto){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if (key==='aspect'){ r.aspectAuto=false;r.aspectDefault=false; r.warnings=r.warnings.filter(w=>!w.startsWith('観点')); }
     if(r.completeGroup && ['points','aspect'].includes(key)){linkedScore(rows,r,key==='points'?r.points:undefined,key==='aspect'?r.aspect:undefined);drawRows(true);return;}
     if (key==='points') r.warnings=r.warnings.filter(w=>!w.startsWith('配点'));
@@ -7023,8 +7090,8 @@ function openAnswerGenerator(initialTitle=''){
       if(hadDoc && q('#auto-subject').value===doc.paper.subject && (doc.paper.writing==='vertical' || (doc.paper.groupHeading || 'side')===q('#auto-group-heading').value)){try{prepared=prepareAnswersInPlace(rows,null);}catch(e){/* Structural edits and answers needing more space are regenerated below. */}}
       if(prepared){const n=updateAnswersInPlace(rows,null,scoring,prepared);options.autoScoring=scoring;saveOptions();close();toast(n+'問を更新しました。欄の配置はそのままです。');return;}
       const subject=q('#auto-subject').value;
-      const basePaper=doc?.paper.subject===subject?{...doc.paper}:null;
-      const generationPaper=subject==='国語'?basePaper:{...(basePaper || newDoc(subject).paper),groupHeading:q('#auto-group-heading').value,title:doc?.paper.title || initialTitle || newDoc(subject).paper.title};
+      const basePaper=doc?.paper.subject===subject?{...doc.paper}:creation?applyCreationPaper({...newDoc(subject).paper},creation,initialTitle):null;
+      const generationPaper=subject==='国語'?basePaper:{...(basePaper || newDoc(subject).paper),groupHeading:q('#auto-group-heading').value,title:doc?.paper.title ?? (creation?initialTitle:(initialTitle || newDoc(subject).paper.title))};
       let next=buildAutoDocument(rows,subject,generationPaper,initialTitle);
       let generated=null;
       if(next.paper.subject!=='国語' && next.paper.writing==='horizontal' && next.paper.orientation==='portrait' && contentScale(next)<.95){
@@ -7054,12 +7121,17 @@ function openAnswerGenerator(initialTitle=''){
   drawRows(); if (rows.length) syncSource(); showStep(rows.length?'review':'input'); (rows.length?q('#auto-tab-review'):source).focus();
 }
 
+function applyCreationPaper(p,creation,title){
+  p.title=title;
+  if(creation){p.grade=creation.grade.replace(/年$/,'');p.testName=creation.testName;p.nameLabel=makeNameLabel(p);}
+  return p;
+}
 function openCreationTitle(method,subject,opener){
   const wrap=document.createElement('div'); wrap.className='modal';
   wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','creation-heading');
-  wrap.innerHTML='<form class="card" id="creation-form"><h3 id="creation-heading" class="companion-title">'+$('#start .buddy').outerHTML+'<span>まずは、テストのタイトルから。</span></h3>'+
-    '<p class="desc">'+(method==='answers'?'模範解答から作ります。':xmlEsc(subject)+(method==='template'?'の見本から作ります。':'の白紙から作ります。'))+'タイトルは、あとから画面上部で直せます。</p>'+
-    '<div class="row"><label for="creation-title">テストのタイトル</label><input id="creation-title" type="text" required placeholder="例：1年 国語 2学期中間テスト" autocomplete="off"></div>'+
+  wrap.innerHTML='<form class="card" id="creation-form"><h3 id="creation-heading" class="companion-title">'+$('#start .buddy').outerHTML+'<span>学年とテスト名を入力</span></h3>'+
+    '<p class="desc">'+(method==='answers'?'模範解答から作ります。':xmlEsc(subject)+(method==='template'?'の見本から作ります。':'の白紙から作ります。'))+'学年・テスト名は、あとから変更できます。</p>'+
+    '<div class="row"><label for="creation-grade">学年</label><input id="creation-grade" type="text" placeholder="例：1／一" autocomplete="off"></div><div class="row"><label for="creation-title">テスト名</label><input id="creation-title" type="text" placeholder="例：国語 2学期中間テスト" autocomplete="off"></div>'+
     '<div class="modal-actions"><button type="button" class="tb" id="creation-back">作り方に戻る</button><button type="submit" class="tb primary" id="creation-next">このタイトルで進む →</button></div></form>';
   document.body.appendChild(wrap);
   const input=wrap.querySelector('#creation-title');
@@ -7067,21 +7139,21 @@ function openCreationTitle(method,subject,opener){
   wrap.querySelector('#creation-back').onclick=close;
   input.oninput=()=>input.setCustomValidity('');
   wrap.querySelector('form').onsubmit=e=>{
-    e.preventDefault(); const title=input.value.trim();
-    if(!title){input.setCustomValidity('テストのタイトルを入力してください。'); input.reportValidity(); return;}
+    e.preventDefault(); const grade=wrap.querySelector('#creation-grade').value.trim(),name=input.value.trim(),title=[grade,name].filter(Boolean).join(' ');
+    if(!title && !window.confirm('入力されてへんで？ 学年・テスト名を空欄のまま作り始めますか？'))return;
     wrap.remove();
-    if(method==='answers') openAnswerGenerator(title);
-    else {doc=newDoc(subject); doc.paper.title=title; if(method==='template') applyTemplate(subject); startApp();}
+    if(method==='answers') openAnswerGenerator(title,{grade,testName:name});
+    else {doc=newDoc(subject); applyCreationPaper(doc.paper,{grade,testName:name},title); if(method==='template') applyTemplate(subject); startApp();}
   };
   wrap.addEventListener('keydown',e=>{
     if(e.key==='Escape'){e.preventDefault();close();}
     if(e.key==='Tab'){
-      const last=wrap.querySelector('#creation-next');
-      if(e.shiftKey && document.activeElement===input){e.preventDefault();last.focus();}
-      else if(!e.shiftKey && document.activeElement===last){e.preventDefault();input.focus();}
+      const last=wrap.querySelector('#creation-next'),first=wrap.querySelector('#creation-grade');
+      if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}
     }
   });
-  input.focus();
+  wrap.querySelector('#creation-grade').focus();
 }
 
 function initStart(){
