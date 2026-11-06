@@ -792,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.5';
+const APP_VERSION = '2.13.6';
 const APP_RELEASES = [
+  ['2.13.6','枠を引く操作で消えないよう修正・消した線の引き直しに対応'],
   ['2.13.5','入力表はShift＋Enterで追加・答え欄へ自動移動'],
   ['2.13.4','罫線を消した場所への欄の移動・配置に対応'],
   ['2.13.3','大きな枠の端でDeleteすると選択箇所の罫線だけ削除'],
@@ -3190,7 +3191,7 @@ function pointToCell(ev){
    --------------------------------------------------------------- */
 function releasedFrameCells(d){
   const sides=new Map();for(const e of d.paper.erasedBorderEdges || []){const k=e.c+','+e.r;if(!sides.has(k))sides.set(k,new Set());sides.get(k).add(e.side);}
-  return new Set([...sides].filter(([k,s])=>['top','bottom','left','right'].every(side=>s.has(side))).map(([k])=>k));
+  return new Set([...(d.paper.releasedFrameCells || []),...[...sides].filter(([k,s])=>['top','bottom','left','right'].every(side=>s.has(side))).map(([k])=>k)]);
 }
 function markReusedFrameCells(d,f){const released=releasedFrameCells(d);f.reusedFrameCells=fieldFootprint(d,f).map(([c,r])=>c+','+r).filter(k=>released.has(k));}
 function occupied(d){
@@ -3502,6 +3503,13 @@ async function openBigWizard(){
         (headOK ? '' : '　※大問の見出しは場所がなくて付けられませんでした'));
 }
 
+function restoreFrameOutline(d,rect){
+  const edgeKey=e=>e.side==='top'?e.c+','+e.r+',h':e.side==='bottom'?e.c+','+(e.r+1)+',h':e.side==='left'?e.c+','+e.r+',v':(e.c+1)+','+e.r+',v';
+  const outline=new Set();for(let c=rect.c;c<rect.c+rect.w;c++){outline.add(edgeKey({c,r:rect.r,side:'top'}));outline.add(edgeKey({c,r:rect.r+rect.h-1,side:'bottom'}));}for(let r=rect.r;r<rect.r+rect.h;r++){outline.add(edgeKey({c:rect.c,r,side:'left'}));outline.add(edgeKey({c:rect.c+rect.w-1,r,side:'right'}));}
+  d.paper.releasedFrameCells=[...releasedFrameCells(d)];
+  d.paper.erasedBorderEdges=(d.paper.erasedBorderEdges || []).filter(e=>!outline.has(edgeKey(e)));
+}
+
 /* シンプル枠：選んだ範囲の外側に罫線を引く（今の線の太さで） */
 function simpleFrame(){
   if (!needSheet('枠を引けません')) return;
@@ -3512,12 +3520,13 @@ function simpleFrame(){
       return toast('⚠ タイトル・氏名欄・得点枠の上には引けません');
   snapshot();
   const i = doc.decorations.findIndex(v=>v.c===s.c&&v.r===s.r&&v.w===s.w&&v.h===s.h);
-  if (i>=0){ doc.decorations.splice(i,1); toast('枠を外しました'); }
+  restoreFrameOutline(doc,s);
+  if (i>=0){doc.decorations[i].style=ui.line;toast('選んだ範囲の枠を整えました');}
   else {
     // 選択とぴったり重なる欄があれば、その欄の太さを切り替える
     const f = doc.fields.find(f => f.rects.length===1 &&
       f.rects[0].c===s.c && f.rects[0].r===s.r && f.rects[0].w===s.w && f.rects[0].h===s.h);
-    if (f){ f.complete = (ui.line==='medium'); toast(f.complete?'この欄を太線にしました':'この欄を普通の線にしました'); }
+    if (f){ f.line=ui.line;f.complete = (ui.line==='medium'); toast(f.complete?'この欄を太線にしました':'この欄を普通の線にしました'); }
     else { doc.decorations.push({id:'v'+(uid++),c:s.c,r:s.r,w:s.w,h:s.h,style:ui.line,
                                  note:'',notePos:'end',points:0,aspect:'知技'});
            const placed=doc.decorations[doc.decorations.length-1];placed.reusedFrameCells=fieldFootprint(doc,{rects:[placed]}).map(([c,r])=>c+','+r).filter(k=>releasedFrameCells(doc).has(k));
