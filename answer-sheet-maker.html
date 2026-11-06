@@ -795,8 +795,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.11.2';
+const APP_VERSION = '2.11.3';
 const APP_RELEASES = [
+  ['2.11.3','タイトルと氏名欄の学年重複を解消'],
   ['2.11.2','確認画面を広く／更新履歴はトップページのみ'],
   ['2.11.1','保存状態を表示／問題・答え・解答欄の編集先を明示'],
   ['2.11.0','一覧を整理／変更操作を統一・途中入力を保持'],
@@ -1046,7 +1047,7 @@ function gridWithColumnWidths(d,paper=d.paper){
 }
 
 function makeTitle(p){
-  const parts = ['第'+p.grade+'学年'];
+  const parts = [];
   if (p.term)     parts.push(p.term);
   if (p.testName) parts.push(p.testName);
   parts.push('解答用紙');
@@ -5444,7 +5445,7 @@ function loadWork(text){
   // 足りない項目は既定値で補う。壊れたファイルで作業中のデータを巻き添えにしない
   const arr = v => Array.isArray(v) ? v : [];
   const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
-  const restoreName=page=>{if([7,10].some(n=>page.paper.nameLabel===standardNameLabel(page.paper,n)))page.paper.nameLabel=makeNameLabel(page.paper);};restoreName(d);
+  const restoreName=page=>{const p=page.paper;if(typeof p.testName==='string' && p.grade && [p.grade+' '+p.testName,p.grade+'年 '+p.testName].includes(p.title))p.title=p.testName;if([7,10].some(n=>page.paper.nameLabel===standardNameLabel(page.paper,n)))page.paper.nameLabel=makeNameLabel(page.paper);};restoreName(d);
   const cleanImages=page=>{if(!('images' in page))return;page.images=arr(page.images).filter(i=>i && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(i.data || '') && [i.x,i.y,i.w,i.h].every(Number.isFinite) && i.w>0 && i.h>0);};cleanImages(d);
   if(Array.isArray(d.bookPages)){d.bookPages=d.bookPages.filter(p=>p && p.paper && p.grid && Array.isArray(p.fields) && Array.isArray(p.decorations) && Array.isArray(p.drawings));d.bookPages.forEach(page=>{cleanImages(page);restoreName(page);});d.pageIndex=Math.min(d.bookPages.length-1,Math.max(0,Math.floor(d.pageIndex || 0)));}
   d.fields = arr(d.fields).filter(f => f && Array.isArray(f.rects) && f.rects.length);
@@ -7559,8 +7560,8 @@ function openCreationTitle(method,subject,opener){
   wrap.querySelector('#creation-back').onclick=close;
   input.oninput=()=>input.setCustomValidity('');
   wrap.querySelector('form').onsubmit=e=>{
-    e.preventDefault(); const grade=wrap.querySelector('#creation-grade').value.trim(),name=input.value.trim(),title=[grade,name].filter(Boolean).join(' ');
-    if(!title && !window.confirm('入力されてへんで？ 学年・テスト名を空欄のまま作り始めますか？'))return;
+    e.preventDefault(); const grade=wrap.querySelector('#creation-grade').value.trim(),name=input.value.trim(),title=name;
+    if(!grade && !name && !window.confirm('入力されてへんで？ 学年・テスト名を空欄のまま作り始めますか？'))return;
     wrap.remove();
     if(method==='answers') openAnswerGenerator(title,{grade,testName:name});
     else {doc=newDoc(subject); applyCreationPaper(doc.paper,{grade,testName:name},title); if(method==='template') applyTemplate(subject); startApp(true);}
@@ -7628,7 +7629,7 @@ function updateHeaderInputs(){
   if(!doc)return;
   const grade=$('#grade-input').value.trim().replace(/年$/,''),testName=$('#title-input').value.trim();
   if(grade===doc.paper.grade && testName===doc.paper.testName)return;
-  bookSnapshot();for(const page of [doc,...(doc.bookPages || [])]){page.paper.grade=grade;page.paper.testName=testName;page.paper.title=[grade?grade+'年':'',testName].filter(Boolean).join(' ');page.paper.nameLabel=makeNameLabel(page.paper);}render();
+  bookSnapshot();for(const page of [doc,...(doc.bookPages || [])]){page.paper.grade=grade;page.paper.testName=testName;page.paper.title=testName;page.paper.nameLabel=makeNameLabel(page.paper);}render();
 }
 for(const id of ['grade-input','title-input']){
   const input=$('#'+id);input.addEventListener('change',updateHeaderInputs);

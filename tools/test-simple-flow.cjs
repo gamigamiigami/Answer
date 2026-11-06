@@ -18,7 +18,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   await page.keyboard.press('Escape');
   await page.click('#start-tab-other');assert.equal(await page.locator('#blank-row').isVisible(),true);
   await page.locator('#start-tab-other').press('ArrowLeft');assert.equal(await page.locator('#btn-from-answers').isVisible(),true);
-  await page.click('#btn-from-answers');await page.fill('#creation-grade','2');await page.fill('#creation-title','国語テスト');await page.click('#creation-next');
+  await page.click('#btn-from-answers');await page.fill('#creation-grade','二');await page.fill('#creation-title','テスト');await page.click('#creation-next');
   assert.deepEqual(errors,[]);
   assert.equal(await page.locator('#auto-range-add').isVisible(),false);
   assert.equal(await page.locator('#auto-source').isVisible(),false);
@@ -35,7 +35,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   await page.click('#review-tab-settings');assert.equal(await page.locator('#auto-bulk-kind').isVisible(),true);
   await page.selectOption('#auto-bulk-kind','essay');await page.fill('#auto-bulk-width','2');await page.fill('#auto-bulk-height','3');await page.click('#auto-bulk-apply');
   await page.click('#review-tab-list');assert.equal(await page.locator('[data-row="0"] [data-k="kind"]').inputValue(),'essay');
-  await page.click('#auto-apply');
+  await page.click('#auto-apply');assert.equal(await page.evaluate(()=>doc.paper.title),'テスト');assert.match(await page.evaluate(()=>doc.paper.nameLabel),/^二年/);
+  for(const title of ['二 テスト','二年 テスト','独自のタイトル']){await page.evaluate(title=>{doc.paper.title=title;loadWork(docJson(false));},title);assert.equal(await page.evaluate(()=>doc.paper.title),title==='独自のタイトル'?title:'テスト');}await page.evaluate(()=>{doc.paper.title='テスト';render();});
   assert.equal(await page.locator('#field-tools').isVisible(),false);
   assert.equal(await page.locator('#tab-draw').isVisible(),false);
   assert.equal(await page.locator('#btn-xlsx').isVisible(),true);
@@ -72,7 +73,7 @@ print('PASS: independent Excel inspection; both sheets and both answers retained
   await page.click('#btn-answer-editor');assert.equal(await page.locator('[data-row]').count(),4);await page.click('#auto-cancel');
   await page.click('#more-menu summary');const save=page.waitForEvent('download');await page.click('#btn-save');await(await save).saveAs(path.join(out,'work.json'));
   const saved=JSON.parse(fs.readFileSync(path.join(out,'work.json'),'utf8'));assert.equal(saved.bookPages.length,2);
-  await page.setInputFiles('#file-open',path.join(out,'work.json'));assert.equal(await page.locator('#field-tools').isVisible(),false);
+  await page.setInputFiles('#file-open',path.join(out,'work.json'));await page.locator('#field-tools').waitFor({state:'hidden'});assert.equal(await page.locator('#field-tools').isVisible(),false);
   assert.deepEqual(await page.evaluate(()=>Object.values(doc.answers)),['太陽','ア']);
   // Every viewport keeps an obvious next action and allows scrolling long tables.
   for(const width of [390,768,1366]){
