@@ -796,8 +796,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.13.1';
 const APP_RELEASES = [
+  ['2.13.1','初終の字数変更を配置保持で反映・問題の照合を改善'],
   ['2.13.0','配置保持・200％表示安定化／初終セル削除修正'],
   ['2.12.0','初終の見出し文字・セルを個別編集'],
   ['2.11.3','タイトルと氏名欄の学年重複を解消'],
@@ -2101,6 +2102,10 @@ async function editScoringSettings(){
   ]);if(!v)return;if(!Number.isFinite(+v.maxScore) || +v.maxScore<0 || +v.maxScore>100000)return toast('満点は0〜100000で指定してください。');
   bookSnapshot();for(const page of [doc,...(doc.bookPages || [])]){page.paper.maxScore=+v.maxScore;page.paper.scoreMode=v.scoreMode;page.paper.showScoreBox=v.scoreMode!=='none';}render();
 }
+function autoRowIdentity(row){
+  const label=autoDigits(String(row.label || '')).replace(/（/g,'(').replace(/）/g,')').replace(/問([一二三四五六七八九十百0-9]+)/g,(_,n)=>'問'+autoNumberIndex(n)).replace(/[ \u3000]/g,'');
+  return (autoNumberIndex(row.group) || row.group)+'\0'+label;
+}
 function prepareAnswersInPlace(rows,ids,base=doc){
   const before=currentAutoRows(base),old=new Map(before.map(r=>[r.fieldId,r])),next=JSON.parse(JSON.stringify(base));
   const list=ids?rows.filter(r=>ids.has(r.fieldId)):rows;
@@ -2108,8 +2113,23 @@ function prepareAnswersInPlace(rows,ids,base=doc){
   if(!ids && (rows.length!==before.length || rows.some(r=>!old.has(r.fieldId))))throw new Error('問題の追加・削除は「用紙を作り直す」かページ分割を使ってください。');
   for(const r of list){
     const original=old.get(r.fieldId),f=next.fields.find(f=>f.id===r.fieldId);if(!original || !f)throw new Error('新しい問題は用紙を作り直して配置してください。');
-    const shape=['kind','group','label','completeGroup'];if(['chars','kanji','extract'].includes(r.kind))shape.push('n','eight');
+    const shape=['kind','completeGroup'];if(autoRowIdentity(r)!==autoRowIdentity(original))throw new Error(r.label+'：問題番号が変わっています。');if(['chars','kanji'].includes(r.kind))shape.push('n','eight');
     if(shape.some(k=>r[k]!==original[k]) || r.w!==original.w || r.h!==original.h)throw new Error(r.label+'：番号・種類・寸法を変える場合は用紙を作り直してください。');
+    if(r.kind==='extract' && r.n!==original.n){
+      const rect=f.rects[0],vertical=next.paper.writing==='vertical',axis=vertical?'r':'c',size=vertical?'h':'w',cross=vertical?'c':'r',span=vertical?'w':'h',end=rect[axis]+rect[size],oldSize=rect[size];
+      const pt=extractParts(next,f);if(!pt)throw new Error('初終の欄の形を確認してください。');
+      const cfg={n:r.n,firstCell:true,lastCell:true,firstCount:r.n,lastCount:r.n,...f.extractConfig};
+      cfg.n=r.n;cfg.firstCount=r.n;cfg.lastCount=r.n;f.extractConfig=cfg;f.chars=r.n;
+      rect[size]=(cfg.firstCell?MARK_LEN:0)+(cfg.lastCell?MARK_LEN:0)+2*r.n*(vertical?CHAR_ROWS:1);
+      const delta=rect[size]-oldSize,overlaps=x=>x[cross]<rect[cross]+rect[span] && x[cross]+x[span]>rect[cross];
+      const movedKeys=new Map();
+      next.fields.filter(other=>other!==f && other.rects.some(x=>overlaps(x) && x[axis]>=end)).forEach(other=>{
+        [...other.rects,...(other.label?[other.label]:[])].forEach(x=>{if(x===other.label){const key=x.c+','+x.r;if(next.texts[key]){const pos={c:x.c,r:x.r};pos[axis]+=delta;movedKeys.set(key,{key:pos.c+','+pos.r,value:next.texts[key]});}}x[axis]+=delta;});
+      });
+      next.decorations.forEach(x=>{if(!overlaps(x))return;if(x[axis]>=end){const key=x.c+','+x.r;if(next.texts[key]){const pos={c:x.c,r:x.r};pos[axis]+=delta;movedKeys.set(key,{key:pos.c+','+pos.r,value:next.texts[key]});}x[axis]+=delta;}else if(x[axis]<=rect[axis] && x[axis]+x[size]>=end)x[size]+=delta;});
+      movedKeys.forEach((v,k)=>delete next.texts[k]);movedKeys.forEach(v=>next.texts[v.key]=v.value);
+      if(next.fields.some(other=>other.rects.some(x=>x.c<0 || x.r<0 || x.c+x.w>next.grid.cols || x.r+x.h>next.grid.rows)))throw new Error(r.label+'：字数を増やすと用紙からはみ出します。欄を移動するかページを分けてください。');
+    }
     const error=autoRowError(r);if(error)throw new Error(error);
     if(r.answer)next.answers[f.id]=r.answer;else delete next.answers[f.id];f.points=r.points;f.aspect=r.aspect;f.complete=!!r.complete;
     if(f.auto){for(const key of ['group','label','kind','n','w','h','kindAuto','aspectAuto','aspectDefault','pointsDefault','points','aspect','complete','eight'])if(r[key]!==undefined)f.auto[key]=r[key];f.auto.warnings=[...(r.warnings || [])];}
@@ -7227,7 +7247,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
   [q('#auto-completion-add').previousElementSibling,q('#auto-completion-add'),q('#auto-completion-remove')].forEach(n=>advancedBatch.append(n));
   q('#review-tab-settings').addEventListener('click',summarizeBatch);
   if(hadDoc){
-    const mode=document.createElement('label');mode.className='row';mode.innerHTML='反映方法 <select id="auto-update-mode"><option value="preserve">移動・手動編集を保って更新（おすすめ）</option><option value="rebuild">一覧の全問から用紙を作り直す（配置をリセット）</option></select><small>答え・配点・観点の修正は配置を保持。問題の追加・削除、種類や寸法を変える場合は作り直しを選びます。</small>';reviewSettings.prepend(mode);
+    const mode=document.createElement('label');mode.className='row';mode.innerHTML='反映方法 <select id="auto-update-mode"><option value="preserve">移動・手動編集を保って更新（おすすめ）</option><option value="rebuild">一覧の全問から用紙を作り直す（配置をリセット）</option></select><small>答え・配点・観点の修正は配置を保持。初終の字数変更にも対応します。問題の追加・削除、その他の種類や寸法の変更は作り直しを選びます。</small>';reviewSettings.prepend(mode);
     const updateMode=()=>{q('#auto-apply').textContent=q('#auto-update-mode').value==='preserve'?'配置を保って更新':'配置を作り直して更新';};q('#auto-update-mode').onchange=updateMode;updateMode();
     reviewList.firstElementChild.textContent='答えと欄を確認してください。移動した位置や手動編集を保って更新します。作り直す場合は「まとめて変更・配置」で反映方法を選べます。';
   }
@@ -7387,9 +7407,9 @@ function openAnswerGenerator(initialTitle='',creation=null){
         if(hadDoc)bookSnapshot();doc=blank;close();startApp(true);return;
       }
 
-      const previous=new Map(); rows.forEach(r=>{ const key=(autoNumberIndex(r.group) || r.group)+'\0'+r.label; if (!previous.has(key)) previous.set(key,[]); previous.get(key).push(r); });
+      const previous=new Map(); rows.forEach(r=>{ const key=autoRowIdentity(r); if (!previous.has(key)) previous.set(key,[]); previous.get(key).push(r); });
       const parsed=parseAutoAnswers(source.value,getDefaults());
-      parsed.forEach(r=>{ const old=(previous.get((autoNumberIndex(r.group) || r.group)+'\0'+r.label) || []).shift(); if(old)r.fieldId=old.fieldId;if(old && r.kind==='table')r.table=old.table; if(old && r.kind==='kanbun') r.kanbunGiven=old.kanbunGiven || ''; if (old && old.appearance) r.appearance={...old.appearance}; if(old && old.graphRange && r.kind==='graph') r.graphRange={...old.graphRange}; });
+      parsed.forEach(r=>{ const old=(previous.get(autoRowIdentity(r)) || []).shift(); if(old)r.fieldId=old.fieldId;if(old && r.kind==='table')r.table=old.table; if(old && r.kind==='kanbun') r.kanbunGiven=old.kanbunGiven || ''; if (old && old.appearance) r.appearance={...old.appearance}; if(old && old.graphRange && r.kind==='graph') r.graphRange={...old.graphRange}; });
       rows=parsed; parsedText=source.value;scoringDirty=false;options.autoScoring=scoringSettings();saveOptions(); selected.clear(); rows.forEach(r=>groups.add(r.group)); drawRows(); showStep('review'); q('#auto-tab-review').focus();
     } catch(e){ status.textContent=e.message; }
   };
