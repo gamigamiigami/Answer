@@ -792,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.3';
+const APP_VERSION = '2.13.4';
 const APP_RELEASES = [
+  ['2.13.4','罫線を消した場所への欄の移動・配置に対応'],
   ['2.13.3','大きな枠の端でDeleteすると選択箇所の罫線だけ削除'],
   ['2.13.2','確認画面で拡大縮小・模範解答の切替に対応'],
   ['2.13.1','初終の字数変更を配置保持で反映・問題の照合を改善'],
@@ -2179,10 +2180,10 @@ function tablePlacementPlan(f,table){
   const trial={...doc,paper:{...doc.paper},grid,colw:Array.from({length:grid.cols},(_,c)=>doc.colw[c] || 1)};
   const boxes=[rect,...(label?[label]:[])],used=new Set(headerLayout(trial).reserved);
   doc.fields.filter(x=>x.id!==f.id).forEach(x=>fieldFootprint(doc,x).forEach(([c,r])=>used.add(c+','+r)));
-  doc.decorations.forEach(x=>{for(let c=x.c;c<x.c+x.w;c++)for(let r=x.r;r<x.r+x.h;r++)used.add(c+','+r);});
+  const released=releasedFrameCells(doc);doc.decorations.forEach(x=>{for(let c=x.c;c<x.c+x.w;c++)for(let r=x.r;r<x.r+x.h;r++)if(!released.has(c+','+r))used.add(c+','+r);});
   for(const [key,value] of Object.entries(doc.texts)){
     if(f.label && key===f.label.c+','+f.label.r)continue;
-    const [c,r]=key.split(',').map(Number),b=textRect(doc,c,r,value);for(let x=b.c;x<b.c+b.w;x++)for(let y=b.r;y<b.r+b.h;y++)used.add(x+','+y);
+    const [c,r]=key.split(',').map(Number),b=textRect(doc,c,r,value);for(let x=b.c;x<b.c+b.w;x++)for(let y=b.r;y<b.r+b.h;y++)if(!released.has(x+','+y))used.add(x+','+y);
   }
   for(const b of boxes)for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)if(c<0 || r<0 || used.has(c+','+r))throw new Error('表を広げる位置に、ほかの欄や見出しがあります。表を空いた場所へ移動してから行・列を追加してください。');
   if(grid.cols!==doc.grid.cols || grid.rows!==doc.grid.rows){
@@ -2210,7 +2211,7 @@ async function placeTable(){
     f.rects[0].c=vertical?0:2;f.rects[0].r=Math.max(contentOrigin(doc).r,...doc.fields.flatMap(x=>x.rects.map(r=>r.r+r.h+2)));label();
     try{plan=tablePlacementPlan(f,table);}catch(e){return toast(e.message);}
   }
-  snapshot(['fields','answers','paper','grid','colw']);uid++;doc.fields.push(f);doc.paper=plan.trial.paper;doc.grid=plan.trial.grid;doc.colw=plan.trial.colw;ui.sel=null;ui.extra=[];ui.targets=[];ui.movePlan=null;ui.cur={c:f.rects[0].c,r:f.rects[0].r};render();editTableField(f);
+  snapshot(['fields','answers','paper','grid','colw']);uid++;doc.fields.push(f);markReusedFrameCells(doc,f);doc.paper=plan.trial.paper;doc.grid=plan.trial.grid;doc.colw=plan.trial.colw;ui.sel=null;ui.extra=[];ui.targets=[];ui.movePlan=null;ui.cur={c:f.rects[0].c,r:f.rects[0].r};render();editTableField(f);
 }
 function editTableField(f,next){
   const spec=tableSpec(f.table),hit=tableCellBoxes(f).find(({rect:b})=>ui.cur.c>=b.c && ui.cur.c<b.c+b.w && ui.cur.r>=b.r && ui.cur.r<b.r+b.h),selection=hit?{r:hit.r,c:hit.c}:{r:0,c:0};
@@ -2754,8 +2755,10 @@ function buildCells(d, withAnswers){
   for(const f of d.fields)if(f.label){box(f.label.c,f.label.r,f.label.w,f.label.h,f.type===8?'thin':f.line || 'thin');merge(f.label.c,f.label.r,f.label.w,f.label.h);}
   for(const q of d.decorations)if(q.questionHeading || q.subQuestionHeading){box(q.c,q.r,q.w,q.h,q.style || 'thin');merge(q.c,q.r,q.w,q.h);}
   // Apply the same edge removals to the SVG and Excel cell data, after generated frames.
+  const restored=new Set();for(const f of [...d.fields,...d.decorations.map(v=>({...v,rects:[v]}))]){const footprint=new Set(fieldFootprint(d,f).map(([c,r])=>c+','+r));for(const k of f.reusedFrameCells || [])if(footprint.has(k))restored.add(k);}
   for(const edge of d.paper.erasedBorderEdges || []){
     const offset={top:[0,-1,'bottom'],bottom:[0,1,'top'],left:[-1,0,'right'],right:[1,0,'left']}[edge.side];if(!offset)continue;
+    if(restored.has(edge.c+','+edge.r) || restored.has((edge.c+offset[0])+','+(edge.r+offset[1])))continue;
     const cell=cells.get(edge.c+','+edge.r);if(cell)delete cell.b[edge.side];
     const neighbor=cells.get((edge.c+offset[0])+','+(edge.r+offset[1]));if(neighbor)delete neighbor.b[offset[2]];
   }
@@ -3184,6 +3187,11 @@ function pointToCell(ev){
 /* ---------------------------------------------------------------
    9. 欄を置く
    --------------------------------------------------------------- */
+function releasedFrameCells(d){
+  const sides=new Map();for(const e of d.paper.erasedBorderEdges || []){const k=e.c+','+e.r;if(!sides.has(k))sides.set(k,new Set());sides.get(k).add(e.side);}
+  return new Set([...sides].filter(([k,s])=>['top','bottom','left','right'].every(side=>s.has(side))).map(([k])=>k));
+}
+function markReusedFrameCells(d,f){const released=releasedFrameCells(d);f.reusedFrameCells=fieldFootprint(d,f).map(([c,r])=>c+','+r).filter(k=>released.has(k));}
 function occupied(d){
   const set = new Set(ui.reserved);
   d.fields.forEach(f => fieldFootprint(d,f).forEach(([c,r]) => set.add(c+','+r)));
@@ -3294,6 +3302,7 @@ async function placeField(type){
       chars:(opt.n ? opt.n : 1), exact:!!opt.exact, line:ui.line,
       points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end'
     });
+    markReusedFrameCells(doc,doc.fields[doc.fields.length-1]);
     const last = got.rects[got.rects.length-1];
     const minC = Math.min(...got.rects.map(r=>r.c));
     if (vertical){
@@ -3448,7 +3457,7 @@ async function openBigWizard(){
     const f = { id:'f'+(uid++), type, rects:g.rects, label:g.lab,
       chars:(type===2 ? 1 : n), exact:(type===4), line:ui.line,
       points:0, aspect:'知技', complete:(ui.line==='medium'), note:'', notePos:'end' };
-    doc.fields.push(f); ids.push(f.id);
+    doc.fields.push(f);markReusedFrameCells(doc,f); ids.push(f.id);
   });
   // 小問の番号
   if (numKind !== 'none' && STAMPS[numKind]){
@@ -3510,6 +3519,7 @@ function simpleFrame(){
     if (f){ f.complete = (ui.line==='medium'); toast(f.complete?'この欄を太線にしました':'この欄を普通の線にしました'); }
     else { doc.decorations.push({id:'v'+(uid++),c:s.c,r:s.r,w:s.w,h:s.h,style:ui.line,
                                  note:'',notePos:'end',points:0,aspect:'知技'});
+           const placed=doc.decorations[doc.decorations.length-1];placed.reusedFrameCells=fieldFootprint(doc,{rects:[placed]}).map(([c,r])=>c+','+r).filter(k=>releasedFrameCells(doc).has(k));
            toast(ui.line==='medium' ? '太い枠を引きました' : '枠を引きました');
            // 記号用と同じく、引いたら次の位置へ進む
            const vertical = doc.paper.writing==='vertical';
@@ -3851,8 +3861,9 @@ function collectMovePlan(all=false){
   const cells=selectedCells(),picked=new Set(cells.map(p=>p.c+','+p.r));
   const hits=b=>{if(all)return true;for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)if(picked.has(c+','+r))return true;return false;};
   const fieldIds=new Set(doc.fields.filter(f=>all || [ ...f.rects,...(f.label?[f.label]:[]) ].some(hits) || ui.targets.some(t=>t.id===f.id)).map(f=>f.id));
-  const decoIds=new Set(doc.decorations.filter(hits).map(d=>d.id)),textKeys=new Set();
-  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(hits(textRect(doc,c,r,v))){textKeys.add(key);if(v.bold && v.box)doc.fields.filter(f=>f.auto && f.auto.group===v.t).forEach(f=>fieldIds.add(f.id));}}
+  const released=releasedFrameCells(doc),hitsFrame=b=>all || cells.some(p=>p.c>=b.c && p.c<b.c+b.w && p.r>=b.r && p.r<b.r+b.h && (!released.has(p.c+','+p.r) || (b.reusedFrameCells || []).includes(p.c+','+p.r)));
+  const decoIds=new Set(doc.decorations.filter(hitsFrame).map(d=>d.id)),textKeys=new Set();
+  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(hitsFrame(textRect(doc,c,r,v))){textKeys.add(key);if(v.bold && v.box)doc.fields.filter(f=>f.auto && f.auto.group===v.t).forEach(f=>fieldIds.add(f.id));}}
   for(const deco of doc.decorations.filter(d=>decoIds.has(d.id) && d.questionHeading))doc.fields.filter(f=>f.auto && [f.auto.questionId,f.auto.subQuestionId].includes(deco.id)).forEach(f=>fieldIds.add(f.id));
   const cloneParentIds=new Set();
   for(const f of doc.fields.filter(f=>fieldIds.has(f.id))){
@@ -3863,7 +3874,7 @@ function collectMovePlan(all=false){
     }
   }
   const ownBoxes=doc.fields.filter(f=>fieldIds.has(f.id)).flatMap(f=>[...f.rects,...(f.label?[f.label]:[])]).concat(doc.decorations.filter(d=>decoIds.has(d.id)));
-  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(ownBoxes.some(b=>rectHits(b,textRect(doc,c,r,v))))textKeys.add(key);}
+  for(const [key,v] of Object.entries(doc.texts)){const [c,r]=key.split(',').map(Number);if(ownBoxes.some(b=>{const t=textRect(doc,c,r,v);for(let x=Math.max(b.c,t.c);x<Math.min(b.c+b.w,t.c+t.w);x++)for(let y=Math.max(b.r,t.r);y<Math.min(b.r+b.h,t.r+t.h);y++)if(!released.has(x+','+y))return true;return false;}))textKeys.add(key);}
   const drawingIndices=[];doc.drawings.forEach((g,i)=>{const pts=g.k==='line'?[{c:Math.floor(g.x1),r:Math.floor(g.y1)},{c:Math.floor(g.x2),r:Math.floor(g.y2)}]:[{c:Math.floor(g.x),r:Math.floor(g.y)}];if(all || pts.every(p=>picked.has(p.c+','+p.r)))drawingIndices.push(i);});
   return {fieldIds:[...fieldIds],decoIds:[...decoIds],textKeys:[...textKeys],cloneParentIds:[...cloneParentIds].filter(id=>!decoIds.has(id)),drawingIndices};
 }
@@ -3872,12 +3883,12 @@ function movementError(plan,dc,dr){
   const moved=p.boxes.map(b=>({...b,c:b.c+dc,r:b.r+dr}));
   if(moved.some(b=>b.c<0 || b.r<0 || b.c+b.w>doc.grid.cols || b.r+b.h>doc.grid.rows))return '用紙からはみ出します。移動する量を小さくしてください。';
   for(const g of p.drawings){const pts=g.k==='line'?[[g.x1,g.y1],[g.x2,g.y2]]:[[g.x,g.y]];if(pts.some(([x,y])=>x+dc<0 || y+dr<0 || x+dc>doc.grid.cols || y+dr>doc.grid.rows))return '一緒に動かす図が用紙からはみ出します。';}
-  const used=new Map();const mark=(b,reason)=>{for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++)used.set(c+','+r,reason);};
+  const used=new Map(),released=releasedFrameCells(doc);const mark=(b,reason,frame=false)=>{for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++){const key=c+','+r;if(!frame || !released.has(key) || (b.reusedFrameCells || []).includes(key))used.set(key,reason);}};
   const header=headerLayout(doc);header.reserved.forEach(k=>used.set(k,'タイトル・氏名欄または得点欄に重なります。空いている位置へ動かしてください。'));
   const sb=scoreBoxBounds(doc);if(sb){const c=columnAtMM(doc,sb.x),last=columnAtMM(doc,sb.x+sb.w-.0001),r=Math.floor(rowAtMM(doc,sb.y));mark({c,r,w:last-c+1,h:Math.ceil(rowAtMM(doc,sb.y+sb.h))-r},'得点欄に重なります。得点欄を先に別の場所へ移せます。');}
   doc.fields.filter(f=>!plan.fieldIds.includes(f.id)).forEach(f=>[...f.rects,...(f.label?[f.label]:[])].forEach(b=>mark(b,'移動しない解答欄に重なります。「解答欄を全部選ぶ」で一緒に動かせます。')));
-  doc.decorations.filter(d=>!plan.decoIds.includes(d.id)).forEach(d=>mark(d,'移動しない枠・見出しに重なります。見出しも含めて選んでください。'));
-  for(const [key,v] of Object.entries(doc.texts)){if(plan.textKeys.includes(key))continue;const [c,r]=key.split(',').map(Number);mark(textRect(doc,c,r,v),'移動しない番号・文字に重なります。番号も含めて選んでください。');}
+  doc.decorations.filter(d=>!plan.decoIds.includes(d.id)).forEach(d=>mark(d,'移動しない枠・見出しに重なります。見出しも含めて選んでください。',true));
+  for(const [key,v] of Object.entries(doc.texts)){if(plan.textKeys.includes(key))continue;const [c,r]=key.split(',').map(Number);mark(textRect(doc,c,r,v),'移動しない番号・文字に重なります。番号も含めて選んでください。',true);}
   for(const b of moved)for(let c=b.c;c<b.c+b.w;c++)for(let r=b.r;r<b.r+b.h;r++){const error=used.get(c+','+r);if(error)return error;}
   return '';
 }
@@ -3886,7 +3897,8 @@ function shiftMovePlan(plan,dc,dr,{quiet=false}={}){
   const p=movePlanParts(plan),entries=p.texts.map(t=>[t.key,t.value]),cloneMap=new Map(),cloneTexts=[];snapshot();
   for(const parent of p.clones){const id='v'+uid++,copy={...parent,id,c:parent.c+dc,r:parent.r+dr};doc.decorations.push(copy);cloneMap.set(parent.id,id);const value=doc.texts[parent.c+','+parent.r];if(value)cloneTexts.push([(parent.c+dc)+','+(parent.r+dr),{...value}]);}
   for(const f of p.fields){[...f.rects,...(f.label?[f.label]:[])].forEach(b=>{b.c+=dc;b.r+=dr;});if(f.auto)for(const key of ['questionId','subQuestionId'])if(cloneMap.has(f.auto[key]))f.auto[key]=cloneMap.get(f.auto[key]);}
-  p.decos.forEach(b=>{b.c+=dc;b.r+=dr;});
+  p.fields.forEach(f=>markReusedFrameCells(doc,f));
+  p.decos.forEach(b=>{b.c+=dc;b.r+=dr;b.reusedFrameCells=fieldFootprint(doc,{rects:[b]}).map(([c,r])=>c+','+r).filter(k=>releasedFrameCells(doc).has(k));});
   // 先に元のキーを全部消す。移動先が次の元キーでも、文字を上書き・消失させない。
   entries.forEach(([key])=>delete doc.texts[key]);const movedKeys=[];
   entries.forEach(([key,value])=>{const [c,r]=key.split(',').map(Number),next=(c+dc)+','+(r+dr);doc.texts[next]=value;movedKeys.push(next);});cloneTexts.forEach(([key,value])=>{doc.texts[key]=value;movedKeys.push(key);});
@@ -3927,7 +3939,7 @@ function eraseSelectedBorders(sideOverride){
     const [dc,dr]=delta[s];if(side!=='all' && keys.has((p.c+dc)+','+(p.r+dr)))continue;edges.push({...p,side:s});
   }
   if(!edges.length)return;
-  snapshot(['paper']);doc.paper.erasedBorderEdges=[...(doc.paper.erasedBorderEdges || []),...edges];render();toast('選択した罫線だけ消しました。問題・答えは残っています');
+  snapshot(['paper','fields','decorations']);for(const f of [...doc.fields,...doc.decorations])if(f.reusedFrameCells)f.reusedFrameCells=f.reusedFrameCells.filter(k=>!keys.has(k));doc.paper.erasedBorderEdges=[...(doc.paper.erasedBorderEdges || []),...edges];render();toast('選択した罫線だけ消しました。問題・答えは残っています');
 }
 function clearSelection(){
   if (ui.tab === 'draw') return toast('描画タブでは消しゴム（3）を使ってください');
