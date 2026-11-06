@@ -654,6 +654,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 #backup-status{font-weight:600}#work-file-status{color:var(--sub)}#save-work-direct{margin-left:auto;font-size:12px}
 @media print{#save-indicator{display:none!important}}
 body.zen #save-indicator{display:none}
+#paper{flex-shrink:0}#preview{overflow-anchor:none;scrollbar-gutter:stable}
 </style>
 
 <svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="tesutomo-mark" viewBox="0 0 112 116">
@@ -789,8 +790,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.12.0';
+const APP_VERSION = '2.13.0';
 const APP_RELEASES = [
+  ['2.13.0','配置保持・200％表示安定化／初終セル削除修正'],
   ['2.12.0','初終の見出し文字・セルを個別編集'],
   ['2.11.3','タイトルと氏名欄の学年重複を解消'],
   ['2.11.2','確認画面を広く／更新履歴はトップページのみ'],
@@ -3081,8 +3083,8 @@ function fitPreview(p){
   if(spreadEnabled(doc))p={w:420,h:297};
   const pane = document.getElementById('preview');
   const zen = document.body.classList.contains('zen');
-  const availW = pane.clientWidth - (zen ? 10 : 22);
-  const availH = pane.clientHeight - (zen ? 10 : 38);
+  const availW = pane.offsetWidth - (zen ? 26 : 38);
+  const availH = pane.offsetHeight - (zen ? 26 : 54);
   if (availW <= 0 || availH <= 0) return;
   const fitW = Math.min(availW, availH * p.w / p.h, 1500);
   const w = ui.zoom ? fitW * ui.zoom : fitW;
@@ -3508,8 +3510,6 @@ function setLine(kind){
    縦書き＝同じ列の下へ、横書き＝同じ行の右へ */
 function insertCells(){
   if (!needSheet('マスを差し込めません')) return;
-  const extract=fieldsInArea().find(f=>f.type===EXTRACT_TYPE);
-  if(extract){const keys=new Set(selectedCells().map(p=>p.c+','+p.r));if(!fieldFootprint(doc,extract).every(([c,r])=>keys.has(c+','+r)))return editExtractField();}
   const vertical = doc.paper.writing==='vertical';
   const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   let n = vertical ? s.h : s.w;                      // 差し込む量
@@ -3708,6 +3708,19 @@ async function editExtractField(){
 
 function deleteCells(){
   if (!needSheet('マスを削除できません')) return;
+  const cells=selectedCells(),keys=new Set(cells.map(p=>p.c+','+p.r));
+  const f=fieldsInArea().find(f=>f.type===EXTRACT_TYPE && !fieldFootprint(doc,f).every(([c,r])=>keys.has(c+','+r)));
+  if(f){
+    const pt=extractParts(doc,f);if(!pt)return;
+    const hit=rect=>rect.w>0 && rect.h>0 && cells.some(p=>p.c>=rect.c && p.c<rect.c+rect.w && p.r>=rect.r && p.r<rect.r+rect.h);
+    const config={n:pt.n,firstCell:true,lastCell:true,firstCount:pt.n,lastCount:pt.n,...f.extractConfig};
+    const first=hit(pt.m1),last=hit(pt.m2);
+    if(!first && !last)return editExtractField();
+    snapshot();if(first)config.firstCell=false;if(last)config.lastCell=false;f.extractConfig=config;
+    const vertical=doc.paper.writing==='vertical';f.rects[0][vertical?'h':'w']=(config.firstCell?MARK_LEN:0)+(config.lastCell?MARK_LEN:0)+(config.firstCount+config.lastCount)*(vertical?CHAR_ROWS:1);
+    ui.sel=null;ui.extra=[];ui.cur={c:f.rects[0].c,r:f.rects[0].r};render();return toast('選んだ見出しセルだけを削除して詰めました。');
+  }
+
   const vertical = doc.paper.writing==='vertical';
   const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   const n = vertical ? s.h : s.w;
@@ -5875,7 +5888,7 @@ ${guideToken('question','2')}￥${guideToken('answer','太陽')}</pre><p>これ�
     <details><summary>答えだけで、まず試したい</summary><pre>ア
 太陽
 相手の気持ちを考えたから。</pre><p>1行に1つの答えでも作れます。点数・観点は入力画面の基本設定と大問の範囲に従います。数字だけの答えは「1,12」の形で書きます。</p></details>
-    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「問題・答え・解答欄を編集」で直し、「この内容で用紙を更新」を押します。一覧の全問で用紙全体を作り直します。</span></div>
+    <div class="guide-mini"><b>↺ 答えを直す</b><span>上部の「問題・答え・解答欄を編集」で直し、「この内容で用紙を更新」を押します。通常は移動・手動編集を保って更新します。作り直す場合は「まとめて変更・配置」で反映方法を選びます。</span></div>
     <button class="tb" data-help-go="advanced">小問・字数指定などは「詳しい機能」へ →</button></section>`+
     '<section id="help-panel-advanced" role="tabpanel" aria-labelledby="help-tab-advanced" hidden>'+
     '<details><summary>手作業で欄を置く・動かす</summary><p>編集画面の「細かな編集」→「解答用紙」を開きます。用紙の位置を選んで、左の「解答欄」のボタンを押してください。ボタンに書かれた数字キーでも追加できます。</p><p>移動は「配置」タブへ。「解答欄を全部選ぶ」→「右に詰める」でまとめて動かします。一部なら欄を囲んで選び、矢印ボタンで動かします。「選んだ欄をドラッグ」をONにするとマウスでも動かせます。</p></details>'+
@@ -7142,7 +7155,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     '<button class="tb auto-help-link" id="auto-help">使い方</button>'+
     '<div class="auto-steps" role="tablist" aria-label="模範解答から作る手順"><button id="auto-tab-input" role="tab" aria-controls="auto-input-panel" data-step="input">1. 模範解答を入力</button><button id="auto-tab-review" role="tab" aria-controls="auto-review-panel" data-step="review">2. 欄を確認</button></div>'+
     '<p class="desc">タイトル：<b>'+xmlEsc(doc ? doc.paper.title : initialTitle)+'</b></p>'+
-    (doc?.bookPages?.length>1?'<p class="desc">全'+doc.bookPages.length+'ページの全問を編集中です。反映すると全体を更新します。</p>':'')+
+    (doc?.bookPages?.length>1?'<p class="desc">全'+doc.bookPages.length+'ページの全問を編集中です。通常は全ページの配置を保って更新します。</p>':'')+
     '<div class="row"><label for="auto-subject">教科</label><select id="auto-subject">'+Object.keys(SUBJECTS).map(s=>'<option>'+s+'</option>').join('')+'</select></div>'+
     '<section id="auto-input-panel" role="tabpanel" aria-labelledby="auto-tab-input"><section class="auto-scoring-setup" aria-labelledby="auto-scoring-title"><h4 id="auto-scoring-title">省略した点数・観点の初期値</h4><div class="auto-defaults"><label>基本点数（1問あたり）<input id="auto-base-points" type="number" min="0" max="1000" step="any" value="2"></label><label>基本の観点<select id="auto-base-aspect"><option value="知技">知識・技能</option><option value="思判表">思考・判断・表現</option><option value="">答えから推定</option></select></label></div><details class="scoring-extra"><summary>大問ごとに観点を変える・観点を追加</summary><p class="desc">例：大問1〜3は知識、大問4〜5は思考。</p><div id="auto-aspect-ranges"></div><button class="tb" id="auto-range-add">＋ 大問の範囲を追加</button><button class="tb" id="auto-aspect-add">＋ 観点を追加</button></details></section><h4>② 問題番号と答えを書く</h4><div class="guide-mini"><b>これだけでOK</b><span>大問は数字だけの行。各問は <code>1￥ア</code> の形で書きます。</span></div><div class="row"><label for="auto-source">模範解答の入力</label><button class="tb" id="auto-example">この例を入力欄に入れる</button></div>'+'<div id="auto-bulk-example"><p>入力例：大問は数字だけで1行。各問は「問番号￥答え￥点数￥観点」の順です。</p><pre>'+guideBasicExample()+'</pre>'+guideLegend()+'<p class="desc">点数・観点は省略できます。省略した場合は①の設定を使います。</p></div>'+'<p class="desc">区切りは ￥（半角の¥・バックスラッシュも可）。例：1￥答え￥2￥知。￥で区切った行の「、」やカンマは答えとして残ります。従来のカンマ入力も使えます。</p><label><input id="auto-answers-only" type="checkbox">答えだけを1行ずつ入力（数字も答えとして読む）</label><button type="button" class="tb" id="auto-input-table">入力表を使う・Excelから貼る</button><p class="desc">数式：1^2、x^{n+1} は右上の指数、3C1・nCr・5P2 は小さい添字で表示します。ふりがなは 漢字《かんじ》 と入力します。</p><textarea id="auto-source" rows="6" placeholder="1&#10;1￥ア&#10;2￥太陽&#10;2&#10;1￥相手の気持ちを考えたから。"></textarea>'+
     '<details class="auto-common"><summary>入力の書き方・小問・初終の例</summary><p class="desc">小問は①・A・（１）をそのまま書けます。例：「1￥①￥ア」の次は「②￥イ」。「1￥A￥ア」の次は「B￥イ」。「1￥（１）￥ア」の次は「（２）￥イ」。親の問番号は引き継ぎます。<br>「あああ～いいい」は、初め「あああ」・終わり「いいい」と読み取ります。<br>点数・観点を省略すると上の設定が入ります。個別に書いた点数・観点を優先します（例：1，ア，5，思）。</p></details>'+
@@ -7207,6 +7220,11 @@ function openAnswerGenerator(initialTitle='',creation=null){
   const advancedBatch=document.createElement('details');advancedBatch.className='auto-common';advancedBatch.innerHTML='<summary>完答の設定</summary>';batchBox.after(advancedBatch);
   [q('#auto-completion-add').previousElementSibling,q('#auto-completion-add'),q('#auto-completion-remove')].forEach(n=>advancedBatch.append(n));
   q('#review-tab-settings').addEventListener('click',summarizeBatch);
+  if(hadDoc){
+    const mode=document.createElement('label');mode.className='row';mode.innerHTML='反映方法 <select id="auto-update-mode"><option value="preserve">移動・手動編集を保って更新（おすすめ）</option><option value="rebuild">一覧の全問から用紙を作り直す（配置をリセット）</option></select><small>答え・配点・観点の修正は配置を保持。問題の追加・削除、種類や寸法を変える場合は作り直しを選びます。</small>';reviewSettings.prepend(mode);
+    const updateMode=()=>{q('#auto-apply').textContent=q('#auto-update-mode').value==='preserve'?'配置を保って更新':'配置を作り直して更新';};q('#auto-update-mode').onchange=updateMode;updateMode();
+    reviewList.firstElementChild.textContent='答えと欄を確認してください。移動した位置や手動編集を保って更新します。作り直す場合は「まとめて変更・配置」で反映方法を選べます。';
+  }
   const paintPreview=card=>{
     const target=card.querySelector('.auto-preview-sheet');
     try{target.replaceChildren(autoAnswerPreview(rows[+card.dataset.row],q('#auto-subject').value,doc?.paper));}
@@ -7539,6 +7557,15 @@ function openAnswerGenerator(initialTitle='',creation=null){
     try {
       const scoring=scoringSettings();
       const subject=q('#auto-subject').value;
+      if(hadDoc && q('#auto-update-mode').value==='preserve'){
+        if(subject!==doc.paper.subject)throw new Error('教科を変える場合は「まとめて変更・配置」の反映方法で「用紙を作り直す」を選んでください。');
+        const pages=allPages(),sets=pages.map(()=>[]);
+        for(const row of rows){const match=/^p([0-9]+)\/(.+)$/.exec(row.fieldId || ''),index=match?+match[1]:0;if(!sets[index])throw new Error('元のページが見つかりません。用紙を作り直してください。');sets[index].push({...row,fieldId:match?match[2]:row.fieldId,completeGroup:row.completeGroup?.replace(/^p[0-9]+\//,'') || ''});}
+        let prepared;
+        try{prepared=pages.map((page,i)=>{const result=!page.fields.length && !sets[i].length?{next:structuredClone(page)}:prepareAnswersInPlace(sets[i],null,page);result.next.paper.autoScoring=scoring;return result.next;});}
+        catch(error){throw new Error(error.message+' 「まとめて変更・配置」→「反映方法」で作り直しを選べます。現在の用紙は変更していません。');}
+        ui.tab='sheet';bookSnapshot();replacePageData(prepared[doc.pageIndex || 0],prepared,doc.pageIndex || 0);options.autoScoring=scoring;saveOptions();ui.targets=[];ui.seq=null;ui.dirty=true;wrap.remove();startApp();toast('移動した位置や手動編集を保って、答え・配点・観点を更新しました。');return;
+      }
       const basePaper=doc?.paper.subject===subject?{...doc.paper}:creation?applyCreationPaper({...newDoc(subject).paper},creation,initialTitle):null;
       const generationPaper=subject==='国語'?basePaper:{...(basePaper || newDoc(subject).paper),groupHeading:q('#auto-group-heading').value,title:doc?.paper.title ?? (creation?initialTitle:(initialTitle || newDoc(subject).paper.title))};
       let next=buildAutoDocument(rows,subject,generationPaper,initialTitle);
