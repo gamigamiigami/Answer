@@ -52,7 +52,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   const before=await page.evaluate(()=>JSON.stringify(doc));
   await page.locator('#workspace-basic').focus();await page.keyboard.press('Digit1');await page.keyboard.press('Backspace');
   assert.equal(await page.evaluate(()=>JSON.stringify(doc)),before,'preview keyboard must not change the sheet');
-  assert.equal(await page.locator('#workbar').isVisible(),false);assert.equal(await page.locator('#basic-guidance').isVisible(),false);assert.equal(await page.locator('#app-footer').count(),0);await page.click('#workspace-detail');assert.equal(await page.locator('#workbar').isVisible(),true);await page.click('#tab-answer');await page.click('#workspace-basic');
+  assert.equal(await page.locator('#workbar').isVisible(),true);await page.click('#btn-zi');assert.equal(await page.evaluate(()=>ui.zoom),1.25);await page.click('#btn-zo');assert.equal(await page.evaluate(()=>ui.zoom),1);await page.click('#btn-zfit');assert.equal(await page.evaluate(()=>ui.zoom),0);assert.equal(await page.locator('#basic-guidance').isVisible(),false);assert.equal(await page.locator('#app-footer').count(),0);await page.click('#tab-answer');assert.equal(await page.evaluate(()=>ui.tab),'answer');await page.click('#tab-sheet');assert.equal(await page.evaluate(()=>ui.tab),'sheet');await page.click('#tab-answer');
   await page.screenshot({path:path.join(out,'05-sheet.png')});
   const download=page.waitForEvent('download');await page.click('#btn-xlsx');await(await download).saveAs(path.join(out,'answers.xlsx'));
   const excel=spawnSync('python3',['-c',`import openpyxl,sys

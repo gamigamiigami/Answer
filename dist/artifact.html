@@ -576,7 +576,9 @@ input[type=checkbox]{accent-color:var(--place)}
 #workspace-tabs{padding:0 18px;margin:0}#basic-guidance{padding:14px 18px;background:var(--panel);line-height:1.7}
 #basic-guidance span{display:block;color:var(--sub);font-size:13px}
 #basic-guidance{display:none}
-.simple-workspace #workbar{display:none}
+.simple-workspace #workbar{display:flex;padding:4px 18px;gap:6px}
+.simple-workspace #workbar .tab{padding:5px 10px;min-width:80px}
+.simple-workspace #review-page-control{display:none}
 .simple-workspace #side,.simple-workspace #status,.simple-workspace #tab-draw{display:none!important}
 .simple-workspace #sheet{pointer-events:none}.simple-workspace #paper .guide{display:none}
 #app-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:6px 18px;border-top:1px solid var(--line);background:var(--panel);color:var(--sub);font-size:11px}
@@ -790,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.1';
+const APP_VERSION = '2.13.2';
 const APP_RELEASES = [
+  ['2.13.2','確認画面で拡大縮小・模範解答の切替に対応'],
   ['2.13.1','初終の字数変更を配置保持で反映・問題の照合を改善'],
   ['2.13.0','配置保持・200％表示安定化／初終セル削除修正'],
   ['2.12.0','初終の見出し文字・セルを個別編集'],
