@@ -792,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.8';
+const APP_VERSION = '2.13.9';
 const APP_RELEASES = [
+  ['2.13.9','Excelの余白を0・A4内に印刷／縦書きの収まりを改善'],
   ['2.13.8','サイトの見た目を維持しExcel出力時だけ文字サイズを調整'],
   ['2.13.7','Excel縦書きの行間を考慮して模範解答の見切れを修正'],
   ['2.13.6','枠を引く操作で消えないよう修正・消した線の引き直しに対応'],
@@ -2356,7 +2357,7 @@ function appendVectorPrimitives(parent,primitives,x0=0,y0=0){
 // 字数自由の答えは、マスごとにばらさず連続した文字列として配置する。
 // 同じ結合セル・フォントサイズをSVGとExcelの両方で使う。
 // Excel's Yu Gothic stacked text needs more line spacing than SVG glyphs.
-const ANSWER_STACK_STEP=1.65;
+const ANSWER_STACK_STEP=2.0;
 function flowingAnswerPlan(d, f, text, forExcel=false){
   const stackStep=forExcel?ANSWER_STACK_STEP:1.12;
   const fixed = f.type!==8 && (f.fixedChars === true || (f.fixedChars !== false && [3,4,5].includes(f.type)));
@@ -5301,15 +5302,15 @@ function buildXlsx(){
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
       '<dimension ref="A1:'+colName(cols-1)+rows+'"/>'+
-      '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'+
+      '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"/></sheetViews>'+
       '<sheetFormatPr defaultColWidth="'+excelColWidth()+'" defaultRowHeight="'+(ROW_H_PT*contentScale(doc))+'" customHeight="1"/>'+
       '<cols>'+colXml(cols)+'</cols>'+
       '<sheetData>'+body+'</sheetData>'+
       (merges.length ? '<mergeCells count="'+merges.length+'">'+
         merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>' : '')+
       '<printOptions horizontalCentered="1" verticalCentered="1"/>'+
-      '<pageMargins left="'+mx+'" right="'+mx+'" top="'+my+'" bottom="'+my+'" header="0" footer="0"/>'+
-      '<pageSetup paperSize="9" scale="'+Math.round(SCALE*100)+'" orientation="'+doc.paper.orientation+'"/>'+
+      '<pageMargins left="0" right="0" top="0" bottom="0" header="0" footer="0"/>'+
+      '<pageSetup paperSize="9" fitToWidth="1" fitToHeight="1" orientation="'+doc.paper.orientation+'"/>'+
       (sh.drawingXml ? '<drawing r:id="rId1"/>' : '')+
       '</worksheet>';
   });

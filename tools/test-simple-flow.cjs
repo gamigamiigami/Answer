@@ -58,7 +58,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   const excel=spawnSync('python3',['-c',`import openpyxl,sys
 b=openpyxl.load_workbook(sys.argv[1]);assert len(b.sheetnames)==2,b.sheetnames
 text=lambda s: ''.join(str(c.value or '') for row in s for c in row)
-a=text(b.worksheets[1]);s=text(b.worksheets[0]);assert '太陽' in a and 'ア' in a,a
+a=text(b.worksheets[1]);s=text(b.worksheets[0]);assert all(c in a for c in '太陽ア'),a
 assert '太陽' not in s and 'ア' not in s,s
 print('PASS: independent Excel inspection; both sheets and both answers retained')`,path.join(out,'answers.xlsx')],{encoding:'utf8'});
   process.stdout.write(excel.stdout);process.stderr.write(excel.stderr);assert.equal(excel.status,0);
