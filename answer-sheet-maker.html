@@ -746,7 +746,7 @@ body.zen #save-indicator{display:none}
       <div id="sheet-panels">
         <h2>解答欄を追加</h2>
         <div class="key-prompt"><b>用紙の位置を選び、欄の種類を押します。</b><br><small>数字キーでも追加できます。</small></div>
-        <div class="grid3" id="field-tools"></div>
+        <div class="grid3" id="field-tools"></div><button class="tb" id="t-extract">選んだ初終を部分編集</button>
         <button class="tb" id="field-note" style="width:100%;margin-top:8px">欄に文字を添える（から。など）</button>
         <details class="tool-section"><summary>番号を振る</summary><p class="tip">用紙上で番号を入れるマスを選んでから押します。</p><div class="grid5" id="stamp-tools"></div></details>
       </div>
@@ -795,8 +795,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.11.3';
+const APP_VERSION = '2.12.0';
 const APP_RELEASES = [
+  ['2.12.0','初終の見出し文字・セルを個別編集'],
   ['2.11.3','タイトルと氏名欄の学年重複を解消'],
   ['2.11.2','確認画面を広く／更新履歴はトップページのみ'],
   ['2.11.1','保存状態を表示／問題・答え・解答欄の編集先を明示'],
@@ -1314,14 +1315,14 @@ function extractParts(d, f){
   const vertical = d.paper.writing==='vertical';
   const CL = vertical ? CHAR_ROWS : 1;            // 文字マス1つぶんの長さ
   const len = vertical ? r.h : r.w;
-  const n = Math.floor((len - 2*MARK_LEN) / (2*CL));
+  const n = f.extractConfig?.n ?? Math.floor((len - 2*MARK_LEN) / (2*CL));
   if (n < 1) return null;
   const seg = (start, size) => vertical
     ? { c:r.c, r:r.r + start, w:r.w, h:size }
     : { c:r.c + start, r:r.r, w:size, h:r.h };
-  const aLen = n*CL;
-  return { n, m1:seg(0, MARK_LEN), a:seg(MARK_LEN, aLen),
-           m2:seg(MARK_LEN+aLen, MARK_LEN), b:seg(2*MARK_LEN+aLen, aLen) };
+  const config=f.extractConfig,m1=config?.firstCell===false?0:MARK_LEN,m2=config?.lastCell===false?0:MARK_LEN;
+  const aLen=(config?.firstCount ?? n)*CL,bLen=(config?.lastCount ?? n)*CL;
+  return {n,m1:seg(0,m1),a:seg(m1,aLen),m2:seg(m1+aLen,m2),b:seg(m1+aLen+m2,bLen)};
 }
 const extractLen = n => 2*MARK_LEN + 2*n;   // 横書きのときの長さ（列数）
 
@@ -2645,10 +2646,10 @@ function buildCells(d, withAnswers){
       f.rects.forEach(r => box(r.c, r.r, r.w, r.h, 'medium'));
       const pt = extractParts(d, f);
       if (pt){
-        [pt.m1, pt.a, pt.m2, pt.b].forEach(x => box(x.c, x.r, x.w, x.h, 'thin'));
+        [pt.m1, pt.a, pt.m2, pt.b].filter(x=>x.w>0 && x.h>0).forEach(x => box(x.c, x.r, x.w, x.h, 'thin'));
         dots([pt.a, pt.b]);
         const mk = f.marks && f.marks.length===2 ? f.marks : EXTRACT_MARKS;
-        [[pt.m1, mk[0]], [pt.m2, mk[1]]].forEach(([x, t]) => {
+        [[pt.m1, mk[0]], [pt.m2, mk[1]]].filter(([x])=>x.w>0 && x.h>0).forEach(([x, t]) => {
           merge(x.c, x.r, x.w, x.h);
           put(x.c, x.r, t, 7);
         });
@@ -3513,6 +3514,8 @@ function setLine(kind){
    縦書き＝同じ列の下へ、横書き＝同じ行の右へ */
 function insertCells(){
   if (!needSheet('マスを差し込めません')) return;
+  const extract=fieldsInArea().find(f=>f.type===EXTRACT_TYPE);
+  if(extract){const keys=new Set(selectedCells().map(p=>p.c+','+p.r));if(!fieldFootprint(doc,extract).every(([c,r])=>keys.has(c+','+r)))return editExtractField();}
   const vertical = doc.paper.writing==='vertical';
   const s = ui.sel || { c:ui.cur.c, r:ui.cur.r, w:1, h:doc.paper.writing==='horizontal'?2:1 };
   let n = vertical ? s.h : s.w;                      // 差し込む量
@@ -3689,6 +3692,26 @@ function removeBand(alongRow, from, n, lo, hi, pullBefore){
 }
 
 /* セルの削除：縦書きは上へ詰める、横書きは左へ詰める */
+async function editExtractField(){
+  if(!needSheet('解答用紙タブで初終の欄を選んでください'))return;
+  const f=fieldsInArea().find(f=>f.type===EXTRACT_TYPE);
+  if(!f)return toast('初終の欄を選んでから押してください。');
+  const pt=extractParts(doc,f);if(!pt)return;
+  const cfg=f.extractConfig || {},marks=f.marks || EXTRACT_MARKS;
+  const v=await ask('初終を部分編集',[
+    {key:'first',label:'初め側の文字（空欄で文字だけ消す）',type:'text',value:marks[0]},
+    {key:'firstCell',label:'初め側の見出しセルを残す',type:'check',value:cfg.firstCell!==false},
+    {key:'last',label:'終わり側の文字（空欄で文字だけ消す）',type:'text',value:marks[1]},
+    {key:'lastCell',label:'終わり側の見出しセルを残す',type:'check',value:cfg.lastCell!==false},
+    {key:'firstCount',label:'初め側の解答マス数',type:'number',value:cfg.firstCount ?? pt.n},
+    {key:'lastCount',label:'終わり側の解答マス数',type:'number',value:cfg.lastCount ?? pt.n,hint:'見出しセルを外すと、その分だけ詰めます。問番号・模範解答・配点は残ります。'}
+  ]);if(!v)return;
+  if(![v.firstCount,v.lastCount].every(n=>Number.isInteger(+n) && +n>=1 && +n<=1000))return toast('解答マス数は1〜1000の整数にしてください。');
+  snapshot();f.marks=[v.first || '',v.last || ''];f.extractConfig={n:pt.n,firstCell:!!v.firstCell,lastCell:!!v.lastCell,firstCount:+v.firstCount,lastCount:+v.lastCount};
+  const vertical=doc.paper.writing==='vertical',len=(v.firstCell?MARK_LEN:0)+(v.lastCell?MARK_LEN:0)+(+v.firstCount + +v.lastCount)*(vertical?CHAR_ROWS:1);
+  f.rects[0][vertical?'h':'w']=len;render();toast('初終の選んだ部分だけ変更しました。「元に戻す」で戻せます。');
+}
+
 function deleteCells(){
   if (!needSheet('マスを削除できません')) return;
   const vertical = doc.paper.writing==='vertical';
@@ -3890,7 +3913,16 @@ function clearSelection(){
     render(); return toast(n?'答えを消しました':'消すものがありません');
   }
   const before = doc.fields.length;
-  doc.fields = doc.fields.filter(f => !fieldFootprint(doc,f).some(([c,r])=>keys.has(c+','+r)));
+  doc.fields = doc.fields.filter(f => {
+    const footprint=fieldFootprint(doc,f),hit=footprint.some(([c,r])=>keys.has(c+','+r));
+    if(!hit)return true;
+    if(f.type===EXTRACT_TYPE && !footprint.every(([c,r])=>keys.has(c+','+r))){
+      const pt=extractParts(doc,f);f.marks=[...(f.marks || EXTRACT_MARKS)];
+      if(pt)[pt.m1,pt.m2].forEach((rect,i)=>{if(cells.some(p=>p.c>=rect.c && p.c<rect.c+rect.w && p.r>=rect.r && p.r<rect.r+rect.h))f.marks[i]='';});
+      return true;
+    }
+    return false;
+  });
   doc.decorations = doc.decorations.filter(v=>{
     for(let i=0;i<v.w;i++) for(let j=0;j<v.h;j++) if(keys.has((v.c+i)+','+(v.r+j))) return false;
     return true;
@@ -6385,6 +6417,7 @@ function buildTools(){
   $('#t-cut').onclick   = cutCells;
   $('#t-paste').onclick = pasteCells;
   $('#t-del').onclick   = clearSelection;
+  $('#t-extract').onclick=editExtractField;
   $('#t-clear').onclick = clearAll;
   $('#t-edit').onclick  = enterInput;
   $('#t-kanbun').onclick=()=>{const f=fieldAt(ui.cur.c,ui.cur.r);if(!f || f.type!==11)return toast('漢文の欄を選んでください');editKanbunField(f);};
