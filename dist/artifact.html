@@ -792,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.4';
+const APP_VERSION = '2.13.5';
 const APP_RELEASES = [
+  ['2.13.5','入力表はShift＋Enterで追加・答え欄へ自動移動'],
   ['2.13.4','罫線を消した場所への欄の移動・配置に対応'],
   ['2.13.3','大きな枠の端でDeleteすると選択箇所の罫線だけ削除'],
   ['2.13.2','確認画面で拡大縮小・模範解答の切替に対応'],
@@ -2027,7 +2028,7 @@ function openAnswerInputTable(initial,defaults,onSave,draft={}){
     });
   };
   const modal=document.createElement('div');modal.className='modal table-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','問題の入力表');
-  modal.innerHTML='<div class="card"><h3>模範解答を入力</h3><p>「大問・番号・答え」を入力してください。「＋ 1問追加」で番号が続きます。</p><p class="desc">点数・観点は「まとめて変更」タブで設定。欄の種類は答えから自動判定し、次の一覧で調整できます。</p><details class="table-input-help"><summary>入力例・Excelから貼り付け</summary><table class="input-example"><caption>例：大問1の問1、答え「太陽」</caption><thead><tr><th>大問</th><th>番号</th><th>答え</th></tr></thead><tbody><tr><td>1</td><td>1</td><td>太陽</td></tr></tbody></table><p>大問の空欄は上と同じ。番号の空欄は連番になります。答えの空欄は空欄のままです。</p><p>Excelからも「大問・番号・答え」の3列を、最初の「大問」の欄に貼り付けます。</p></details><div class="table-scroll"><table id="answer-input-grid"></table></div><button class="tb" id="answer-input-add">＋ 1問追加</button><p role="status" id="answer-input-status"></p><div class="modal-actions"><button class="tb" id="answer-input-cancel">やめる</button><button class="tb primary" id="answer-input-save">入力した答えを確認する →</button></div></div>';
+  modal.innerHTML='<div class="card"><h3>模範解答を入力</h3><p>「大問・番号・答え」を入力してください。「＋ 1問追加」または Shift＋Enter で追加し、新しい答え欄へ移動します。番号は自動で続きます。</p><p class="desc">点数・観点は「まとめて変更」タブで設定。欄の種類は答えから自動判定し、次の一覧で調整できます。</p><details class="table-input-help"><summary>入力例・Excelから貼り付け</summary><table class="input-example"><caption>例：大問1の問1、答え「太陽」</caption><thead><tr><th>大問</th><th>番号</th><th>答え</th></tr></thead><tbody><tr><td>1</td><td>1</td><td>太陽</td></tr></tbody></table><p>大問の空欄は上と同じ。番号の空欄は連番になります。答えの空欄は空欄のままです。</p><p>Excelからも「大問・番号・答え」の3列を、最初の「大問」の欄に貼り付けます。</p></details><div class="table-scroll"><table id="answer-input-grid"></table></div><button class="tb" id="answer-input-add" title="Shift＋Enterで1問追加し、答え欄へ移動" aria-keyshortcuts="Shift+Enter">＋ 1問追加 <kbd>Shift＋Enter</kbd></button><p role="status" id="answer-input-status"></p><div class="modal-actions"><button class="tb" id="answer-input-cancel">やめる</button><button class="tb primary" id="answer-input-save">入力した答えを確認する →</button></div></div>';
   document.body.append(modal);draft.onOpen?.();const q=s=>modal.querySelector(s),opener=document.activeElement;
   const card=q('.card'),tabs=document.createElement('div');tabs.className='view-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','入力表の操作');
   tabs.innerHTML='<button id="input-table-tab-edit" role="tab" aria-controls="input-table-edit" aria-selected="true">問題を入力</button><button id="input-table-tab-bulk" role="tab" aria-controls="input-table-bulk" aria-selected="false" tabindex="-1">まとめて変更</button>';
@@ -2063,11 +2064,11 @@ function openAnswerInputTable(initial,defaults,onSave,draft={}){
   });
   modal.onclick=e=>{const b=e.target.closest('[data-delete-input]');if(b){const index=+b.dataset.deleteInput;data.splice(index,1);const indices=[...selected];selected.clear();indices.forEach(i=>{if(i!==index)selected.add(i>index?i-1:i);});draw();}};
   q('#answer-input-add').onclick=()=>{
-    if(data.length>=200)return;
+    if(data.length>=200){status.textContent='200問まで追加できます。これ以上は別の用紙を作ってください。';return;}
     const previous=resolvedRows().at(-1);
     if(previous)data.push([previous[0],nextNumber(previous[1],data.length+1),'',previous[3],previous[4],'auto']);
     else data.push([String(defaults.group || '1'),autoNumberLabel(defaults.numStyle || 'digit',defaults.start || 1),'',String(defaults.points ?? 2),defaults.aspect || '知技','auto']);
-    draw();q('[data-input-cell="'+(data.length-1)+',2"]').focus();
+    draw();const answer=q('[data-input-cell="'+(data.length-1)+',2"]');answer.focus({preventScroll:true});answer.scrollIntoView({block:'nearest',inline:'nearest'});
   };
   let saved=false;const close=()=>{draft.data=saved?null:structuredClone(data);modal.remove();draft.onClose?.();if(opener?.isConnected)opener.focus();};q('#answer-input-cancel').textContent='入力を残して戻る';q('#answer-input-cancel').onclick=close;
   q('#answer-input-save').onclick=()=>{try{
@@ -2080,7 +2081,7 @@ function openAnswerInputTable(initial,defaults,onSave,draft={}){
       const error=autoRowError(r);if(error)throw new Error((i+1)+'問目：'+error);return r;
     });if(!rows.length)throw new Error('1問以上入力してください。');onSave(rows);saved=true;close();
   }catch(e){q('#answer-input-status').textContent=e.message;}};
-  modal.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();close();}if(e.key==='Tab'){const nodes=[...modal.querySelectorAll('button,textarea,select,summary')].filter(n=>!n.disabled && n.getClientRects().length),first=nodes[0],last=nodes.at(-1);if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}}};draw();q('[data-input-cell="0,2"]')?.focus();
+  modal.onkeydown=e=>{if(e.key==='Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing && e.keyCode!==229 && !edit.hidden){e.preventDefault();e.stopPropagation();if(!e.repeat)q('#answer-input-add').click();return;}if(e.key==='Escape'){e.stopPropagation();close();}if(e.key==='Tab'){const nodes=[...modal.querySelectorAll('button,textarea,select,summary')].filter(n=>!n.disabled && n.getClientRects().length),first=nodes[0],last=nodes.at(-1);if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first.focus();}}};draw();q('[data-input-cell="0,2"]')?.focus();
 }
 function printReadability(d){
   const scale=contentScale(d),small=new Set(),over=new Set();
