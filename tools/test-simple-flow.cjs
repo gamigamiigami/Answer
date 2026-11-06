@@ -51,7 +51,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('n
   const before=await page.evaluate(()=>JSON.stringify(doc));
   await page.locator('#workspace-basic').focus();await page.keyboard.press('Digit1');await page.keyboard.press('Backspace');
   assert.equal(await page.evaluate(()=>JSON.stringify(doc)),before,'preview keyboard must not change the sheet');
-  await page.click('#tab-answer');
+  assert.equal(await page.locator('#workbar').isVisible(),false);assert.equal(await page.locator('#basic-guidance').isVisible(),false);assert.equal(await page.locator('#app-footer').count(),0);await page.click('#workspace-detail');assert.equal(await page.locator('#workbar').isVisible(),true);await page.click('#tab-answer');await page.click('#workspace-basic');
   await page.screenshot({path:path.join(out,'05-sheet.png')});
   const download=page.waitForEvent('download');await page.click('#btn-xlsx');await(await download).saveAs(path.join(out,'answers.xlsx'));
   const excel=spawnSync('python3',['-c',`import openpyxl,sys
@@ -68,7 +68,7 @@ print('PASS: independent Excel inspection; both sheets and both answers retained
   assert.equal(await page.evaluate(()=>JSON.stringify(doc)),before,'switching modes must preserve the document');
   // Multi-page navigation remains available with the editing tools hidden.
   await page.evaluate(()=>{doc.bookPages=[pageCopy(doc),pageCopy(doc)];doc.pageIndex=0;render();});
-  assert.equal(await page.locator('#review-page-select').isVisible(),true);await page.selectOption('#review-page-select','1');assert.equal(await page.evaluate(()=>doc.pageIndex),1);
+  await page.click('#workspace-detail');assert.equal(await page.locator('#review-page-select').isVisible(),true);await page.selectOption('#review-page-select','1');assert.equal(await page.evaluate(()=>doc.pageIndex),1);
   await page.click('#btn-answer-editor');assert.equal(await page.locator('[data-row]').count(),4);await page.click('#auto-cancel');
   await page.click('#more-menu summary');const save=page.waitForEvent('download');await page.click('#btn-save');await(await save).saveAs(path.join(out,'work.json'));
   const saved=JSON.parse(fs.readFileSync(path.join(out,'work.json'),'utf8'));assert.equal(saved.bookPages.length,2);

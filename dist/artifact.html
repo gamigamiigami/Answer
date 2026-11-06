@@ -575,7 +575,8 @@ input[type=checkbox]{accent-color:var(--place)}
 #start .note{margin-top:18px;border:0;padding:0;font-size:12px}
 #workspace-tabs{padding:0 18px;margin:0}#basic-guidance{padding:14px 18px;background:var(--panel);line-height:1.7}
 #basic-guidance span{display:block;color:var(--sub);font-size:13px}
-body:not(.simple-workspace) #basic-guidance{display:none}
+#basic-guidance{display:none}
+.simple-workspace #workbar{display:none}
 .simple-workspace #side,.simple-workspace #status,.simple-workspace #tab-draw{display:none!important}
 .simple-workspace #sheet{pointer-events:none}.simple-workspace #paper .guide{display:none}
 #app-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:6px 18px;border-top:1px solid var(--line);background:var(--panel);color:var(--sub);font-size:11px}
@@ -771,7 +772,7 @@ body.zen #save-indicator{display:none}
       <div id="status"></div>
     </div>
   </div>
-  <footer id="app-footer"><span class="app-version" data-app-version></span><span>あとで編集するには「保存・その他」→「作業ファイルを保存」</span></footer>
+
   <input type="text" id="cell-input" autocomplete="off">
 </div>
 
@@ -788,8 +789,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.11.2';
 const APP_RELEASES = [
+  ['2.11.2','確認画面を広く／更新履歴はトップページのみ'],
   ['2.11.1','保存状態を表示／問題・答え・解答欄の編集先を明示'],
   ['2.11.0','一覧を整理／変更操作を統一・途中入力を保持'],
   ['2.10.0','学年・テスト名を分離／選択した罫線だけ削除'],
