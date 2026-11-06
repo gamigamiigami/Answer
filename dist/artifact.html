@@ -792,8 +792,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.6';
+const APP_VERSION = '2.13.7';
 const APP_RELEASES = [
+  ['2.13.7','Excel縦書きの行間を考慮して模範解答の見切れを修正'],
   ['2.13.6','枠を引く操作で消えないよう修正・消した線の引き直しに対応'],
   ['2.13.5','入力表はShift＋Enterで追加・答え欄へ自動移動'],
   ['2.13.4','罫線を消した場所への欄の移動・配置に対応'],
@@ -2353,6 +2354,8 @@ function appendVectorPrimitives(parent,primitives,x0=0,y0=0){
 
 // 字数自由の答えは、マスごとにばらさず連続した文字列として配置する。
 // 同じ結合セル・フォントサイズをSVGとExcelの両方で使う。
+// Excel's Yu Gothic stacked text needs more line spacing than SVG glyphs.
+const ANSWER_STACK_STEP=1.65;
 function flowingAnswerPlan(d, f, text){
   const fixed = f.type!==8 && (f.fixedChars === true || (f.fixedChars !== false && [3,4,5].includes(f.type)));
   if (fixed) return null;
@@ -2409,7 +2412,7 @@ function flowingAnswerPlan(d, f, text){
       const available = (vertical ? p.mh*RH-2*inset : width(p.c,p.mw)-2*inset)*.92;
       const across = vertical ? width(p.c,p.mw)-1.6 : p.mh*RH-1.6;
       if (ptmm(size)*1.15 > across) continue;
-      const unit = vertical ? ptmm(size)*1.12 : ptmm(size);
+      const unit = vertical ? ptmm(size)*ANSWER_STACK_STEP : ptmm(size);
       const capacity = Math.max(0,Math.floor(available/unit));
       room += capacity;
       let part = '', used = 0;
@@ -2427,7 +2430,7 @@ function flowingAnswerPlan(d, f, text){
         }
         used += advance; part += ch; index++;
       }
-      if (part) out.push({p:{...p,stack:vertical,indent:!vertical && p.mw>1 ? 1 : 0},ch:part,size});
+      if (part) out.push({p:{...p,stack:vertical,stackStep:vertical?ANSWER_STACK_STEP:0,fitAnswer:true,indent:!vertical && p.mw>1 ? 1 : 0},ch:part,size});
       if (index >= chars.length) break;
     }
     return {out,room:Math.max(room,index),need:chars.length,used:index};
@@ -2744,7 +2747,7 @@ function buildCells(d, withAnswers){
         if (p.mh){
           put(p.c, p.r, ch, size || 11, false, vertical || !(p.mw>1) ? 'center' : 'left', false);
           get(p.c,p.r).indent = !vertical ? p.indent || 0 : 0;
-          merge(p.c, p.r, p.mw || 1, p.mh); get(p.c,p.r).stack = !!p.stack;
+          merge(p.c, p.r, p.mw || 1, p.mh); get(p.c,p.r).stack = !!p.stack;get(p.c,p.r).stackStep=p.stackStep;get(p.c,p.r).fitAnswer=!!p.fitAnswer;
           get(p.c,p.r).valign = vertical && p.insetRows ? 'top' : 'center';
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
@@ -5207,9 +5210,9 @@ function buildXlsx(){
     if (!borderKey.has(k)){ borderKey.set(k, borders.length); borders.push(b); }
     return borderKey.get(k);
   };
-  const addXf = (fi,bi,align,pi,stack=false,valign='center',indent=0,wrap=false) => {
-    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack+'/'+valign+'/'+indent+'/'+wrap;
-    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack,valign,indent,wrap}); }
+  const addXf = (fi,bi,align,pi,stack=false,valign='center',indent=0,wrap=false,fitAnswer=false) => {
+    const k = fi+'/'+bi+'/'+align+'/'+(pi||0)+'/'+stack+'/'+valign+'/'+indent+'/'+wrap+'/'+fitAnswer;
+    if (!xfKey.has(k)){ xfKey.set(k, xfs.length); xfs.push({fi,bi,align,pi:pi||0,stack,valign,indent,wrap,fitAnswer}); }
     return xfKey.get(k);
   };
   const fillList = ['', ''];                    // 0:なし 1:gray125（Excelのきまり）
@@ -5282,7 +5285,7 @@ function buildXlsx(){
           bd = unionBorders(sh.cells, c, r, mg.w, mg.h);
         }
         const si = addXf(addFont(x.size||11, x.bold), addBorder(bd), x.align||'center',
-                         addFill(x.fill),!!x.stack,x.valign,x.indent || 0,!!x.wrap);
+                         addFill(x.fill),!!x.stack,x.valign,x.indent || 0,!!x.wrap,!!x.fitAnswer);
         const ref = colName(c)+(r+1);
         rowXml += x.t
           ? '<c r="'+ref+'" s="'+si+'" t="inlineStr"><is><t xml:space="preserve">'+
@@ -5323,7 +5326,7 @@ function buildXlsx(){
   ).join('')+'</fills>';
   const xfsXml = '<cellXfs count="'+xfs.length+'">'+xfs.map(x =>
     '<xf numFmtId="0" fontId="'+x.fi+'" fillId="'+x.pi+'" borderId="'+x.bi+'" xfId="0" applyFont="1" applyBorder="1" applyFill="1" applyAlignment="1">'+
-    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(['top','bottom'].includes(x.valign)?x.valign:'center')+'"'+(x.stack?' textRotation="255"':'')+(x.indent?' indent="'+x.indent+'"':'')+(x.wrap?' wrapText="1"':'')+'/></xf>'
+    '<alignment horizontal="'+(x.align==='left'||x.align==='right'?x.align:'center')+'" vertical="'+(['top','bottom'].includes(x.valign)?x.valign:'center')+'"'+(x.stack?' textRotation="255"':'')+(x.indent?' indent="'+x.indent+'"':'')+(x.wrap?' wrapText="1"':'')+(x.fitAnswer?' shrinkToFit="1"':'')+'/></xf>'
   ).join('')+'</cellXfs>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
