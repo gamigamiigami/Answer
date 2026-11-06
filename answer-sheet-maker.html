@@ -798,8 +798,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.2';
+const APP_VERSION = '2.13.3';
 const APP_RELEASES = [
+  ['2.13.3','大きな枠の端でDeleteすると選択箇所の罫線だけ削除'],
   ['2.13.2','確認画面で拡大縮小・模範解答の切替に対応'],
   ['2.13.1','初終の字数変更を配置保持で反映・問題の照合を改善'],
   ['2.13.0','配置保持・200％表示安定化／初終セル削除修正'],
@@ -3924,9 +3925,9 @@ function placeScoreBelow(where){
   snapshot();moveScoreBox(x,y);toast(where==='name'?'得点欄を氏名欄の下へ置きました':'得点欄を解答欄の下へ置きました');
 }
 /* 消す */
-function eraseSelectedBorders(){
+function eraseSelectedBorders(sideOverride){
   if(!doc || ui.tab!=='sheet')return toast('解答用紙タブで範囲を選んでください');
-  const cells=selectedCells(),keys=new Set(cells.map(p=>p.c+','+p.r)),side=$('#border-erase-side').value,edges=[];
+  const cells=selectedCells(),keys=new Set(cells.map(p=>p.c+','+p.r)),side=typeof sideOverride==='string'?sideOverride:$('#border-erase-side').value,edges=[];
   const delta={top:[0,-1],bottom:[0,1],left:[-1,0],right:[1,0]};
   for(const p of cells)for(const s of side==='all'?Object.keys(delta):[side]){
     const [dc,dr]=delta[s];if(side!=='all' && keys.has((p.c+dc)+','+(p.r+dr)))continue;edges.push({...p,side:s});
@@ -3938,8 +3939,18 @@ function clearSelection(){
   if (ui.tab === 'draw') return toast('描画タブでは消しゴム（3）を使ってください');
   const cells = selectedCells();
   if (!cells.length) return;
-  snapshot();
   const keys = new Set(cells.map(p=>p.c+','+p.r));
+  if(ui.tab==='sheet'){
+    const frames=[...doc.decorations.filter(v=>v.w*v.h>1),...Object.entries(doc.texts).filter(([k,v])=>v.box && (v.autoGroup || v.bold)).map(([key,v])=>{const [c,r]=key.split(',').map(Number);return textRect(doc,c,r,v);})];
+    const partialEdge=frames.some(rect=>{
+      const touches=cells.some(p=>p.c>=rect.c && p.c<rect.c+rect.w && p.r>=rect.r && p.r<rect.r+rect.h && (p.c===rect.c || p.c===rect.c+rect.w-1 || p.r===rect.r || p.r===rect.r+rect.h-1));
+      if(!touches)return false;
+      for(let c=rect.c;c<rect.c+rect.w;c++)for(let r=rect.r;r<rect.r+rect.h;r++)if(!keys.has(c+','+r))return true;
+      return false;
+    });
+    if(partialEdge){eraseSelectedBorders('all');return;}
+  }
+  snapshot();
   if (ui.tab==='answer'){
     // 模範解答タブでは答えだけ消す
     let n=0;
