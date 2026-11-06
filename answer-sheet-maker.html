@@ -798,8 +798,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.7';
+const APP_VERSION = '2.13.8';
 const APP_RELEASES = [
+  ['2.13.8','サイトの見た目を維持しExcel出力時だけ文字サイズを調整'],
   ['2.13.7','Excel縦書きの行間を考慮して模範解答の見切れを修正'],
   ['2.13.6','枠を引く操作で消えないよう修正・消した線の引き直しに対応'],
   ['2.13.5','入力表はShift＋Enterで追加・答え欄へ自動移動'],
@@ -2362,7 +2363,8 @@ function appendVectorPrimitives(parent,primitives,x0=0,y0=0){
 // 同じ結合セル・フォントサイズをSVGとExcelの両方で使う。
 // Excel's Yu Gothic stacked text needs more line spacing than SVG glyphs.
 const ANSWER_STACK_STEP=1.65;
-function flowingAnswerPlan(d, f, text){
+function flowingAnswerPlan(d, f, text, forExcel=false){
+  const stackStep=forExcel?ANSWER_STACK_STEP:1.12;
   const fixed = f.type!==8 && (f.fixedChars === true || (f.fixedChars !== false && [3,4,5].includes(f.type)));
   if (fixed) return null;
   const chars = Array.from(text);
@@ -2418,7 +2420,7 @@ function flowingAnswerPlan(d, f, text){
       const available = (vertical ? p.mh*RH-2*inset : width(p.c,p.mw)-2*inset)*.92;
       const across = vertical ? width(p.c,p.mw)-1.6 : p.mh*RH-1.6;
       if (ptmm(size)*1.15 > across) continue;
-      const unit = vertical ? ptmm(size)*ANSWER_STACK_STEP : ptmm(size);
+      const unit = vertical ? ptmm(size)*stackStep : ptmm(size);
       const capacity = Math.max(0,Math.floor(available/unit));
       room += capacity;
       let part = '', used = 0;
@@ -2436,7 +2438,7 @@ function flowingAnswerPlan(d, f, text){
         }
         used += advance; part += ch; index++;
       }
-      if (part) out.push({p:{...p,stack:vertical,stackStep:vertical?ANSWER_STACK_STEP:0,fitAnswer:true,indent:!vertical && p.mw>1 ? 1 : 0},ch:part,size});
+      if (part) out.push({p:{...p,stack:vertical,stackStep:vertical?stackStep:0,fitAnswer:true,indent:!vertical && p.mw>1 ? 1 : 0},ch:part,size});
       if (index >= chars.length) break;
     }
     return {out,room:Math.max(room,index),need:chars.length,used:index};
@@ -2473,14 +2475,14 @@ function rubyAnnotationPlan(d,f,text){
     });
   }return {...plan,rubyVectors:vectors};
 }
-function answerPlan(d, f, text){
+function answerPlan(d, f, text, forExcel=false){
   const t = String(text == null ? '' : text);
   const ruby=rubyAnnotationPlan(d,f,t);if(ruby)return ruby;
   if(f.type===12){const table=tableSpec(f.table),data=t?parseTableTSV(t):[];const valid=data.length<=table.rows && data.every(r=>r.length<=table.cols);return {out:[],room:1,need:valid?1:2};}
   if(f.type===11){const parts=parseKanbun(t);return {out:[],room:Math.floor(f.rects[0].h/4),need:parts.length};}
   if(f.type===7 && looksLikeGraph(t)){graphPrimitives(d,f,t,(d.answerGraphs || {})[f.id],true);return {out:[],room:1,need:1};}
   const fractions=fractionAnswerPlan(d,f,t);if(fractions) return fractions;
-  const flowing = flowingAnswerPlan(d, f, t);
+  const flowing = flowingAnswerPlan(d, f, t, forExcel);
   if (flowing) return flowing;
   const sc = textScaleOf(f);
   if (f.type === EXTRACT_TYPE){
@@ -2583,7 +2585,7 @@ function rectCells(d, rects){
    6. セルの組み立て
    画面もExcelもこの結果だけを見て描く（ズレを起こさないため）。
    --------------------------------------------------------------- */
-function buildCells(d, withAnswers){
+function buildCells(d, withAnswers, forExcel=false){
   const cells = new Map();
   const get = (c,r) => {
     const k = c+','+r;
@@ -2749,7 +2751,7 @@ function buildCells(d, withAnswers){
     for (const f of boxes){
       const a = d.answers[f.id];
       if (!a) continue;
-      answerPlan(d, f, a).out.forEach(({p, ch, size}) => {
+      answerPlan(d, f, a, forExcel).out.forEach(({p, ch, size}) => {
         if (p.mh){
           put(p.c, p.r, ch, size || 11, false, vertical || !(p.mw>1) ? 'center' : 'left', false);
           get(p.c,p.r).indent = !vertical ? p.indent || 0 : 0;
@@ -5200,7 +5202,7 @@ function vectorGroupDrawingXml(d,group,nextId){
 }
 function buildXlsx(){
   const originalDoc=doc;try{
-  const totals=scoreTotals(doc),pages=allPages();pages.forEach(p=>p.scoreOverride=totals);const sheets=pages.flatMap((d,i)=>[false,true].map(answer=>({name:(answer?'模範解答':'解答用紙')+(pages.length>1?' '+(i+1):''),cells:buildCells(d,answer),doc:d,answer})));
+  const totals=scoreTotals(doc),pages=allPages();pages.forEach(p=>p.scoreOverride=totals);const sheets=pages.flatMap((d,i)=>[false,true].map(answer=>({name:(answer?'模範解答':'解答用紙')+(pages.length>1?' '+(i+1):''),cells:buildCells(d,answer,true),doc:d,answer})));
   const media=[];
   // スタイル表を作る（フォント・罫線・配置の組み合わせを重複なく集める）
   const fonts = [], borders = [], xfs = [];
