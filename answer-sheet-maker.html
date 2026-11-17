@@ -662,6 +662,7 @@ body.zen #workspace-tabs,body.zen #basic-guidance,body.zen #app-footer{display:n
 @media print{#save-indicator{display:none!important}}
 body.zen #save-indicator{display:none}
 #paper{flex-shrink:0}#preview{overflow-anchor:none;scrollbar-gutter:stable}
+.answer-format-tools{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}.answer-format-tools .tb{font-size:12px;padding:4px 8px}.answer-format-tools small{width:100%;font-size:11px;color:var(--sub)}
 </style>
 </head>
 <body>
@@ -699,7 +700,7 @@ body.zen #save-indicator{display:none}
     <div class="subject-row" id="tpl-row"></div>
     <h2 style="font-size:13px;margin:22px 0 8px">白紙から始める</h2><p class="mode-desc">＋ 好きな場所を選ぶ → 数字キーで欄を追加。自分で並べたい方に。</p>
     <div class="subject-row" id="blank-row"></div>
-    </section><p class="note">Excelには、配布用の解答用紙と模範解答が入ります。</p>
+    </section><p class="note">Excelには、配布用の解答用紙と模範解答が入ります。通常の模範解答はテキストボックスで編集できます。</p>
     <p class="app-version" data-app-version></p>
   </div>
 </div>
@@ -798,8 +799,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.13.9';
+const APP_VERSION = '2.14.0';
 const APP_RELEASES = [
+  ['2.14.0','模範解答を編集できるテキストボックスへ／太字・下線・印刷罫線'],
   ['2.13.9','Excelの余白を0・A4内に印刷／縦書きの収まりを改善'],
   ['2.13.8','サイトの見た目を維持しExcel出力時だけ文字サイズを調整'],
   ['2.13.7','Excel縦書きの行間を考慮して模範解答の見切れを修正'],
@@ -2141,7 +2143,7 @@ function prepareAnswersInPlace(rows,ids,base=doc){
       if(next.fields.some(other=>other.rects.some(x=>x.c<0 || x.r<0 || x.c+x.w>next.grid.cols || x.r+x.h>next.grid.rows)))throw new Error(r.label+'：字数を増やすと用紙からはみ出します。欄を移動するかページを分けてください。');
     }
     const error=autoRowError(r);if(error)throw new Error(error);
-    if(r.answer)next.answers[f.id]=r.answer;else delete next.answers[f.id];f.points=r.points;f.aspect=r.aspect;f.complete=!!r.complete;
+    if(r.answer)next.answers[f.id]=r.answer;else delete next.answers[f.id];f.points=r.points;f.aspect=r.aspect;f.complete=!!r.complete;if(r.appearance?.answerStyles)f.answerStyles=structuredClone(r.appearance.answerStyles);else delete f.answerStyles;
     if(f.auto){for(const key of ['group','label','kind','n','w','h','kindAuto','aspectAuto','aspectDefault','pointsDefault','points','aspect','complete','eight'])if(r[key]!==undefined)f.auto[key]=r[key];f.auto.warnings=[...(r.warnings || [])];}
     if(r.kind==='table'){const t=tableSpec(r.table,r.w,r.h);if(tableSize(t).w!==f.rects[0].w || tableSize(t).h!==f.rects[0].h)throw new Error('表の寸法を変える場合は表の専用編集画面を使ってください。');f.table=t;}
     if(r.kind==='kanbun')f.kanbunGiven=r.kanbunGiven || '';
@@ -2752,6 +2754,8 @@ function buildCells(d, withAnswers, forExcel=false){
     for (const f of boxes){
       const a = d.answers[f.id];
       if (!a) continue;
+      if(forExcel && answerUsesTextbox(d,f))continue;
+      let answerOffset=0;
       answerPlan(d, f, a, forExcel).out.forEach(({p, ch, size}) => {
         if (p.mh){
           put(p.c, p.r, ch, size || 11, false, vertical || !(p.mw>1) ? 'center' : 'left', false);
@@ -2760,6 +2764,7 @@ function buildCells(d, withAnswers, forExcel=false){
           get(p.c,p.r).valign = vertical && p.insetRows ? 'top' : 'center';
         }
         else put(p.c, p.r, ch, size || 11, false, 'center', p.full !== false);
+        const begin=a.indexOf(ch,answerOffset);if(begin>=0)answerOffset=begin;const formatted=[];for(const letter of Array.from(ch)){formatted.push({ch:letter,...answerFormatAt(f.answerStyles,answerOffset)});answerOffset+=letter.length;}get(p.c,p.r).answerFormats=formatted;
         if(vertical && Array.from(ch).length===1 && /[、。，．,。っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch)){
           const cell=get(p.c,p.r);cell.align='right';cell.valign='top';cell.verticalCorner=true;
         }
@@ -2924,9 +2929,11 @@ function appendCellArtwork(d,cells,target,x0=0,y0=0,withAnswers=true){
         const dy=x.referenceStack && '（）()'.includes(ch)?-ptmm(x.size*1.5/16):0;
         const corner=/[、。，．,っゃゅょぁぃぅぇぉゎゕゖッャュョァィゥェォヮヵヶｧｨｩｪｫｬｭｮｯ]/.test(ch);
         const span = el('tspan',{x:a.x+(corner?fs*.28:0),y:a.y-(corner?fs*.2:0)+(x.valign==='top'?i:x.valign==='bottom'?i-(letters.length-1):i-(letters.length-1)/2)*step+dy});
+        if(x.answerFormats?.[i]?.bold)span.setAttribute('font-weight','bold');if(x.answerFormats?.[i]?.underline){const line=el('line',{'class':'answer-underline',x1:a.x+fs*.58,x2:a.x+fs*.58,y1:a.y+(x.valign==='top'?i:i-(letters.length-1)/2)*step-step*.5,y2:a.y+(x.valign==='top'?i:i-(letters.length-1)/2)*step+step*.5,stroke:'#000','stroke-width':.2});texts.appendChild(line);}
         span.textContent = V_GLYPH[ch] || ch; t.appendChild(span);
       });
-    } else t.textContent = cellText(d, x);
+    } else if(x.answerFormats){x.answerFormats.forEach(style=>{const span=el('tspan',{'font-weight':style.bold?'bold':'normal',...(style.underline && d.paper.writing!=='vertical'?{'text-decoration':'underline'}:{})});span.textContent=style.ch;t.appendChild(span);});}else t.textContent = cellText(d, x);
+    if(d.paper.writing==='vertical' && !x.stack && x.answerFormats?.some(s=>s.underline)){texts.appendChild(el('line',{'class':'answer-underline',x1:a.x+fs*.58,x2:a.x+fs*.58,y1:y0+docRowMM(d,x.r),y2:y0+docRowMM(d,x.r+mh),stroke:'#000','stroke-width':.2}));}
     texts.appendChild(t);
   });
   target.appendChild(texts);
@@ -4956,6 +4963,7 @@ async function openFieldPopup(){
     return toast('欄の上にカーソルを置いて Space を押してください');
   }
   if(f.type===12)return editTableField(f);
+  const initialAnswerBold=answerFormatAt(f.answerStyles,0).bold,initialAnswerUnderline=answerFormatAt(f.answerStyles,0).underline;
   const rows = [
     {key:'points',label:f.completeGroup?'組全体の配点':'配点',type:'number',value:f.points,min:0,hint:f.completeGroup?'この欄と同じ完答の組に含まれる全欄に反映します。':''},
     {key:'aspect',label:'観点',type:'seg',value:f.aspect,options:aspectOptions()},
@@ -4964,6 +4972,7 @@ async function openFieldPopup(){
   if (f.type===5) rows.push({key:'exact',label:'8割ライン',type:'check',value:!f.exact});
   rows.push({key:'textPt',label:'文字の大きさ',type:'number',value:textPtOf(f),min:4,
              hint:'pt（Excelと同じ）。11がふつうです。入りきらないときは自動で小さくなります'});
+  rows.push({key:'answerBold',label:'模範解答を太字にする',type:'check',value:initialAnswerBold},{key:'answerUnderline',label:'模範解答に下線を付ける',type:'check',value:initialAnswerUnderline});
   rows.push({key:'note',label:'欄に入れる文字',type:'text',value:f.note||'',hint:'例：から。　x＝　cm²'});
   rows.push({key:'notePos',label:'その位置',type:'seg',value:f.notePos||'end',
              options:[['start','先頭（上・左）'],['center','中央'],['end','末尾（下・右）']]});
@@ -4972,7 +4981,7 @@ async function openFieldPopup(){
   snapshot();
   linkedScore(doc.fields,f,pointValue(v.points),v.aspect);
   f.complete = !!v.complete;
-  f.textPt = num(v.textPt, 4, BASE_PT); delete f.textScale;
+  f.textPt = num(v.textPt, 4, BASE_PT); delete f.textScale;if(!!v.answerBold!==initialAnswerBold || !!v.answerUnderline!==initialAnswerUnderline){f.answerStyles ||= [];f.answerStyles.push({start:0,end:(doc.answers[f.id] || '').length,...(!!v.answerBold!==initialAnswerBold?{bold:!!v.answerBold}:{}),...(!!v.answerUnderline!==initialAnswerUnderline?{underline:!!v.answerUnderline}:{})});}
   if (f.type===5) f.exact = !v.exact;
   const total = charCells(doc, f).length;
   const note = v.note || '';
@@ -5180,7 +5189,7 @@ function vectorDrawingXml(v,id,bare=false){
   }else if(v.k==='line'){
     x=emu(Math.min(v.x1,v.x2));y=emu(Math.min(v.y1,v.y2));w=emu(Math.abs(v.x2-v.x1));h=emu(Math.abs(v.y2-v.y1));
     const flip=(v.x2<v.x1?' flipH="1"':'')+(v.y2<v.y1?' flipV="1"':'');
-    body='<xdr:spPr><a:xfrm'+flip+'><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="'+emu(v.width || .2)+'"><a:solidFill><a:srgbClr val="'+(v.color || '000000')+'"/></a:solidFill>'+(v.dash?'<a:prstDash val="dash"/>':'')+'</a:ln></xdr:spPr>';
+    body='<xdr:spPr><a:xfrm'+flip+'><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="'+emu(v.width || .2)+'"><a:solidFill><a:srgbClr val="'+(v.color || '000000')+'"/></a:solidFill>'+(v.dash?'<a:prstDash val="'+(typeof v.dash==='string'?v.dash:'dash')+'"/>':'')+'</a:ln></xdr:spPr>';
   }else{
     const width=Math.max(.8,mathTextWidth(v.text,v.size)+.6),height=ptmm(v.size)*1.4;
     x=emu(v.x-width/2);y=emu(v.y-height/2);w=emu(width);h=emu(height);
@@ -5201,6 +5210,38 @@ function vectorGroupDrawingXml(d,group,nextId){
   return {nextId,xml:'<xdr:twoCellAnchor editAs="'+(group.box?'absolute':'twoCell')+'">'+(group.box?physicalMarker('from',b.x,b.y)+physicalMarker('to',b.x+b.w,b.y+b.h):marker('from',r.c,r.r)+marker('to',r.c+r.w,r.r+r.h))+
     '<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id="'+id+'" name="'+(group.name || 'answer'+id)+'"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr><a:xfrm><a:off x="'+emu(b.x)+'" y="'+emu(b.y)+'"/><a:ext cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/><a:chOff x="0" y="0"/><a:chExt cx="'+emu(b.w)+'" cy="'+emu(b.h)+'"/></a:xfrm></xdr:grpSpPr>'+shapes+'</xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>'};
 }
+function answerFormatAt(styles,index){const out={bold:false,underline:false};for(const s of styles || [])if(index>=s.start && index<s.end){if(s.bold!==undefined)out.bold=s.bold;if(s.underline!==undefined)out.underline=s.underline;}return out;}
+function answerUsesTextbox(d,f){const t=d.answers[f.id] || '';return !!t && ![7,11,12].includes(f.type) && !fractionAnswerPlan(d,f,t) && !rubyAnnotationPlan(d,f,t);}
+function printableBorderVectors(d){
+  const edges=new Map(),cells=buildCells(d,false),rank={hair:1,dotted:2,dashed:2,thin:3,mediumDashed:4,medium:5};
+  for(const cell of cells.values())for(const [side,style] of Object.entries(cell.b)){
+    const c=cell.c,r=cell.r,horizontal=side==='top' || side==='bottom',x=c+(side==='right'?1:0),y=r+(side==='bottom'?1:0),key=x+','+y+','+(horizontal?'h':'v');
+    const old=edges.get(key);if(old && (rank[old.style] || 0)>=(rank[style] || 0))continue;
+    edges.set(key,{cellC:x,cellR:y,horizontal,style,k:'line',x1:docColumnMM(d,x),y1:docRowMM(d,y),x2:docColumnMM(d,x+(horizontal?1:0)),y2:docRowMM(d,y+(horizontal?0:1)),width:style.startsWith('medium')?.38:.22,dash:style==='dotted'?'sysDot':/dash/i.test(style)?'dash':false});
+  }
+  return [...edges.values()];
+}
+function printableBorderDrawingXml(d,nextId){
+  const marker=(name,c,r)=>'<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+r+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:'+name+'>';
+  const xml=printableBorderVectors(d).map(v=>{const id=nextId++,shape=vectorDrawingXml({...v,x1:0,y1:0,x2:v.x2-v.x1,y2:v.y2-v.y1},id,true).replace('name="math'+id+'"','name="印刷罫線 '+id+'"');return '<xdr:twoCellAnchor editAs="twoCell">'+marker('from',v.cellC,v.cellR)+marker('to',v.cellC+(v.horizontal?1:0),v.cellR+(v.horizontal?0:1))+shape+'<xdr:clientData fPrintsWithSheet="1"/></xdr:twoCellAnchor>';}).join('');return {xml,nextId};
+}
+function answerTextboxXml(d,f,nextId){
+  const answer=d.answers[f.id] || '',vertical=d.paper.writing==='vertical';let parts=[{rect:f.rects[0],text:answer,start:0}];
+  if(f.type===3){const p=extractParts(d,f),a=splitExtract(answer);if(p)parts=[{rect:p.a,text:a[0],start:0},{rect:p.b,text:a[1],start:Math.max(0,answer.lastIndexOf(a[1]))}];}
+  else if(f.rects.length>1){let at=0;parts=f.rects.map(rect=>{const len=rectCells(d,[rect]).length,text=Array.from(answer).slice(at,at+len).join(''),start=Array.from(answer).slice(0,at).join('').length;at+=len;return {rect,text,start};});}
+  const xml=parts.filter(p=>p.text).map((part,i)=>{
+    const box=rectMM(d,part.rect),emu=v=>Math.round(v/SCALE*contentScale(d)*36000),fixed=[3,4,5].includes(f.type) && f.fixedChars!==false;
+    const plan=answerPlan(d,f,answer),base=Math.min(...plan.out.map(x=>x.size || 11));
+    const across=vertical?box.w:box.h,size=Math.max(.1,Math.min(base,(across-1)/ptmm(1)/1.15)),sz=Math.round(size*contentScale(d)*100);
+    const advance=vertical?CHAR_ROWS*ROW_H_PT:box.w/Math.max(1,part.rect.w)/SCALE*72/25.4;
+    const spacing=fixed?Math.round(Math.max(0,advance-size)*contentScale(d)*100):0;const startInset=fixed?ptmm(Math.max(0,advance-size)/2):.35;
+    let offset=part.start;const runs=Array.from(part.text).map(ch=>{const style=answerFormatAt(f.answerStyles,offset);offset+=ch.length;return '<a:r><a:rPr lang="ja-JP" sz="'+sz+'" b="'+(style.bold?1:0)+'" u="'+(style.underline?'sng':'none')+'"'+(spacing?' spc="'+spacing+'"':'')+'><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Yu Gothic"/><a:ea typeface="游ゴシック"/></a:rPr><a:t xml:space="preserve">'+xmlEsc(ch)+'</a:t></a:r>';}).join('');
+    const x=emu(box.x),y=emu(box.y),w=emu(box.w),h=emu(box.h),id=nextId++;
+    const marker=(name,c,r)=>'<xdr:'+name+'><xdr:col>'+c+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>'+r+'</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:'+name+'>';
+    return '<xdr:twoCellAnchor editAs="twoCell">'+marker('from',part.rect.c,part.rect.r)+marker('to',part.rect.c+part.rect.w,part.rect.r+part.rect.h)+'<xdr:sp><xdr:nvSpPr><xdr:cNvPr id="'+id+'" name="模範解答 '+xmlEsc(f.id)+' '+(i+1)+'"/><xdr:cNvSpPr txBox="1"/></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="'+x+'" y="'+y+'"/><a:ext cx="'+w+'" cy="'+h+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr><xdr:txBody><a:bodyPr vert="'+(vertical?'eaVert':'horz')+'" wrap="square" lIns="'+emu(fixed && !vertical?startInset:.35)+'" rIns="'+emu(.35)+'" tIns="'+emu(fixed && vertical?startInset:.35)+'" bIns="'+emu(.35)+'" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="'+(fixed?'l':'ctr')+'"/><a:r><a:rPr lang="ja-JP" sz="'+sz+'"/><a:t></a:t></a:r>'+runs+'<a:endParaRPr lang="ja-JP" sz="'+sz+'"/></a:p></xdr:txBody></xdr:sp><xdr:clientData fPrintsWithSheet="1"/></xdr:twoCellAnchor>';
+  }).join('');return {xml,nextId};
+}
+
 function buildXlsx(){
   const originalDoc=doc;try{
   const totals=scoreTotals(doc),pages=allPages();pages.forEach(p=>p.scoreOverride=totals);const sheets=pages.flatMap((d,i)=>[false,true].map(answer=>({name:(answer?'模範解答':'解答用紙')+(pages.length>1?' '+(i+1):''),cells:buildCells(d,answer,true),doc:d,answer})));
@@ -5269,9 +5310,11 @@ function buildXlsx(){
     const score=scoreBoxBounds(doc);
     const groups=answerVectorGroups(doc,sh.answer);if(score)groups.push({name:'score-box',box:score,vectors:scoreBoxVectors(doc)});
     const vectors=groups.map(group=>{const result=vectorGroupDrawingXml(doc,group,nextId);nextId=result.nextId;return result.xml;}).join('');
+    const borderDrawing=printableBorderDrawingXml(doc,nextId);nextId=borderDrawing.nextId;const borderLines=borderDrawing.xml;
+    const answerBoxes=sh.answer?doc.fields.filter(f=>answerUsesTextbox(doc,f)).map(f=>{const result=answerTextboxXml(doc,f,nextId);nextId=result.nextId;return result.xml;}).join(''):'';
     const pictures=(doc.images || []).filter(im=>!im.answerOnly || sh.answer).map(im=>{const name='image'+(media.length+1)+'.png',rel='rIdImage'+(media.length+1);media.push({name,data:Uint8Array.from(atob(im.data.split(',')[1]),c=>c.charCodeAt(0))});sh.imageRels=(sh.imageRels || '')+'<Relationship Id="'+rel+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/'+name+'"/>';return imageDrawingXml(im,nextId++,rel,doc);}).join('');
-    sh.drawingXml=shapes || vectors || pictures ? '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-      '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+shapes+pictures+vectors+'</xdr:wsDr>' : '';
+    sh.drawingXml=shapes || vectors || pictures || answerBoxes ? '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+shapes+pictures+borderLines+vectors+answerBoxes+'</xdr:wsDr>' : '';
   });
 
   const sheetXml = sheets.map(sh => {
@@ -7179,7 +7222,7 @@ function currentAutoRows(d=doc){
       label:parentLabel+subParentLabel+(f.label ? (d.texts[f.label.c+','+f.label.r] || {}).t || '' : ''),
       ...(autoChoiceKind((f.auto || {}).kind || kind)==='essay' ? {w:rect.w,h:Math.ceil(rect.h/CHAR_ROWS)} : {}),
       warnings:((f.auto || {}).warnings || []).filter(w=>!(w.startsWith('配点') && f.points!==(f.auto || {}).points) && !(w.startsWith('観点') && f.aspect!==(f.auto || {}).aspect)),
-      appearance:Object.fromEntries(['textPt','textScale','fill','line','note','notePos','guides','targetWords'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]]))};
+      appearance:Object.fromEntries(['textPt','textScale','fill','line','note','notePos','guides','targetWords','answerStyles'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]]))};
   });
 }
 
@@ -7386,7 +7429,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     card.querySelector('.auto-kind-help').textContent=custom?customName(ci)+'：'+customCells(ci)+'セル分の枠。設定ボタンから名前とセル数を変更できます。':AUTO_KIND_HELP[r.kind] || '';
     card.querySelector('.auto-kind-help').hidden=!custom && !AUTO_KIND_HELP[r.kind];
     card.querySelector('[data-custom-settings]').hidden=!custom;
-    card.querySelector('[data-k="aspect"]').value=r.aspect;card.querySelector('.question-scoring summary').textContent=r.points+'点・'+(new Map(aspectOptions()).get(r.aspect) || r.aspect);
+    card.querySelector('.answer-format-tools').hidden=['table','kanbun','graph','formula'].includes(r.kind);card.querySelector('[data-k="aspect"]').value=r.aspect;card.querySelector('.question-scoring summary').textContent=r.points+'点・'+(new Map(aspectOptions()).get(r.aspect) || r.aspect);
     card.querySelector('[data-k="complete"]').disabled=!!r.completeGroup;
     for (const key of ['n','w','h','eight']){
       const enabled=key==='n'?['chars','extract'].includes(r.kind):key==='eight'?r.kind==='chars':['formula','essay','graph','table'].includes(r.kind);
@@ -7426,7 +7469,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       '<label>小問内の番号<select data-k="leafLabel" aria-label="小問内の番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.leaf || '')+'</select><span data-leaf-label-custom hidden>'+input('leafLabelCustom',numbering.leaf || '','text','小問内の番号を自由に指定')+'</span></label></details></div></div>'+
       (r.completeGroup?'<p class="auto-completion-note">'+xmlEsc('まとめて完答：'+rows.filter(x=>x.completeGroup===r.completeGroup).map(x=>x.label).join('・')+' の全てで '+r.points+'点')+'</p>':'')+
       '<figure class="auto-field-preview"><figcaption>欄 <button type="button" class="auto-preview-open" data-preview="'+i+'" aria-label="'+(i+1)+'問目の欄を拡大">プレビュー拡大</button></figcaption><div class="auto-preview-sheet" tabindex="0" role="region" aria-label="解答欄プレビュー。長い欄は枠内をスクロールできます"></div></figure>'+
-      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
+      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="answer-format-tools"><button type="button" class="tb" data-answer-format="bold">太字</button><button type="button" class="tb" data-answer-format="underline">下線</button><button type="button" class="tb" data-answer-format="clear">装飾を解除</button><small>文字を選択して設定。未選択なら答え全体。</small></div><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+autoKindOptions(q('#auto-subject').value,r.kind)+'</select><small class="auto-kind-help"></small><button type="button" class="tb auto-custom-settings" data-custom-settings hidden>名前・セル数を設定</button></label>'+
       '<details class="question-scoring"><summary>'+r.points+'点・'+xmlEsc(new Map(aspectOptions()).get(r.aspect) || r.aspect)+'</summary><label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></details></div>'+
@@ -7547,6 +7590,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
     } catch(e){ status.textContent=e.message; }
   };
   q('#auto-cancel').onclick=close;
+  q('#auto-rows').addEventListener('mousedown',e=>{if(e.target.closest('[data-answer-format]'))e.preventDefault();});
   q('#auto-rows').addEventListener('input',e=>{
     let key=e.target.dataset.k; const card=e.target.closest('[data-row]'); if (!card) return;
     const r=rows[+card.dataset.row];
@@ -7572,7 +7616,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       if (key==='label') card.querySelector('[data-label-custom]').hidden=true;
       if (key==='subLabel') card.querySelector('[data-sub-label-custom]').hidden=true;
       if (key==='leafLabel')card.querySelector('[data-leaf-label-custom]').hidden=true;
-    } else r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;
+    } else {if(key==='answer' && r.appearance?.answerStyles){const old=r.answer,next=e.target.value;let start=0,end=0;while(start<old.length && start<next.length && old[start]===next[start])start++;while(end<old.length-start && end<next.length-start && old[old.length-1-end]===next[next.length-1-end])end++;const delta=next.length-old.length;r.appearance.answerStyles=r.appearance.answerStyles.map(s=>({...s,start:s.start<=start?s.start:Math.max(start,s.start+delta),end:s.end<=start?s.end:Math.min(next.length,Math.max(start,s.end+delta))})).filter(s=>s.end>s.start);}r[key]=e.target.type==='checkbox'?e.target.checked:['n','w','h','points'].includes(key)?Number(e.target.value):e.target.value;}
     if(['w','h'].includes(key) && r.kind==='essay')r.kindAuto=false;
     if (key==='kind'){ r.kindAuto=false; r.warnings=r.warnings.filter(w=>!w.startsWith('欄の種類')); }
     if(key==='eight')r.eightExplicit=true;
@@ -7587,6 +7631,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
   q('#auto-rows').addEventListener('click',e=>{
     if(e.target.closest('[data-custom-settings]')){openCustomFieldSettings(()=>drawRows());return;}
 
+    const format=e.target.closest('[data-answer-format]');if(format){const card=format.closest('[data-row]'),r=rows[+card.dataset.row],input=card.querySelector('[data-k="answer"]');let start=input.selectionStart,end=input.selectionEnd;if(start===end){start=0;end=r.answer.length;}r.appearance ||= {};const styles=r.appearance.answerStyles ||= [],key=format.dataset.answerFormat;if(key==='clear')styles.push({start,end,bold:false,underline:false});else styles.push({start,end,[key]:!answerFormatAt(styles,start)[key]});paintPreview(card);syncSource();return;}
     const preview=e.target.closest('[data-preview]');
     if(preview){
       const dialog=document.createElement('dialog');dialog.className='auto-preview-dialog';

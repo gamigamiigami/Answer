@@ -13,12 +13,15 @@ assert.equal(await page.evaluate(()=>doc.fields[0].extractConfig.lastCell),false
 const download=page.waitForEvent('download');await page.click('#btn-xlsx');await(await download).saveAs('/tmp/extract-edit-'+subject+'.xlsx');
 }
 const result=spawnSync('python3',['-c',`import openpyxl
+import zipfile,xml.etree.ElementTree as ET
+def drawing_text(path):
+ with zipfile.ZipFile(path) as z: return ''.join(n.text or '' for name in z.namelist() if name.startswith('xl/drawings/drawing') and name.endswith('.xml') for n in ET.fromstring(z.read(name)).iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t'))
 for subject in ['国語','数学']:
  b=openpyxl.load_workbook('/tmp/extract-edit-'+subject+'.xlsx')
  for s in b:
   text=''.join(str(c.value or '') for row in s for c in row)
   assert '初め' not in text and '終わり' not in text,text
  text=''.join(str(c.value or '') for row in b.worksheets[1] for c in row)
- assert all(c in text for c in 'あいうかきく'),text
+ assert all(c in drawing_text('/tmp/extract-edit-'+subject+'.xlsx') for c in 'あいうかきく'),text
 print('PASS Excel: headings removed, model answers retained')`],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);console.log(result.stdout);assert.deepEqual(errors,[]);console.log('PASS partial extract editing, vertical/horizontal, save/load');}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
 function MARK(){return 1;}

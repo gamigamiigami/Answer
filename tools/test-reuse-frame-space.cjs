@@ -4,7 +4,10 @@ const moved=await p.evaluate(()=>{ui.cur={c:14,r:5};ui.sel=null;ui.movePlan=null
 // Reusing a deleted edge for a new simple frame must draw its own border.
 await p.evaluate(()=>{ui.cur={c:2,r:2};ui.sel=null;clearSelection();ui.sel={c:2,r:2,w:1,h:1};simpleFrame();});assert.equal(await p.evaluate(()=>!!buildCells(doc,true).get('2,2').b.left),true);
 const dl=p.waitForEvent('download');await p.click('#btn-xlsx');await(await dl).saveAs('/tmp/reuse-frame-space.xlsx');const py=spawnSync('python3',['-c',`import openpyxl
+import zipfile,xml.etree.ElementTree as ET
+def drawing_text(path):
+ with zipfile.ZipFile(path) as z: return ''.join(n.text or '' for name in z.namelist() if name.startswith('xl/drawings/drawing') and name.endswith('.xml') for n in ET.fromstring(z.read(name)).iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t'))
 b=openpyxl.load_workbook('/tmp/reuse-frame-space.xlsx')
 for s in b: assert s.cell(3,10).border.top.style is not None
-assert 'ア' in ''.join(str(c.value or '') for row in b.worksheets[1] for c in row)
+assert 'ア' in drawing_text('/tmp/reuse-frame-space.xlsx')
 print('PASS Excel restored new field border and answer')`],{encoding:'utf8'});assert.equal(py.status,0,py.stderr);console.log(py.stdout);console.log('PASS move into deleted frame edge, new simple frame, undo/redo, save/load');}finally{await b.close();s.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
