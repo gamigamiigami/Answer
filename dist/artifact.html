@@ -793,8 +793,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.14.1';
+const APP_VERSION = '2.14.2';
 const APP_RELEASES = [
+  ['2.14.2','細かな編集でも太字・下線／Ctrl＋Uのソース表示を防止'],
   ['2.14.1','Ctrl＋Uで下線・Ctrl＋Bで太字に対応'],
   ['2.14.0','模範解答を編集できるテキストボックスへ／太字・下線・印刷罫線'],
   ['2.13.9','Excelの余白を0・A4内に印刷／縦書きの収まりを改善'],
@@ -4608,6 +4609,7 @@ function commitInput(){
         setTimeout(()=>toast('⚠ 用紙の端です（'+(val.length-put)+'文字が入りませんでした）'), 30);
     }
   }
+  if(t?.pendingAnswerStyles && ['answer','answerPart'].includes(t.kind))t.field.answerStyles=t.pendingAnswerStyles;
   if (ui.seq) return seqNext();
   exitInput();
 }
@@ -4649,6 +4651,41 @@ function decorationAt(c,r){
    --------------------------------------------------------------- */
 // 数字キーは「ボタンの並び」で決まる（1〜9、10個目は0）
 const CODE_STAMP = {KeyD:'D',KeyQ:'Q',KeyP:'P',KeyM:'M',KeyA:'A'};
+
+function applyEditorAnswerFormat(key){
+  const input=$('#cell-input'),target=ui.mode==='input'?ui.editTarget:null;
+  if(target && ['answer','answerPart'].includes(target.kind)){
+    const value=input.value;if(!value)return toast('模範解答を入力してから設定してください。');
+    const f=target.field;if([7,11,12].includes(f.type) || fractionAnswerPlan(doc,f,value) || rubyAnnotationPlan(doc,f,value))return toast('この専用欄の装飾には対応していません。');
+    const offset=target.kind==='answerPart' && target.part?splitExtract(doc.answers[f.id] || '')[0].length+1:0;
+    let start=input.selectionStart,end=input.selectionEnd;if(start===end){start=0;end=value.length;}
+    const styles=target.pendingAnswerStyles ||= structuredClone(f.answerStyles || []);start+=offset;end+=offset;styles.push({start,end,[key]:!answerFormatAt(styles,start)[key]});
+    input.focus({preventScroll:true});return toast((key==='bold'?'太字':'下線')+'を切り替えました。Enterで確定します。');
+  }
+  if(target)return toast('模範解答を入力しているときに文字を選んで設定してください。');
+  if(document.body.classList.contains('simple-workspace'))return openAnswerFormatting();
+  if(ui.tab==='draw')return toast('模範解答の欄を選んで設定してください。');
+  const checked=ui.targets.map(t=>fieldById(t.id)).filter(f=>doc.fields.includes(f));
+  const fields=(checked.length?checked:fieldsInArea()).filter(f=>doc.fields.includes(f) && answerUsesTextbox(doc,f));
+  if(!fields.length)return openAnswerFormatting();
+  if(ui.tab!=='answer'){ui.tab='answer';ui.pickKind='answer';document.querySelectorAll('#tabs .tab').forEach(b=>b.classList.toggle('on',b.dataset.tab==='answer'));showPanels();}
+  const value=!fields.every(f=>Array.from(doc.answers[f.id] || '').every((ch,i)=>answerFormatAt(f.answerStyles,i)[key]));snapshot(['fields']);
+  fields.forEach(f=>{f.answerStyles ||= [];f.answerStyles.push({start:0,end:doc.answers[f.id].length,[key]:value});});render();toast(fields.length+'問の模範解答の'+(key==='bold'?'太字':'下線')+'を'+(value?'設定':'解除')+'しました。');
+}
+function openAnswerFormatting(){
+  const field=fieldAt(ui.cur.c,ui.cur.r),id=field?.id,page=doc.pageIndex || 0;openAnswerGenerator();
+  const rows=[...document.querySelectorAll('.auto-modal [data-row]')],index=allPages().slice(0,page).reduce((n,p)=>n+p.fields.length,0)+(id?doc.fields.findIndex(f=>f.id===id):0),card=rows[Math.max(0,index)];
+  const input=card?.querySelector('[data-k="answer"]');if(input){input.focus();input.select();input.scrollIntoView({block:'nearest'});}toast('模範解答の入力欄で文字を選び、Ctrl＋Bで太字、Ctrl＋Uで下線を設定します。');
+}
+document.addEventListener('keydown',ev=>{
+  if(!doc || $('#start').style.display!=='none' || !(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey || ev.isComposing || ev.keyCode===229)return;
+  const key=ev.code==='KeyB' || ev.key.toLowerCase()==='b'?'bold':ev.code==='KeyU' || ev.key.toLowerCase()==='u'?'underline':'';if(!key)return;
+  if(ev.target.matches('.auto-modal textarea[data-k="answer"]') && !ev.target.closest('[data-row]').querySelector('.answer-format-tools').hidden)return;
+  ev.preventDefault();ev.stopImmediatePropagation();if(ev.repeat)return;
+  if(document.querySelector('.modal'))return toast('太字・下線は問題一覧の模範解答入力欄で設定できます。');
+  if(ev.target.id!=='cell-input' && ev.target.matches('input,textarea,select,[contenteditable="true"]'))return toast('模範解答の欄を選ぶか、「問題・答え・解答欄を編集」で設定してください。');
+  applyEditorAnswerFormat(key);
+},true);
 
 document.addEventListener('keydown', ev => {
   if (ev.defaultPrevented) return;
@@ -6485,6 +6522,8 @@ function buildTools(){
     (key?'<span class="k">'+key+'</span>':'')+'</button>';
   $('#input-tools').innerHTML =
     tool('t-edit','文字','Enter','文字・答えを入れる（☑があれば順に）')+
+    tool('t-answer-bold','模範解答を太字','Ctrl+B','選んだ欄の模範解答を太字にする')+
+    tool('t-answer-underline','模範解答に下線','Ctrl+U','選んだ欄の模範解答に下線を付ける')+
     tool('t-bulk','一覧入力','⇧Enter','模範解答を1行1問でまとめて入れる')+
     tool('t-kanbun','漢文の文字・返り点','','漢文欄を選び、□の中・右下・左下を入力',true)+
     tool('t-graph','式からグラフ','','グラフ欄を選んで、式とx・yの表示範囲を設定',true)+
@@ -6533,6 +6572,7 @@ function buildTools(){
   $('#t-extract').onclick=editExtractField;
   $('#t-clear').onclick = clearAll;
   $('#t-edit').onclick  = enterInput;
+  $('#t-answer-bold').onclick=()=>applyEditorAnswerFormat('bold');$('#t-answer-underline').onclick=()=>applyEditorAnswerFormat('underline');for(const id of ['t-answer-bold','t-answer-underline'])$('#'+id).onmousedown=e=>e.preventDefault();
   $('#t-kanbun').onclick=()=>{const f=fieldAt(ui.cur.c,ui.cur.r);if(!f || f.type!==11)return toast('漢文の欄を選んでください');editKanbunField(f);};
   $('#t-kanbun-edit').onclick=$('#t-kanbun').onclick;
   $('#t-graph').onclick = ()=>{
@@ -6578,7 +6618,7 @@ function showPanels(){
   $('#side-panel-tools .workspace-guide').hidden=!dr && !answer;
   $('#side-tab-layout').hidden=dr;
   selectSideTab('tools');
-  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'直したい欄を選んで「文字」から入力できます。まとめて直すときは、上の「問題・答え・解答欄を編集」へ。':'';
+  $('#workspace-tip').textContent=dr?'線や点で、問題にぴったりの図を添えましょう。道具を選んだら、用紙に描けます。':answer?'欄を選んでCtrl＋Bで太字、Ctrl＋Uで下線。文字の一部はEnterで入力中に選択して設定できます。':'';
   document.querySelectorAll('#tabs .tab').forEach(t=>{
     const active=t.dataset.tab===ui.tab;
     t.setAttribute('aria-selected',String(active)); t.tabIndex=active?0:-1;
