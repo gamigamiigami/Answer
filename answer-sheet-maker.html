@@ -799,8 +799,9 @@ body.zen #save-indicator{display:none}
    ===================================================================== */
 
 // サイト更新時にここを更新する。作業ファイルのデータ形式 version とは別。
-const APP_VERSION = '2.14.0';
+const APP_VERSION = '2.14.1';
 const APP_RELEASES = [
+  ['2.14.1','Ctrl＋Uで下線・Ctrl＋Bで太字に対応'],
   ['2.14.0','模範解答を編集できるテキストボックスへ／太字・下線・印刷罫線'],
   ['2.13.9','Excelの余白を0・A4内に印刷／縦書きの収まりを改善'],
   ['2.13.8','サイトの見た目を維持しExcel出力時だけ文字サイズを調整'],
@@ -7469,7 +7470,7 @@ function openAnswerGenerator(initialTitle='',creation=null){
       '<label>小問内の番号<select data-k="leafLabel" aria-label="小問内の番号">'+choices([...subLabels,['!custom','自由に指定…']],numbering.leaf || '')+'</select><span data-leaf-label-custom hidden>'+input('leafLabelCustom',numbering.leaf || '','text','小問内の番号を自由に指定')+'</span></label></details></div></div>'+
       (r.completeGroup?'<p class="auto-completion-note">'+xmlEsc('まとめて完答：'+rows.filter(x=>x.completeGroup===r.completeGroup).map(x=>x.label).join('・')+' の全てで '+r.points+'点')+'</p>':'')+
       '<figure class="auto-field-preview"><figcaption>欄 <button type="button" class="auto-preview-open" data-preview="'+i+'" aria-label="'+(i+1)+'問目の欄を拡大">プレビュー拡大</button></figcaption><div class="auto-preview-sheet" tabindex="0" role="region" aria-label="解答欄プレビュー。長い欄は枠内をスクロールできます"></div></figure>'+
-      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="answer-format-tools"><button type="button" class="tb" data-answer-format="bold">太字</button><button type="button" class="tb" data-answer-format="underline">下線</button><button type="button" class="tb" data-answer-format="clear">装飾を解除</button><small>文字を選択して設定。未選択なら答え全体。</small></div><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
+      '<div class="auto-answer"><label>模範解答<textarea data-k="answer" aria-label="模範解答" rows="2">'+xmlEsc(r.answer)+'</textarea></label><div class="answer-format-tools"><button type="button" class="tb" data-answer-format="bold" aria-keyshortcuts="Control+b Meta+b" title="太字（Ctrl＋B）">太字</button><button type="button" class="tb" data-answer-format="underline" aria-keyshortcuts="Control+u Meta+u" title="下線（Ctrl＋U）">下線</button><button type="button" class="tb" data-answer-format="clear">装飾を解除</button><small>Ctrl＋B：太字／Ctrl＋U：下線。未選択なら答え全体。</small></div><div class="auto-dimensions" hidden></div><button class="tb" data-table="'+i+'"'+(r.kind==='table'?'':' hidden')+'>表の行・列・文字を編集</button><button class="tb" data-kanbun="'+i+'"'+(r.kind==='kanbun'?'':' hidden')+'>□・右下・左下を入力</button><button class="tb" data-graph="'+i+'"'+(r.kind==='graph'?'':' hidden')+'>式・表示範囲を設定</button></div>'+
       '<label>欄の種類<select data-k="kind" aria-label="欄の種類">'+autoKindOptions(q('#auto-subject').value,r.kind)+'</select><small class="auto-kind-help"></small><button type="button" class="tb auto-custom-settings" data-custom-settings hidden>名前・セル数を設定</button></label>'+
       '<details class="question-scoring"><summary>'+r.points+'点・'+xmlEsc(new Map(aspectOptions()).get(r.aspect) || r.aspect)+'</summary><label>'+(r.completeGroup?'組全体の配点':'配点')+'<select data-k="points" aria-label="配点">'+points(r.points)+'</select><span data-point-custom hidden>'+input('pointsCustom',r.points,'number','配点を自由に指定')+'</span></label>'+
       '<label>観点<select data-k="aspect" aria-label="観点">'+choices(aspectOptions(r.aspect),r.aspect)+'</select></label></details></div>'+
@@ -7590,6 +7591,13 @@ function openAnswerGenerator(initialTitle='',creation=null){
     } catch(e){ status.textContent=e.message; }
   };
   q('#auto-cancel').onclick=close;
+  q('#auto-rows').addEventListener('keydown',e=>{
+    if(!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.isComposing || e.keyCode===229 || !e.target.matches('textarea[data-k="answer"]'))return;
+    const key=e.code==='KeyB' || e.key.toLowerCase()==='b'?'bold':e.code==='KeyU' || e.key.toLowerCase()==='u'?'underline':'';
+    if(!key)return;const button=e.target.closest('[data-row]').querySelector('[data-answer-format="'+key+'"]');
+    if(!button || button.closest('.answer-format-tools').hidden)return;
+    e.preventDefault();e.stopPropagation();if(!e.repeat)button.click();
+  });
   q('#auto-rows').addEventListener('mousedown',e=>{if(e.target.closest('[data-answer-format]'))e.preventDefault();});
   q('#auto-rows').addEventListener('input',e=>{
     let key=e.target.dataset.k; const card=e.target.closest('[data-row]'); if (!card) return;
